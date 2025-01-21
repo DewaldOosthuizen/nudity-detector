@@ -1,10 +1,11 @@
+from datetime import datetime
 import os
 import shutil
 import logging
 from nudenet import NudeDetector
 
 # Configure logging
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Classes considered as nudity
 nudity_classes = [
@@ -19,7 +20,7 @@ nudity_classes = [
 def classify_image(file_path, detector):
     try:
         detection_result = detector.detect(file_path)
-        logging.info(f"Image Classification Result for {file_path}: {detection_result}")
+        logging.debug(f"Image Classification Result for {file_path}: {detection_result}")
         
         # Check for nudity
         nudity_detected = any(result['class'] in nudity_classes for result in detection_result)
@@ -46,7 +47,7 @@ def classify_image(file_path, detector):
 def classify_video(file_path, detector):
     try:
         detection_result = detector.detect(file_path)
-        logging.info(f"Video Classification Result for {file_path}: {detection_result}")
+        logging.debug(f"Video Classification Result for {file_path}: {detection_result}")
         
         # Check for nudity
         nudity_detected = any(result['class'] in nudity_classes for result in detection_result)
@@ -92,7 +93,9 @@ if __name__ == "__main__":
     logging.debug(f"User input folder: {folder_to_classify}")
     classify_files_in_folder(folder_to_classify)
     
-    # Print the report
-    print("\nNudity Detection Report:")
-    for report in nudity_report:
-        print(f"File: {report['file']}, Nudity Detected: {report['nudity_detected']}, Classes: {report['detected_classes']}")
+    # Write the report to a file
+    report_file_path = os.path.join('exposed', 'nudity_detection_report.txt')
+    with open(report_file_path, 'w') as report_file:
+        report_file.write(f"Nudity Detection Report - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}:\n")
+        for report in nudity_report:
+            report_file.write(f"File: {report['file']}, Nudity Detected: {report['nudity_detected']}, Classes: {report['detected_classes']}\n")

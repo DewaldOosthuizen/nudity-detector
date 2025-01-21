@@ -116,6 +116,7 @@ dmypy.json
 
 # VS Code
 .vscode/
+.history/
 
 # Exposed folder
 samples/
