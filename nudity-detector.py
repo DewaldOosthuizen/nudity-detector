@@ -5,7 +5,7 @@ import logging
 from nudenet import NudeDetector
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Classes considered as nudity
 nudity_classes = [
@@ -23,7 +23,7 @@ def classify_image(file_path, detector):
         logging.debug(f"Image Classification Result for {file_path}: {detection_result}")
         
         # Check for nudity
-        nudity_detected = any(result['class'] in nudity_classes for result in detection_result)
+        nudity_detected = any(result['class'] in nudity_classes and result['score'] > 0.6 for result in detection_result)
         
         # Log and copy file if nudity detected
         if nudity_detected:
@@ -50,7 +50,7 @@ def classify_video(file_path, detector):
         logging.debug(f"Video Classification Result for {file_path}: {detection_result}")
         
         # Check for nudity
-        nudity_detected = any(result['class'] in nudity_classes for result in detection_result)
+        nudity_detected = any(result['class'] in nudity_classes and result['score'] > 0.6 for result in detection_result)
         
         # Log and copy file if nudity detected
         if nudity_detected:
