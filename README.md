@@ -27,15 +27,19 @@ Two versions of the script are available:
 1. **Clone the repository**:
 
    ```bash
-   git clone https://github.com/your-repo/nudity-detector.git
+   https://github.com/DewaldOosthuizen/nudity-detector.git
+
+2. **Navigate to inside the repository**:
+
+   ```Bash
    cd nudity-detector
 
-2. **Install requirements**:
+3. **Install requirements**:
 
     ```bash
     pip install -r requirements.txt
 
-3. **Perpare Models**:
+4. **Perpare Models**:
 
    - Nudenet
      - For Nudenet no setup is required.
