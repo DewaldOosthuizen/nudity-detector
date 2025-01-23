@@ -63,7 +63,7 @@ Two versions of the script are available:
 - WEBP
 - TIFF
 
-### Videos (Planned Future Support)
+### Videos
 
 - MP4
 - AVI

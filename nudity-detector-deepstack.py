@@ -3,7 +3,7 @@ import os
 import shutil
 import logging
 import requests
-from nudity_detector_utils import classify_files_in_folder, save_nudity_report, nudity_report, report_lock, check_and_save_report, load_existing_report
+from nudity_detector_utils import classify_files_in_folder, save_nudity_report, nudity_report, report_lock, check_and_save_report, load_existing_report, handle_results
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -29,24 +29,7 @@ def classify_image(file_path):
             nudity_detected = result.get("nudity", {}).get("unsafe", 0) > 0.6
             classifiers = ["unsafe"] if nudity_detected else []
             
-            with report_lock:
-                if nudity_detected:
-                    shutil.copy(file_path, os.path.join('exposed', os.path.basename(file_path)))
-                    nudity_report.append({
-                        "file": file_path,
-                        "nudity_detected": True,
-                        "detected_classes": classifiers,
-                        "date_classified": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    })
-                else:
-                    if logging.getLogger().isEnabledFor(logging.DEBUG):
-                        nudity_report.append({
-                            "file": file_path,
-                            "nudity_detected": False,
-                            "detected_classes": classifiers,
-                            "date_classified": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        })
-                check_and_save_report(nudity_report, os.path.join('exposed', 'nudity_report.xlsx'))
+            handle_results(file_path, nudity_detected, classifiers)
         else:
             logging.error(f"Failed to classify image {file_path}. HTTP Status: {response.status_code}")
     except Exception as e:
