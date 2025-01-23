@@ -28,17 +28,20 @@ Two versions of the script are available:
 1. **Clone the repository**:
 
    ```bash
-   https://github.com/DewaldOosthuizen/nudity-detector.git
+   git clone https://github.com/DewaldOosthuizen/nudity-detector.git
+   ```
 
 2. **Navigate to inside the repository**:
 
    ```Bash
    cd nudity-detector
+   ```
 
 3. **Install requirements**:
 
     ```bash
     pip install -r requirements.txt
+    ```
 
 4. **Perpare Models**:
 
@@ -48,9 +51,23 @@ Two versions of the script are available:
      - Download and install DeepStack from [DeepStack's official website](https://deepstack.cc/).
      - Start DeepStack with the nudity detection model:
 
-     ```sh
+     ```bash
      deepstack --VISION-DETECTION True --PORT 80
      ```
+
+5. **Run the process**:
+
+- nudenet
+
+  ```bash
+  python3 nudity-detector-nudenet.py
+  ```
+
+- Deepstack
+
+    ```bash
+  python3 nudity-detector-deepstack.py
+  ```
 
 ## Supported File Formats
 
