@@ -11,8 +11,6 @@ Two versions of the script are available:
   - Not always accurate
   - Process videos by extracting frames and analyzing the frames as images.
 - **DeepStack**: Uses the `DeepStack` AI server for detection. (In Progress)
-  - Advanced
-  - Higher acuuracy
 
 ## Features
 
@@ -43,19 +41,27 @@ Two versions of the script are available:
     pip install -r requirements.txt
     ```
 
-4. **Perpare Models**:
+4. Install docker and docker compose
+
+5. **Perpare Models**:
 
    - Nudenet
      - For Nudenet no setup is required.
    - Deepstack
-     - Download and install DeepStack from [DeepStack's official website](https://deepstack.cc/).
-     - Start DeepStack with the nudity detection model:
+     - Run the docker-compose.yml file to start your server
 
-     ```bash
-     deepstack --VISION-DETECTION True --PORT 80
-     ```
+       ```bash
+       docker-compose up --build
+       ```
 
-5. **Run the process**:
+   - Once started, DeepStack will be available at <http://localhost:5000>.
+   - You can test if your server is running by executing the following (Replace the image path with an existing image)
+
+    ```bash
+    curl -X POST -F image=@test.jpg 'http://localhost:5000/v1/vision/detection'
+    ```
+
+6. **Run the process**:
 
 - nudenet
 

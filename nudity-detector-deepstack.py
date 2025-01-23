@@ -9,7 +9,7 @@ from nudity_detector_utils import classify_files_in_folder, save_nudity_report, 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # DeepStack server configuration
-DEEPSTACK_URL = "http://localhost:5000/v1/vision/nudity"
+DEEPSTACK_URL = "http://localhost:5000/v1/vision/nsfw"
 
 # Load existing report to avoid reprocessing files
 existing_files = load_existing_report(os.path.join('exposed', 'nudity_report.xlsx'))
