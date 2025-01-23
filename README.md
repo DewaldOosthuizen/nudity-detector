@@ -9,6 +9,7 @@ Two versions of the script are available:
 - **Nudenet**: Uses the `nudenet` library for nudity detection.
   - Basic
   - Not always accurate
+  - Process videos by extracting frames and analyzing the frames as images.
 - **DeepStack**: Uses the `DeepStack` AI server for detection. (In Progress)
   - Advanced
   - Higher acuuracy
