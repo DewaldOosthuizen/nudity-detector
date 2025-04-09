@@ -1,5 +1,9 @@
 # Nudity Detector
 
+This project, Nudity Detector, is a Python-based script designed to detect nudity in images and videos. It provides an 
+An efficient and automated solution for identifying explicit content, making it suitable for applications such as content 
+moderation, safety filters, and compliance checks.
+
 ## Overview
 
 The **Nudity Detector** script is a tool for identifying nudity in images and videos. It uses AI-based models to classify files and organizes detected content into a dedicated folder, generating a comprehensive report afterward.
