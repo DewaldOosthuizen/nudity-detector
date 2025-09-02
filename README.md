@@ -1,7 +1,7 @@
 # Nudity Detector
 
-This project, Nudity Detector, is a Python-based script designed to detect nudity in images and videos. It provides an 
-An efficient and automated solution for identifying explicit content, making it suitable for applications such as content 
+This project, Nudity Detector, is a Python-based script designed to detect nudity in images and videos. It provides an
+An efficient and automated solution for identifying explicit content, making it suitable for applications such as content
 moderation, safety filters, and compliance checks.
 
 ## Overview
@@ -41,12 +41,27 @@ Two versions of the script are available:
 
 3. **Install requirements**:
 
-    ```bash
-    pip install -r requirements.txt
-    ```
+  Activate the venv environment if you are using one.
 
-4. Install docker and docker compose
+  ```bash
+  source ./.venv/bin/activate
+  ```
 
+  ```bash
+  pip install -r requirements.txt
+  ```
+
+  or
+
+  ```bash
+  ./.venv/bin/pip install -r requirements.txt
+  ```
+
+4. **Install docker and docker compose**
+
+    - Follow the instructions for your OS on the official Docker website: <https://docs.docker.com/get-docker/>
+    - Ensure Docker Compose is installed. Instructions can be found here: <https://docs.docker.com/compose/install/>
+  
 5. **Perpare Models**:
 
    - Nudenet

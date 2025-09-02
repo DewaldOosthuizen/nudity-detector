@@ -3,6 +3,8 @@ import os
 import shutil
 import logging
 import requests
+import cv2
+import json
 from nudity_detector_utils import classify_files_in_folder, save_nudity_report, nudity_report, report_lock, check_and_save_report, load_existing_report, handle_results
 
 # Configure logging
@@ -42,31 +44,61 @@ def classify_image(file_path):
     except Exception as e:
         logging.error(f"Error classifying image {file_path}: {e}")
 
+def extract_frames(file_path, frame_rate=5):
+    """Extract frames from a video file at a specified frame rate."""
+    cap = cv2.VideoCapture(file_path)
+    frames = []
+    frame_count = 0
+
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            break
+        if frame_count % frame_rate == 0:
+            frame_path = f"temp_frame_{frame_count}.jpg"
+            cv2.imwrite(frame_path, frame)
+            frames.append(frame_path)
+        frame_count += 1
+
+    cap.release()
+    return frames
+
+def cleanup_frames(frames):
+    """Remove temporary frames."""
+    for frame in frames:
+        try:
+            os.remove(frame)
+        except Exception as e:
+            logging.error(f"Error removing frame {frame}: {e}")
+
 def classify_video(file_path):
-    """Classify a video for nudity using DeepStack."""
+    """Classify a video for nudity using DeepStack by analyzing extracted frames."""
     if file_path in existing_files:
         logging.info(f"Skipping already scanned file: {file_path}")
         return
 
     try:
-        # Open the video file
-        with open(file_path, "rb") as video_file:
-            # Send the video to DeepStack for classification
-            response = requests.post(DEEPSTACK_URL, files={"video": video_file})
-        
-        if response.status_code == 200:
-            # Parse the response from DeepStack
-            result = response.json()
-            logging.debug(f"DeepStack Result for {file_path}: {result}")
-            
-            # Check if nudity is detected
-            nudity_detected = result.get("nudity", {}).get("unsafe", 0) > 0.6
-            classifiers = ["unsafe"] if nudity_detected else []
-            
-            # Handle the results (e.g., save to report, copy file if nudity detected)
-            handle_results(file_path, nudity_detected, classifiers)
-        else:
-            logging.error(f"Failed to classify video {file_path}. HTTP Status: {response.status_code}")
+        frames = extract_frames(file_path, frame_rate=5)  # Analyze every 5th frame
+
+        nudity_detected = False
+        detection_results = []
+
+        for frame in frames:
+            with open(frame, "rb") as image_file:
+                response = requests.post(DEEPSTACK_URL, files={"image": image_file})
+            if response.status_code == 200:
+                result = response.json()
+                unsafe_score = result.get("nudity", {}).get("unsafe", 0)
+                detection_results.append({"frame": frame, "unsafe_score": unsafe_score})
+                if unsafe_score > 0.6:
+                    nudity_detected = True
+            else:
+                logging.error(f"Failed to classify frame {frame}. HTTP Status: {response.status_code}")
+
+        json_result = json.dumps(detection_results, ensure_ascii=False, indent=4)
+        handle_results(file_path, nudity_detected, json_result)
+        cleanup_frames(frames)
+
     except Exception as e:
         logging.error(f"Error classifying video {file_path}: {e}")
 

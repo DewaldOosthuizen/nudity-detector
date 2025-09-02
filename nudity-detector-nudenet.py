@@ -20,6 +20,9 @@ nudity_classes = [
 # Load existing report to avoid reprocessing files
 existing_files = load_existing_report(os.path.join('exposed', 'nudity_report.xlsx'))
 
+# Initialize the NudeDetector
+detector = NudeDetector()
+
 def classify_image(file_path):
     """Classify an image for nudity."""
     if file_path in existing_files:
@@ -27,8 +30,7 @@ def classify_image(file_path):
         return
 
     try:
-        # Initialize the NudeDetector
-        detector = NudeDetector()
+        
         # Detect nudity in the image
         detection_result = detector.detect(file_path)
         logging.debug(f"Image Classification Result for {file_path}: {detection_result}")
@@ -72,17 +74,14 @@ def classify_video(file_path):
         if file_path in existing_files:
             logging.info(f"Skipping already scanned file: {file_path}")
             return
-        
-        # Step 1: Initialize detector
-        detector = NudeDetector()
 
-        # Step 2: Extract frames
+        # Extract frames
         frames = extract_frames(file_path, frame_rate=5)  # Analyze every 5th frame
 
         detection_results = []
         nudity_detected = False
 
-        # Step 3: Analyze each frame
+        # Analyze each frame
         for frame in frames:
             try:
                 if frame is None:
