@@ -25,7 +25,7 @@ class NudityDetectorGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("Nudity Detector")
-        self.root.geometry("600x500")
+        self.root.geometry("600x700")
         self.root.resizable(True, True)
         
         # Variables
@@ -42,7 +42,7 @@ class NudityDetectorGUI:
         """Create and layout all GUI widgets."""
         # Main frame
         main_frame = ttk.Frame(self.root, padding="10")
-        main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        main_frame.grid(row=0, column=0, sticky="nsew")
         
         # Configure grid weights
         self.root.columnconfigure(0, weight=1)
@@ -55,7 +55,7 @@ class NudityDetectorGUI:
         
         # Model selection
         model_frame = ttk.LabelFrame(main_frame, text="Detection Model", padding="10")
-        model_frame.grid(row=1, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 10))
+        model_frame.grid(row=1, column=0, columnspan=3, sticky="we", pady=(0, 10))
         
         nudenet_radio = ttk.Radiobutton(model_frame, text="NudeNet (Fast, Local)", 
                                        variable=self.model_var, value="nudenet")
@@ -67,11 +67,11 @@ class NudityDetectorGUI:
         
         # Folder selection
         folder_frame = ttk.LabelFrame(main_frame, text="Folder to Scan", padding="10")
-        folder_frame.grid(row=2, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 10))
+        folder_frame.grid(row=2, column=0, columnspan=3, sticky="we", pady=(0, 10))
         folder_frame.columnconfigure(0, weight=1)
         
         self.folder_entry = ttk.Entry(folder_frame, textvariable=self.folder_var, width=50)
-        self.folder_entry.grid(row=0, column=0, sticky=(tk.W, tk.E), padx=(0, 10))
+        self.folder_entry.grid(row=0, column=0, sticky="we", padx=(0, 10))
         
         browse_button = ttk.Button(folder_frame, text="Browse...", command=self.browse_folder)
         browse_button.grid(row=0, column=1)
@@ -88,18 +88,18 @@ class NudityDetectorGUI:
         
         # Progress bar
         progress_frame = ttk.LabelFrame(main_frame, text="Progress", padding="10")
-        progress_frame.grid(row=4, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 10))
+        progress_frame.grid(row=4, column=0, columnspan=3, sticky="we", pady=(0, 10))
         progress_frame.columnconfigure(0, weight=1)
         
         self.progress_bar = ttk.Progressbar(progress_frame, mode='indeterminate')
-        self.progress_bar.grid(row=0, column=0, sticky=(tk.W, tk.E), pady=(0, 5))
+        self.progress_bar.grid(row=0, column=0, sticky="we", pady=(0, 5))
         
         self.status_label = ttk.Label(progress_frame, textvariable=self.status_var)
         self.status_label.grid(row=1, column=0)
         
         # Results section
         results_frame = ttk.LabelFrame(main_frame, text="Results", padding="10")
-        results_frame.grid(row=5, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 10))
+        results_frame.grid(row=5, column=0, columnspan=3, sticky="we", pady=(0, 10))
         
         self.open_folder_button = ttk.Button(results_frame, text="Open Exposed Folder", 
                                            command=self.open_exposed_folder, state="disabled")
@@ -111,7 +111,7 @@ class NudityDetectorGUI:
         
         # Log area
         log_frame = ttk.LabelFrame(main_frame, text="Log", padding="10")
-        log_frame.grid(row=6, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 10))
+        log_frame.grid(row=6, column=0, columnspan=3, sticky="nsew", pady=(0, 10))
         log_frame.columnconfigure(0, weight=1)
         log_frame.rowconfigure(0, weight=1)
         main_frame.rowconfigure(6, weight=1)
@@ -121,8 +121,8 @@ class NudityDetectorGUI:
         scrollbar = ttk.Scrollbar(log_frame, orient="vertical", command=self.log_text.yview)
         self.log_text.configure(yscrollcommand=scrollbar.set)
         
-        self.log_text.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
-        scrollbar.grid(row=0, column=1, sticky=(tk.N, tk.S))
+        self.log_text.grid(row=0, column=0, sticky="nsew")
+        scrollbar.grid(row=0, column=1, sticky="ns")
         
     def browse_folder(self):
         """Open folder selection dialog."""
