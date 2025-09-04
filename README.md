@@ -84,20 +84,37 @@ Two versions of the script are available:
 
 6. **Run the process**:
 
-**Option 1: GUI Application (Recommended)**
+### Option 1: GUI Application (Recommended)
+
+This will require tkinter to be installed.
+
+  On Ubuntu/Debian, you can install it using:
+
+  ```bash
+  sudo apt-get install python3-tk
+  ```
+
+  On Windows, it is included with the standard Python installation. or you can use
+
+  ```bash
+  pip install tk
+  ```
+
+  Then run:
 
   ```bash
   python3 nudity_detector_gui.py
   ```
 
   The GUI provides an easy-to-use interface with:
-  - Model selection (NudeNet or DeepStack)
-  - Folder browsing and selection
-  - Progress tracking with visual indicators
-  - Automatic report generation
-  - Quick access to results and exposed files
 
-**Option 2: Command Line**
+- Model selection (NudeNet or DeepStack)
+- Folder browsing and selection
+- Progress tracking with visual indicators
+- Automatic report generation
+- Quick access to results and exposed files
+
+### Option 2: Command Line
 
 - nudenet
 
