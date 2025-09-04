@@ -18,10 +18,12 @@ Two versions of the script are available:
 
 ## Features
 
-1. **File Classification**: Identifies nudity in supported image and video files.
-2. **File Management**: Copies files with detected nudity to an `exposed` folder for review.
-3. **Report Generation**: Creates an Excel report in the `exposed` folder summarizing detection results.
-4. **Multi-Threading**: Speeds up classification by processing files in parallel.
+1. **Graphical User Interface**: Easy-to-use tkinter GUI with model selection and progress tracking.
+2. **File Classification**: Identifies nudity in supported image and video files.
+3. **File Management**: Copies files with detected nudity to an `exposed` folder for review.
+4. **Report Generation**: Creates an Excel report in the `exposed` folder summarizing detection results.
+5. **Multi-Threading**: Speeds up classification by processing files in parallel.
+6. **Real-time Progress**: Visual progress indicators and logging during scanning.
 
 ---
 
@@ -81,6 +83,38 @@ Two versions of the script are available:
     ```
 
 6. **Run the process**:
+
+### Option 1: GUI Application (Recommended)
+
+This will require tkinter to be installed.
+
+  On Ubuntu/Debian, you can install it using:
+
+  ```bash
+  sudo apt-get install python3-tk
+  ```
+
+  On Windows, it is included with the standard Python installation. or you can use
+
+  ```bash
+  pip install tk
+  ```
+
+  Then run:
+
+  ```bash
+  python3 nudity_detector_gui.py
+  ```
+
+  The GUI provides an easy-to-use interface with:
+
+- Model selection (NudeNet or DeepStack)
+- Folder browsing and selection
+- Progress tracking with visual indicators
+- Automatic report generation
+- Quick access to results and exposed files
+
+### Option 2: Command Line
 
 - nudenet
 
