@@ -128,14 +128,20 @@ class DetectionResult:
     nudity_detected: bool = False
     detected_classes: List[str] = field(default_factory=list)
 
+    def _serialize_classes(self) -> str:
+        """Serialize detected_classes list to a JSON string."""
+        import json
+        try:
+            return json.dumps(self.detected_classes, ensure_ascii=False)
+        except (TypeError, ValueError):
+            return str(self.detected_classes)
+
     def to_report_entry(
         self,
         threshold_percent: float = constants.DEFAULT_THRESHOLD_PERCENT,
         thumbnail: str = '',
     ) -> ReportEntry:
         """Convert detection result to report entry."""
-        from datetime import datetime as dt
-
         return ReportEntry(
             file=self.file_path,
             media_type=self.media_type,
@@ -145,5 +151,5 @@ class DetectionResult:
             nudity_detected=self.nudity_detected,
             detected_classes=self._serialize_classes(),
             thumbnail=thumbnail,
-            date_classified=dt.now().strftime('%Y-%m-%d %H:%M:%S'),
+            date_classified=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
         )

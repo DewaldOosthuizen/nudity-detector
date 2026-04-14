@@ -12,7 +12,10 @@ import tempfile
 from io import BytesIO
 from typing import Optional, Tuple, List
 
-import cv2
+try:
+    import cv2
+except ImportError:
+    cv2 = None
 
 try:
     from PIL import Image
@@ -54,9 +57,14 @@ class FrameExtractor:
         """Initialize frame extractor.
 
         Args:
-            frame_rate: Extract every Nth frame
+            frame_rate: Extract every Nth frame (must be >= 1)
             temp_prefix: Prefix for temporary directory
+
+        Raises:
+            ValueError: If frame_rate is less than 1
         """
+        if frame_rate < 1:
+            raise ValueError(f'frame_rate must be >= 1, got {frame_rate}')
         self.frame_rate = frame_rate
         self.temp_prefix = temp_prefix or constants.FRAME_TEMP_DIR_PREFIX_CLI_NUDENET
         self.temp_dir: Optional[str] = None
@@ -72,8 +80,11 @@ class FrameExtractor:
             Tuple of (temp_dir, frame_paths)
 
         Raises:
-            RuntimeError: If video cannot be opened
+            RuntimeError: If OpenCV is not available or video cannot be opened
         """
+        if cv2 is None:
+            raise RuntimeError('OpenCV (cv2) is required for frame extraction but is not installed')
+
         self.temp_dir = tempfile.mkdtemp(prefix=self.temp_prefix)
         self.frame_paths = []
 

@@ -17,6 +17,7 @@ import logging
 import os
 import subprocess
 import sys
+from datetime import datetime
 from queue import Empty, Queue
 from threading import Lock, Thread
 from typing import Optional, Tuple
@@ -28,7 +29,7 @@ except ImportError:
 
 from . import constants
 from .models import ReportEntry, SessionState, ScanConfig
-from ..processing.media_processor import detect_media_type, is_supported_file, ThumbnailGenerator, FrameExtractor
+from ..processing.media_processor import detect_media_type, is_supported_file, ThumbnailGenerator
 from ..reporting.report_manager import ReportManager
 
 
@@ -423,7 +424,7 @@ def handle_results(
             constants.RESULT_FIELD_NUDITY: bool(nudity_detected),
             constants.RESULT_FIELD_CLASSES: json.dumps(raw_result, ensure_ascii=False) if not isinstance(raw_result, str) else raw_result,
             constants.RESULT_FIELD_THUMBNAIL: thumbnail,
-            constants.RESULT_FIELD_DATE: __import__('datetime').datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            constants.RESULT_FIELD_DATE: datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
         }
         nudity_report.append(entry_data)
 

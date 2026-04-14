@@ -103,8 +103,11 @@ class ReportManager:
             if sheet.max_row < 2:  # No data rows
                 return []
 
-            headers = [cell.value for cell in sheet[1] if cell.value]
-            normalized_headers = {str(h).strip(): idx for idx, h in enumerate(headers)}
+            normalized_headers = {
+                str(cell.value).strip(): idx
+                for idx, cell in enumerate(sheet[1])
+                if cell.value
+            }
 
             entries = []
             for row_idx, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
