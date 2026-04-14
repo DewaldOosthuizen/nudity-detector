@@ -1,12 +1,11 @@
 import json
 import logging
 import os
+import shutil
 import tempfile
 
 import cv2
 from nudenet import NudeDetector
-
-import logging
 
 from nudity_detector_utils import (
     classify_files_in_folder,
@@ -85,11 +84,7 @@ def extract_frames(file_path, frame_rate=5):
 
 def cleanup_frames(temp_dir):
     if os.path.isdir(temp_dir):
-        for file_name in os.listdir(temp_dir):
-            file_path = os.path.join(temp_dir, file_name)
-            if os.path.isfile(file_path):
-                os.remove(file_path)
-        os.rmdir(temp_dir)
+        shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 if __name__ == '__main__':

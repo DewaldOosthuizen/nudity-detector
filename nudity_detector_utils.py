@@ -27,7 +27,7 @@ import subprocess
 import sys
 from datetime import datetime
 from io import BytesIO
-from queue import Queue
+from queue import Empty, Queue
 from threading import Lock, Thread
 from typing import Optional, Tuple
 
@@ -177,6 +177,10 @@ def generate_video_thumbnail(file_path: str, size: Tuple[int, int] = (100, 100))
     if cv2 is None:
         logging.debug('OpenCV not available for video thumbnail generation: %s', file_path)
         return None
+
+    if Image is None:
+        logging.debug('PIL not available for video thumbnail generation: %s', file_path)
+        return None
         
     try:
         cap = cv2.VideoCapture(file_path)
@@ -277,7 +281,7 @@ def detect_with_timeout(detector, file_path: str, timeout_seconds: int = 60) -> 
         timeout_seconds: Timeout in seconds
         
     Returns:
-        Detection results or None if timeout
+        Detection results when detection completes successfully
         
     Raises:
         TimeoutError: If detection exceeds timeout
@@ -293,7 +297,7 @@ def detect_with_timeout(detector, file_path: str, timeout_seconds: int = 60) -> 
         except Exception as e:
             exception_container[0] = e
     
-    thread = Thread(target=run_detection, daemon=False)
+    thread = Thread(target=run_detection, daemon=True)
     thread.start()
     thread.join(timeout=timeout_seconds)
     
@@ -436,8 +440,11 @@ def process_file_queue(file_queue, classify_image, classify_video):
         classify_image: Image classification function
         classify_video: Video classification function
     """
-    while not file_queue.empty():
-        file_path = file_queue.get()
+    while True:
+        try:
+            file_path = file_queue.get_nowait()
+        except Empty:
+            break
         try:
             process_file(file_path, classify_image, classify_video)
         except Exception as e:
@@ -609,6 +616,7 @@ def save_nudity_report(report_data, file_path, session_state=None):
 def check_and_save_report(report_data, file_path, batch_size=500, session_state=None):
     if len(report_data) >= batch_size:
         save_nudity_report(report_data, file_path, session_state=session_state)
+        report_data.clear()
 
 
 def _sheet_headers(sheet):

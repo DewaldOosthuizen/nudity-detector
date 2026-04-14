@@ -8,6 +8,7 @@ Supports both NudeNet and DeepStack models.
 import base64
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 import threading
@@ -352,9 +353,9 @@ class NudityDetectorGUI:
     def check_deepstack_server(self):
         try:
             import requests
-            requests.get('http://localhost:5000', timeout=5)
-            return True
-        except (OSError, IOError, json.JSONDecodeError):
+            response = requests.get('http://localhost:5000', timeout=5)
+            return response.ok
+        except requests.exceptions.RequestException:
             return False
 
     def start_scanning(self):
@@ -412,11 +413,7 @@ class NudityDetectorGUI:
         return temp_dir, frame_paths
 
     def cleanup_frame_dir(self, temp_dir, frame_paths):
-        for frame_path in frame_paths:
-            if os.path.exists(frame_path):
-                os.remove(frame_path)
-        if os.path.isdir(temp_dir):
-            os.rmdir(temp_dir)
+        shutil.rmtree(temp_dir, ignore_errors=True)
 
     def create_nudenet_classifiers(self, existing_files, threshold_value, threshold_percent):
         from nudenet import NudeDetector

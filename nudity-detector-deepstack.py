@@ -1,5 +1,6 @@
 import logging
 import os
+import shutil
 import tempfile
 
 import cv2
@@ -147,11 +148,7 @@ if __name__ == '__main__':
             logging.error('Error classifying video %s: %s', file_path, error)
         finally:
             if temp_dir and os.path.isdir(temp_dir):
-                for frame_name in os.listdir(temp_dir):
-                    frame_path = os.path.join(temp_dir, frame_name)
-                    if os.path.isfile(frame_path):
-                        os.remove(frame_path)
-                os.rmdir(temp_dir)
+                shutil.rmtree(temp_dir, ignore_errors=True)
 
     logging.debug('User input folder: %s', folder_to_classify)
     reset_nudity_report()
