@@ -136,21 +136,23 @@ cd ..
 
 # 2. Run NudeNet CLI interactively
 python3 nudity-detector-nudenet.py
-# When prompted, enter: test_scenario
+# When prompted, enter:
+#  - folder: test_scenario
+#  - threshold: 60
 
 # 3. Verify outputs
-ls -la exposed/
-file exposed/nudity_report.xlsx
+ls -la reports/
+file reports/nudity_report.xlsx
 
 # 4. Clean up
-rm -rf test_scenario exposed
+rm -rf test_scenario reports
 ```
 
 Expected results:
 - Should process 2 images (test1.jpg, test2.png)
 - Should skip bad_file.txt with "unsupported file" message
-- Should create `exposed/` folder with `nudity_report.xlsx`
-- Should show "Report saved to exposed/nudity_report.xlsx"
+- Should create `reports/` folder with `nudity_report.xlsx`
+- Should show "Report saved to reports/nudity_report.xlsx"
 
 ### Manual Testing Scenarios
 - **Basic Image Processing**: Use the end-to-end scenario above
@@ -175,19 +177,19 @@ Expected results:
 ### Testing Changes
 - Always run validation scenarios above after making code changes
 - Test both NudeNet and DeepStack backends if modifying core detection logic
-- Verify report generation works by checking `exposed/nudity_report.xlsx` creation
+- Verify report generation works by checking `reports/nudity_report.xlsx` creation
 
 ## Common Tasks
 
 ### Repository Structure
 ```
 .
-├── README.md                          # Project documentation
-├── requirements.txt                   # Python dependencies  
-├── docker-compose.yml                 # DeepStack server config
+├── README.md                         # Project documentation
+├── requirements.txt                  # Python dependencies
+├── docker-compose.yml                # DeepStack server config
 ├── nudity_detector_gui.py            # GUI application (tkinter)
 ├── nudity-detector-nudenet.py        # NudeNet CLI
-├── nudity-detector-deepstack.py      # DeepStack CLI  
+├── nudity-detector-deepstack.py      # DeepStack CLI
 ├── nudity_detector_utils.py          # Shared utilities
 └── .github/
     └── copilot-instructions.md       # This file
@@ -201,8 +203,11 @@ Expected results:
 ```
 nudenet          # Local AI nudity detection
 vnudenet         # Enhanced nudity detection
-openpyxl         # Excel report generation  
+openpyxl         # Excel report generation
+Pillow           # Image thumbnail generation
+opencv-python    # Video frame extraction and thumbnail generation
 requests         # HTTP client for DeepStack API
+Send2Trash       # Safe file deletion to recycle bin/trash
 ```
 
 ### Environment Requirements
@@ -213,6 +218,6 @@ requests         # HTTP client for DeepStack API
 
 ### Troubleshooting
 - **GUI fails with "no display"**: Normal in headless environments, use CLI instead
-- **DeepStack API 404**: Wait 15+ seconds after container start for full initialization  
+- **DeepStack API 404**: Wait 15+ seconds after container start for full initialization
 - **Import errors**: Ensure `pip3 install -r requirements.txt` completed successfully
 - **Docker permission issues**: User must be in docker group or use sudo

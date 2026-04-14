@@ -118,6 +118,10 @@ dmypy.json
 .vscode/
 .history/
 
-# Exposed folder
+# Reports folder
 samples/
-exposed/
+reports/
+
+# AI
+.codegraph/
+openspec/

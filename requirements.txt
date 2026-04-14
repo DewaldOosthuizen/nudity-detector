@@ -2,4 +2,7 @@
 nudenet
 vnudenet
 openpyxl
+Pillow
+opencv-python
 requests
+Send2Trash
