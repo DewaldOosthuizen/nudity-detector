@@ -5,6 +5,7 @@ Provides type-safe, structured data classes for report entries, scan configs, an
 
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
+import json
 from typing import Dict, Any, List, Optional
 
 from . import constants
@@ -130,7 +131,6 @@ class DetectionResult:
 
     def _serialize_classes(self) -> str:
         """Serialize detected_classes list to a JSON string."""
-        import json
         try:
             return json.dumps(self.detected_classes, ensure_ascii=False)
         except (TypeError, ValueError):
