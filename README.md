@@ -8,12 +8,12 @@ moderation, safety filters, and compliance checks.
 
 The **Nudity Detector** application identifies nudity in images and videos using AI-based models. It scans files, stores reports in a dedicated reports folder, and presents detected items in the GUI for review actions.
 
-Two versions of the script are available:
+Two detector backends are available:
 
-- **Nudenet**: Uses the `nudenet` library for nudity detection.
+- **NudeNet**: Uses the `nudenet` library for local nudity detection.
   - Basic
   - Not always accurate
-  - Process videos by extracting frames and analyzing the frames as images.
+  - Processes videos by extracting frames and analysing them as images.
 - **DeepStack**: Uses the `DeepStack` AI server for detection.
 
 ## Features
@@ -97,7 +97,7 @@ This will require tkinter to be installed.
   sudo apt-get install python3-tk
   ```
 
-  On Windows, it is included with the standard Python installation. or you can use
+  On Windows, it is included with the standard Python installation, or you can use:
 
   ```bash
   pip install tk
@@ -106,7 +106,7 @@ This will require tkinter to be installed.
   Then run:
 
   ```bash
-  python3 nudity_detector_gui.py
+  python3 run_gui.py
   ```
 
   The GUI provides an easy-to-use interface with:
@@ -123,20 +123,20 @@ This will require tkinter to be installed.
 
 ### Option 2: Command Line
 
-- nudenet
+- NudeNet
 
   ```bash
-  python3 nudity-detector-nudenet.py
+  python3 run_nudenet.py
   ```
 
   Prompts:
   - source folder path
   - detection threshold percentage
 
-- Deepstack
+- DeepStack
 
-    ```bash
-  python3 nudity-detector-deepstack.py
+  ```bash
+  python3 run_deepstack.py
   ```
 
   Prompts:
