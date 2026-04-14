@@ -2,7 +2,7 @@
 """
 Nudity Detector GUI
 A tkinter-based graphical user interface for the nudity detection system.
-Supports both NudeNet and DeepStack models.
+Supports both NudeNet and DeepStack models with theme support and session persistence.
 """
 
 import base64
@@ -26,7 +26,8 @@ except ImportError:
     Image = None
     ImageTk = None
 
-from nudity_detector_utils import (
+from ..core import constants
+from ..core.utils import (
     DEFAULT_REPORT_DIR,
     classify_files_in_folder,
     create_session_state,
@@ -46,31 +47,21 @@ from nudity_detector_utils import (
     save_nudity_report,
 )
 
-NUDITY_CLASSES = {
-    'EXPOSED_ANUS',
-    'EXPOSED_BREAST_F',
-    'EXPOSED_GENITALIA_F',
-    'EXPOSED_GENITALIA_M',
-    'EXPOSED_BUTTOCKS',
-}
-XLSX_EXTENSION = '.xlsx'
-NO_THUMBNAIL_TEXT = 'No thumbnail available'
-
 
 class NudityDetectorGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title('Nudity Detector')
-        self.root.geometry('1080x820')
-        self.root.minsize(900, 700)
+        self.root.title(constants.GUI_WINDOW_TITLE)
+        self.root.geometry(constants.GUI_WINDOW_GEOMETRY)
+        self.root.minsize(constants.GUI_WINDOW_MIN_WIDTH, constants.GUI_WINDOW_MIN_HEIGHT)
 
         self.style = ttk.Style()
         self.default_theme_name = self.style.theme_use()
 
-        self.model_var = tk.StringVar(value='nudenet')
+        self.model_var = tk.StringVar(value=constants.MODEL_NUDENET)
         self.folder_var = tk.StringVar()
-        self.theme_var = tk.StringVar(value='system')
-        self.threshold_var = tk.DoubleVar(value=60.0)
+        self.theme_var = tk.StringVar(value=constants.THEME_SYSTEM)
+        self.threshold_var = tk.DoubleVar(value=constants.DEFAULT_THRESHOLD_PERCENT)
         self.status_var = tk.StringVar(value='Ready')
         self.summary_var = tk.StringVar(value='No scan has been run yet.')
 
@@ -89,7 +80,7 @@ class NudityDetectorGUI:
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(0, weight=1)
 
-        main_frame = ttk.Frame(self.root, padding=16)
+        main_frame = ttk.Frame(self.root, padding=constants.GUI_FRAME_PADDING)
         main_frame.grid(row=0, column=0, sticky='nsew')
         main_frame.columnconfigure(0, weight=1)
         main_frame.rowconfigure(3, weight=1)
@@ -106,7 +97,7 @@ class NudityDetectorGUI:
             style='Subtitle.TLabel',
         ).grid(row=1, column=0, sticky='w', pady=(4, 0))
 
-        controls_frame = ttk.LabelFrame(main_frame, text='Scan Settings', padding=12)
+        controls_frame = ttk.LabelFrame(main_frame, text='Scan Settings', padding=constants.GUI_CONTROLS_PADDING)
         controls_frame.grid(row=1, column=0, sticky='ew', pady=(0, 12))
         controls_frame.columnconfigure(1, weight=1)
         controls_frame.columnconfigure(3, weight=1)
@@ -115,7 +106,7 @@ class NudityDetectorGUI:
         self.theme_combo = ttk.Combobox(
             controls_frame,
             textvariable=self.theme_var,
-            values=('system', 'light', 'dark'),
+            values=constants.SUPPORTED_THEMES,
             state='readonly',
         )
         self.theme_combo.grid(row=0, column=1, sticky='ew', padx=(8, 16), pady=(0, 8))
@@ -124,8 +115,8 @@ class NudityDetectorGUI:
         ttk.Label(controls_frame, text='Model').grid(row=0, column=2, sticky='w')
         model_frame = ttk.Frame(controls_frame)
         model_frame.grid(row=0, column=3, sticky='w', pady=(0, 8))
-        self.nudenet_radio = ttk.Radiobutton(model_frame, text='NudeNet', variable=self.model_var, value='nudenet')
-        self.deepstack_radio = ttk.Radiobutton(model_frame, text='DeepStack', variable=self.model_var, value='deepstack')
+        self.nudenet_radio = ttk.Radiobutton(model_frame, text='NudeNet', variable=self.model_var, value=constants.MODEL_NUDENET)
+        self.deepstack_radio = ttk.Radiobutton(model_frame, text='DeepStack', variable=self.model_var, value=constants.MODEL_DEEPSTACK)
         self.nudenet_radio.grid(row=0, column=0, sticky='w')
         self.deepstack_radio.grid(row=0, column=1, sticky='w', padx=(12, 0))
 
@@ -179,18 +170,17 @@ class NudityDetectorGUI:
 
         ttk.Label(results_frame, textvariable=self.summary_var, style='Summary.TLabel').grid(row=0, column=0, sticky='w', pady=(0, 8))
 
-        columns = ('name', 'media_type', 'confidence', 'model', 'path')
-        self.results_tree = ttk.Treeview(results_frame, columns=columns, show='headings', height=12)
+        self.results_tree = ttk.Treeview(results_frame, columns=constants.TREE_COLUMNS, show='headings', height=constants.TREE_HEIGHT)
         self.results_tree.heading('name', text='File')
         self.results_tree.heading('media_type', text='Type')
         self.results_tree.heading('confidence', text='Confidence')
         self.results_tree.heading('model', text='Model')
         self.results_tree.heading('path', text='Path')
-        self.results_tree.column('name', width=220, anchor='w')
-        self.results_tree.column('media_type', width=90, anchor='center')
-        self.results_tree.column('confidence', width=110, anchor='center')
-        self.results_tree.column('model', width=100, anchor='center')
-        self.results_tree.column('path', width=430, anchor='w')
+
+        for col in constants.TREE_COLUMNS:
+            width = constants.TREE_COLUMN_WIDTHS.get(col, 100)
+            anchor = constants.TREE_COLUMN_ANCHORS.get(col, 'w')
+            self.results_tree.column(col, width=width, anchor=anchor)
         self.results_tree.grid(row=1, column=0, sticky='nsew')
 
         tree_scroll = ttk.Scrollbar(results_frame, orient='vertical', command=self.results_tree.yview)
@@ -205,9 +195,9 @@ class NudityDetectorGUI:
         ttk.Label(preview_frame, text='Thumbnail Preview').grid(row=0, column=0, sticky='w', pady=(0, 8))
         self.thumbnail_image_label = ttk.Label(
             preview_frame,
-            text=NO_THUMBNAIL_TEXT,
+            text=constants.NO_THUMBNAIL_TEXT,
             anchor='center',
-            width=30,
+            width=constants.GUI_PREVIEW_PANEL_WIDTH,
         )
         self.thumbnail_image_label.grid(row=1, column=0, sticky='n', pady=(0, 8))
         ttk.Label(preview_frame, textvariable=self.thumbnail_meta_var, wraplength=220, justify='left').grid(
@@ -353,7 +343,7 @@ class NudityDetectorGUI:
     def check_deepstack_server(self):
         try:
             import requests
-            response = requests.get('http://localhost:5000', timeout=5)
+            response = requests.get(constants.DEEPSTACK_CONNECTION_CHECK_URL, timeout=constants.DEEPSTACK_HEALTH_CHECK_TIMEOUT)
             return response.ok
         except requests.exceptions.RequestException:
             return False
@@ -366,10 +356,10 @@ class NudityDetectorGUI:
         if not os.path.isdir(folder_path):
             messagebox.showerror('Error', 'Selected folder does not exist.')
             return
-        if self.model_var.get() == 'deepstack' and not self.check_deepstack_server():
+        if self.model_var.get() == constants.MODEL_DEEPSTACK and not self.check_deepstack_server():
             messagebox.showerror(
                 'Error',
-                'DeepStack server is not available at http://localhost:5000\nPlease start it before scanning.',
+                f'DeepStack server is not available at {constants.DEEPSTACK_CONNECTION_CHECK_URL}\nPlease start it before scanning.',
             )
             return
 
@@ -430,7 +420,7 @@ class NudityDetectorGUI:
             class_scores = [
                 record.get('score', 0.0)
                 for record in detection_result
-                if record.get('label') in NUDITY_CLASSES
+                if record.get('label') in constants.NUDITY_CLASSES
             ]
             return max(class_scores, default=0.0)
 
@@ -564,7 +554,7 @@ class NudityDetectorGUI:
         existing_files = {entry.get('file') for entry in load_report_entries(report_path)}
 
         try:
-            if model_name == 'nudenet':
+            if model_name == constants.MODEL_NUDENET:
                 classify_image, classify_video = self.create_nudenet_classifiers(
                     existing_files,
                     threshold_value,
@@ -637,7 +627,7 @@ class NudityDetectorGUI:
 
     def clear_thumbnail_preview(self):
         self.thumbnail_photo = None
-        self.thumbnail_image_label.config(image='', text=NO_THUMBNAIL_TEXT)
+        self.thumbnail_image_label.config(image='', text=constants.NO_THUMBNAIL_TEXT)
         self.thumbnail_meta_var.set('Select a result to preview.')
 
     def update_thumbnail_preview(self):
@@ -655,7 +645,7 @@ class NudityDetectorGUI:
 
         if not thumbnail_b64 or Image is None or ImageTk is None:
             self.thumbnail_photo = None
-            self.thumbnail_image_label.config(image='', text=NO_THUMBNAIL_TEXT)
+            self.thumbnail_image_label.config(image='', text=constants.NO_THUMBNAIL_TEXT)
             self.thumbnail_meta_var.set(meta_text)
             return
 
@@ -663,9 +653,9 @@ class NudityDetectorGUI:
             thumbnail_bytes = base64.b64decode(thumbnail_b64)
             with Image.open(BytesIO(thumbnail_bytes)) as pil_image:
                 if hasattr(Image, 'Resampling'):
-                    pil_image.thumbnail((220, 220), Image.Resampling.LANCZOS)
+                    pil_image.thumbnail(constants.THUMBNAIL_SIZE_PREVIEW, Image.Resampling.LANCZOS)
                 else:
-                    pil_image.thumbnail((220, 220))
+                    pil_image.thumbnail(constants.THUMBNAIL_SIZE_PREVIEW)
                 self.thumbnail_photo = ImageTk.PhotoImage(pil_image)
 
             self.thumbnail_image_label.config(image=self.thumbnail_photo, text='')
@@ -722,9 +712,6 @@ class NudityDetectorGUI:
             messagebox.showerror('Delete failed', message)
             return
 
-        # Note: With new schema, detected files are not copied to the reports folder.
-        # They remain at original location. No cleanup of copies needed.
-
         del self.detected_results[index]
         remaining_entries = [item for item in nudity_report if item.get('file') != entry.get('file')]
         replace_nudity_report(remaining_entries)
@@ -735,8 +722,8 @@ class NudityDetectorGUI:
     def save_session_dialog(self):
         report_path = filedialog.asksaveasfilename(
             title='Save scan report',
-            defaultextension=XLSX_EXTENSION,
-            filetypes=[('Excel Report', f'*{XLSX_EXTENSION}')],
+            defaultextension=constants.XLSX_EXTENSION,
+            filetypes=[('Excel Report', f'*{constants.XLSX_EXTENSION}')],
             initialfile=os.path.basename(self.last_report_path),
         )
         if not report_path:
@@ -750,14 +737,14 @@ class NudityDetectorGUI:
     def load_session_dialog(self):
         file_path = filedialog.askopenfilename(
             title='Load saved session',
-            filetypes=[('Report or Session', f'*{XLSX_EXTENSION} *.json'), ('Excel Report', f'*{XLSX_EXTENSION}'), ('JSON Session', '*.json')],
+            filetypes=[('Report or Session', f'*{constants.XLSX_EXTENSION} *.json'), ('Excel Report', f'*{constants.XLSX_EXTENSION}'), ('JSON Session', '*.json')],
         )
         if file_path:
             self.load_session_from_path(file_path, show_feedback=True)
 
     def load_session_from_path(self, file_path, show_feedback):
         session_state = load_scan_session(file_path)
-        report_path = file_path if file_path.endswith(XLSX_EXTENSION) else file_path.replace('_session.json', XLSX_EXTENSION)
+        report_path = file_path if file_path.endswith(constants.XLSX_EXTENSION) else file_path.replace('_session.json', constants.XLSX_EXTENSION)
         report_entries = load_report_entries(report_path) if os.path.exists(report_path) else []
         detected_results = session_state.get('results') or get_detected_results(report_entries)
         scan_config = session_state.get('scan_config', {})
