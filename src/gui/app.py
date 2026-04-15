@@ -670,7 +670,10 @@ class NudityDetectorGUI:
                 if os.path.isdir(entry_path):
                     shutil.rmtree(entry_path, ignore_errors=True)
                 elif os.path.isfile(entry_path):
-                    os.remove(entry_path)
+                    try:
+                        os.remove(entry_path)
+                    except OSError:
+                        pass
         reset_nudity_report()
         self.detected_results = []
         self.last_report_path = get_report_path()
