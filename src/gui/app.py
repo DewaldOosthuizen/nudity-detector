@@ -50,6 +50,10 @@ class NudityDetectorWindow(
         self._folder = cfg.get('last_source_folder', '')
         self._theme_mode = cfg.get('theme', constants.THEME_SYSTEM)
         self._threshold = float(cfg.get('threshold_percent', constants.DEFAULT_THRESHOLD_PERCENT))
+        try:
+            self._progress_interval = max(1, int(cfg.get('progress_update_interval', constants.SCAN_PROGRESS_UPDATE_INTERVAL)))
+        except (ValueError, TypeError):
+            self._progress_interval = constants.SCAN_PROGRESS_UPDATE_INTERVAL
 
         self.is_processing = False
         self.processing_thread = None
@@ -203,6 +207,30 @@ class NudityDetectorWindow(
         threshold_help.set_wrap(True)
         threshold_help.set_hexpand(True)
         grid.attach(threshold_help, 2, 2, 2, 1)
+
+        # Progress update interval row
+        interval_label = Gtk.Label(label='Update Every')
+        interval_label.set_xalign(0)
+        grid.attach(interval_label, 0, 3, 1, 1)
+
+        interval_adj = Gtk.Adjustment(
+            value=self._progress_interval,
+            lower=1,
+            upper=10000,
+            step_increment=10,
+            page_increment=100,
+        )
+        self.progress_interval_spin = Gtk.SpinButton(adjustment=interval_adj, climb_rate=1, digits=0)
+        grid.attach(self.progress_interval_spin, 1, 3, 1, 1)
+
+        interval_help = Gtk.Label(
+            label='Refresh detected results in the view every N files processed during a scan.'
+        )
+        interval_help.set_xalign(0)
+        interval_help.add_css_class('dim-label')
+        interval_help.set_wrap(True)
+        interval_help.set_hexpand(True)
+        grid.attach(interval_help, 2, 3, 2, 1)
 
         # --- Action buttons ---
         action_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
@@ -432,6 +460,7 @@ class NudityDetectorWindow(
                 'model': self._get_model(),
                 'threshold_percent': self.threshold_spin.get_value(),
                 'last_source_folder': self.folder_entry.get_text().strip(),
+                'progress_update_interval': self._get_progress_interval(),
             }
             with open(config_path, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=2)
@@ -449,6 +478,9 @@ class NudityDetectorWindow(
         idx = self.theme_dropdown.get_selected()
         themes = list(constants.SUPPORTED_THEMES)
         return themes[idx] if idx < len(themes) else constants.THEME_SYSTEM
+
+    def _get_progress_interval(self) -> int:
+        return max(1, int(self.progress_interval_spin.get_value()))
 
     # ------------------------------------------------------------------
     # Theme
@@ -481,6 +513,7 @@ class NudityDetectorWindow(
         self.nudenet_radio.set_sensitive(not processing)
         self.deepstack_radio.set_sensitive(not processing)
         self.clear_all_button.set_sensitive(not processing)
+        self.progress_interval_spin.set_sensitive(not processing)
         for button_name in (
             'save_session_button',
             'load_session_button',
