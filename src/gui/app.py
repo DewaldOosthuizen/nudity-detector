@@ -115,7 +115,7 @@ class NudityDetectorGUI:
             state='readonly',
         )
         self.theme_combo.grid(row=0, column=1, sticky='ew', padx=(8, 16), pady=(0, 8))
-        self.theme_combo.bind('<<ComboboxSelected>>', lambda _event: [self.apply_theme(self.theme_var.get()), self._save_config()])
+        self.theme_combo.bind('<<ComboboxSelected>>', self._on_theme_selected)
 
         ttk.Label(controls_frame, text='Model').grid(row=0, column=2, sticky='w')
         model_frame = ttk.Frame(controls_frame)
@@ -395,6 +395,10 @@ class NudityDetectorGUI:
             selectbackground=colors['accent'],
         )
 
+    def _on_theme_selected(self, _event=None):
+        self.apply_theme(self.theme_var.get())
+        self._save_config()
+
     def set_controls_for_processing(self, processing):
         state = 'disabled' if processing else 'normal'
         self.start_button.config(state='disabled' if processing else 'normal')
@@ -405,6 +409,7 @@ class NudityDetectorGUI:
         self.threshold_spinbox.config(state=state)
         self.nudenet_radio.config(state=state)
         self.deepstack_radio.config(state=state)
+        self.clear_all_button.config(state=state)
 
     def check_deepstack_server(self):
         try:
@@ -650,6 +655,9 @@ class NudityDetectorGUI:
             self.root.after(0, self.finish_processing)
 
     def clear_all_scan_results(self):
+        if self.is_processing:
+            messagebox.showwarning('Scan In Progress', 'Cannot clear results while a scan is running. Stop the scan first.')
+            return
         if not messagebox.askyesno(
             'Clear All Results',
             'This will permanently delete all previous scan reports and cannot be undone.\n\nContinue?',
@@ -658,9 +666,11 @@ class NudityDetectorGUI:
         report_dir = DEFAULT_REPORT_DIR
         if os.path.isdir(report_dir):
             for name in os.listdir(report_dir):
-                subdir_path = os.path.join(report_dir, name)
-                if os.path.isdir(subdir_path):
-                    shutil.rmtree(subdir_path, ignore_errors=True)
+                entry_path = os.path.join(report_dir, name)
+                if os.path.isdir(entry_path):
+                    shutil.rmtree(entry_path, ignore_errors=True)
+                elif os.path.isfile(entry_path):
+                    os.remove(entry_path)
         reset_nudity_report()
         self.detected_results = []
         self.last_report_path = get_report_path()
@@ -721,7 +731,8 @@ class NudityDetectorGUI:
         """Try to load a full-quality PIL image from the original file."""
         resampler = Image.Resampling.LANCZOS if hasattr(Image, 'Resampling') else Image.LANCZOS
         if media_type == constants.MEDIA_TYPE_IMAGE:
-            img = Image.open(file_path).copy()
+            with Image.open(file_path) as im:
+                img = im.copy()
             img.thumbnail(constants.THUMBNAIL_SIZE_PREVIEW_IMAGE, resampler)
             return img
         if media_type == constants.MEDIA_TYPE_VIDEO:
