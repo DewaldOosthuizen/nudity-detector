@@ -90,6 +90,11 @@ class NudityDetectorWindow(
         self.detected_results = []
         self.last_report_path = self._find_latest_report_path() or get_report_path()
         self._pulse_source_id = None
+        self._tail_log = True
+        # Scan-progress tracking (reset at start of each scan)
+        self._total_files = 0          # total supported files identified before scan
+        self._last_populated_count = 0  # last len(detected_results) pushed to the list store
+        self._progress_fraction = 0.0  # current 0‑1 progress fraction driven by _pulse_tick
 
         self._build_ui()
         self._apply_theme(self._theme_mode)
@@ -633,17 +638,32 @@ class NudityDetectorWindow(
 
         # --- Activity Log ---
         log_frame = Gtk.Frame()
-        log_frame.set_label('Activity Log')
         log_frame.set_vexpand(True)
         log_frame.set_margin_bottom(12)
         outer.append(log_frame)
 
-        log_inner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        log_inner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         log_inner.set_margin_top(8)
         log_inner.set_margin_bottom(8)
         log_inner.set_margin_start(8)
         log_inner.set_margin_end(8)
         log_frame.set_child(log_inner)
+
+        # Log header row: label on the left, controls on the right
+        log_header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        log_inner.append(log_header)
+
+        log_title = Gtk.Label(label='Activity Log')
+        log_title.add_css_class('heading')
+        log_title.set_xalign(0)
+        log_title.set_hexpand(True)
+        log_header.append(log_title)
+
+        self.tail_log_button = Gtk.ToggleButton(label='Tail Log')
+        self.tail_log_button.set_active(True)
+        self.tail_log_button.set_tooltip_text('Automatically scroll to the latest log entry')
+        self.tail_log_button.connect('toggled', self._on_tail_log_toggled)
+        log_header.append(self.tail_log_button)
 
         self.log_scroll = Gtk.ScrolledWindow()
         self.log_scroll.set_vexpand(True)
@@ -651,6 +671,10 @@ class NudityDetectorWindow(
         log_inner.append(self.log_scroll)
 
         self.log_buffer = Gtk.TextBuffer()
+        # Color tags for log levels
+        self.log_buffer.create_tag('error', foreground='#e01b24')
+        self.log_buffer.create_tag('warning', foreground='#e5a50a')
+        self.log_buffer.create_tag('success', foreground='#26a269')
         self.log_view = Gtk.TextView(buffer=self.log_buffer)
         self.log_view.set_editable(False)
         self.log_view.set_cursor_visible(False)
@@ -670,6 +694,7 @@ class NudityDetectorWindow(
         self.status_label = Gtk.Label(label='Ready')
         self.status_label.set_xalign(1)
         footer_box.append(self.status_label)
+
 
         return scroll
 
@@ -840,13 +865,24 @@ class NudityDetectorWindow(
     # Activity log
     # ------------------------------------------------------------------
 
-    def log_message(self, message):
+    def _on_tail_log_toggled(self, button):
+        self._tail_log = button.get_active()
+        if self._tail_log:
+            end_iter = self.log_buffer.get_end_iter()
+            self.log_view.scroll_to_iter(end_iter, 0.0, False, 0.0, 1.0)
+
+    def log_message(self, message, level='info'):
         timestamp = datetime.now().strftime('%H:%M:%S')
         line = f'[{timestamp}] {message}\n'
         adj = self.log_scroll.get_vadjustment()
-        at_bottom = adj.get_value() >= adj.get_upper() - adj.get_page_size() - 1.0
+        at_bottom = self._tail_log or (adj.get_value() >= adj.get_upper() - adj.get_page_size() - 1.0)
+        line_start = self.log_buffer.get_end_iter().get_offset()
         end_iter = self.log_buffer.get_end_iter()
         self.log_buffer.insert(end_iter, line)
+        if level in ('error', 'warning', 'success'):
+            start_iter = self.log_buffer.get_iter_at_offset(line_start)
+            end_iter = self.log_buffer.get_end_iter()
+            self.log_buffer.apply_tag_by_name(level, start_iter, end_iter)
         if at_bottom:
             end_iter = self.log_buffer.get_end_iter()
             self.log_view.scroll_to_iter(end_iter, 0.0, False, 0.0, 1.0)

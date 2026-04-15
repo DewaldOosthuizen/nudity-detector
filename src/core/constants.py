@@ -113,7 +113,7 @@ DEEPSTACK_CONNECTION_CHECK_URL = f'http://{DEEPSTACK_HOST}:{DEEPSTACK_PORT}'
 # GUI Configuration - UI Constants
 # ============================================================================
 GUI_WINDOW_TITLE = 'Nudity Detector'
-GUI_WINDOW_GEOMETRY = '1080x820'
+GUI_WINDOW_GEOMETRY = '1080x950'
 GUI_WINDOW_MIN_WIDTH = 900
 GUI_WINDOW_MIN_HEIGHT = 700
 GUI_FRAME_PADDING = 16

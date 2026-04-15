@@ -83,8 +83,9 @@ class SessionMixin:
         if latest and os.path.exists(latest):
             try:
                 self.load_session_from_path(latest, show_feedback=False)
+                self.log_message(f'Loaded previous session from {latest}')
             except (OSError, IOError, json.JSONDecodeError):
-                self.log_message('No previous session could be loaded.')
+                self.log_message('No previous session could be loaded.', 'warning')
 
     # ------------------------------------------------------------------
     # Save dialog
@@ -112,7 +113,7 @@ class SessionMixin:
                 self.last_report_path = report_path
                 save_nudity_report(nudity_report, report_path, session_state=self.build_session_state())
                 self.open_report_button.set_sensitive(True)
-                self.log_message(f'Saved session report to {report_path}')
+                self.log_message(f'Saved session report to {report_path}', 'success')
         except GLib.Error:
             pass
 
@@ -174,7 +175,7 @@ class SessionMixin:
         self.open_report_button.set_sensitive(os.path.exists(report_path))
 
         if show_feedback:
-            self.log_message(f'Loaded session from {file_path}')
+            self.log_message(f'Loaded session from {file_path}', 'success')
 
         # Ensure the Scan tab is visible after loading a session
         if hasattr(self, 'view_stack'):
@@ -189,6 +190,7 @@ class SessionMixin:
         success, error_message = open_file_location(DEFAULT_REPORT_DIR)
         if not success:
             self._show_error('Error', f'Could not open folder: {error_message}')
+            self.log_message(f'Could not open reports folder: {error_message}', 'error')
 
     def open_report(self):
         if not os.path.exists(self.last_report_path):
@@ -198,3 +200,4 @@ class SessionMixin:
         success, error_message = open_file(self.last_report_path)
         if not success:
             self._show_error('Error', f'Could not open report: {error_message}')
+            self.log_message(f'Could not open report: {error_message}', 'error')

@@ -279,11 +279,12 @@ class ScanHistoryMixin:
         # Prefer copying the existing xlsx; regenerate from session JSON if absent
         if os.path.exists(item.report_path):
             shutil.copy2(item.report_path, dest_path)
-            self.log_message(f'Exported report to {dest_path}')
+            self.log_message(f'Exported report to {dest_path}', 'success')
         elif os.path.exists(item.session_path):
             self._export_from_session_json(item.session_path, dest_path)
         else:
             self._show_error('Export Failed', 'No report data found for this scan run.')
+            self.log_message('Export failed: no report data found for this scan run.', 'error')
 
     # ------------------------------------------------------------------
     # Delete action
@@ -322,7 +323,7 @@ class ScanHistoryMixin:
                 GLib.idle_add(self._show_error, 'Delete Failed', str(exc))
                 GLib.idle_add(self._update_history_action_state, True)
                 return
-            GLib.idle_add(self.log_message, f'Deleted scan: {item.dir_name}')
+            GLib.idle_add(self.log_message, f'Deleted scan: {item.dir_name}', 'success')
             GLib.idle_add(self.refresh_scan_history)
 
         threading.Thread(target=_do_delete, daemon=True).start()
@@ -357,7 +358,7 @@ class ScanHistoryMixin:
                     errors.append(str(exc))
         if errors:
             self._show_error('Clear Failed', 'Some items could not be deleted:\n' + '\n'.join(errors))
-        self.log_message('All scan history has been cleared.')
+        self.log_message('All scan history has been cleared.', 'success')
         self.refresh_scan_history()
 
     def _export_from_session_json(self, session_path, dest_path):
@@ -367,6 +368,7 @@ class ScanHistoryMixin:
             data = load_scan_session(session_path)
             entries = [ReportEntry.from_dict(r) for r in data.get('results', [])]
             ReportManager.save_entries(entries, dest_path)
-            self.log_message(f'Exported report to {dest_path}')
+            self.log_message(f'Exported report to {dest_path}', 'success')
         except Exception as exc:
             self._show_error('Export Failed', str(exc))
+            self.log_message(f'Export failed: {exc}', 'error')

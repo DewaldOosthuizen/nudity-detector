@@ -322,6 +322,28 @@ def process_file(file_path: str, classify_image, classify_video) -> None:
         classify_video(file_path)
 
 
+def count_supported_files(folder_path: str) -> int:
+    """Count all supported media files in a folder tree.
+
+    Performs a single os.walk pass to count files where is_supported_file()
+    returns True.  Used to calculate a deterministic total before scanning
+    begins so the progress bar can show a real fraction and completion can be
+    verified.
+
+    Args:
+        folder_path: Root folder to walk
+
+    Returns:
+        Number of supported files found
+    """
+    total = 0
+    for _root, _dirs, files in os.walk(folder_path):
+        for file_name in files:
+            if is_supported_file(file_name):
+                total += 1
+    return total
+
+
 def classify_files_in_folder(
     folder_path: str,
     classify_image,
@@ -381,9 +403,16 @@ def classify_files_in_folder(
     # Block until all queued items (including sentinels) have been processed.
     file_queue.join()
 
-    # Workers have exited their loops; collect threads.
+    # Collect worker threads; apply timeout so a stuck worker is detected.
     for worker in workers:
-        worker.join()
+        worker.join(timeout=worker_timeout)
+        if worker.is_alive():
+            logging.warning(
+                'Worker thread did not exit within %ds after scan completion — '
+                'a detection may be stuck. Thread: %s',
+                worker_timeout,
+                worker.name,
+            )
 
 
 # ============================================================================
