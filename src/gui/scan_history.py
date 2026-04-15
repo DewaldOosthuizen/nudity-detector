@@ -345,21 +345,37 @@ class ScanHistoryMixin:
         if response != 'clear':
             return
         report_dir = DEFAULT_REPORT_DIR
-        errors = []
-        if os.path.isdir(report_dir):
-            for name in os.listdir(report_dir):
-                entry_path = os.path.join(report_dir, name)
-                try:
-                    if os.path.isdir(entry_path):
-                        shutil.rmtree(entry_path)
-                    elif os.path.isfile(entry_path):
-                        os.remove(entry_path)
-                except OSError as exc:
-                    errors.append(str(exc))
-        if errors:
-            self._show_error('Clear Failed', 'Some items could not be deleted:\n' + '\n'.join(errors))
-        self.log_message('All scan history has been cleared.', 'success')
-        self.refresh_scan_history()
+
+        # Disable action buttons while deletion runs in the background.
+        self.history_load_button.set_sensitive(False)
+        self.history_export_button.set_sensitive(False)
+        self.history_delete_button.set_sensitive(False)
+
+        def _do_clear_all():
+            errors = []
+            if os.path.isdir(report_dir):
+                for name in os.listdir(report_dir):
+                    entry_path = os.path.join(report_dir, name)
+                    try:
+                        if os.path.isdir(entry_path):
+                            shutil.rmtree(entry_path)
+                        elif os.path.isfile(entry_path):
+                            os.remove(entry_path)
+                    except OSError as exc:
+                        errors.append(str(exc))
+            if errors:
+                GLib.idle_add(
+                    self._show_error,
+                    'Clear Failed',
+                    'Some items could not be deleted:\n' + '\n'.join(errors),
+                )
+                GLib.idle_add(self.log_message, f'Scan history partially cleared; {len(errors)} item(s) could not be deleted.', 'warning')
+            else:
+                GLib.idle_add(self.log_message, 'All scan history has been cleared.', 'success')
+            GLib.idle_add(self.history_clear_all_button.set_sensitive, True)
+            GLib.idle_add(self.refresh_scan_history)
+
+        threading.Thread(target=_do_clear_all, daemon=True).start()
 
     def _export_from_session_json(self, session_path, dest_path):
         try:

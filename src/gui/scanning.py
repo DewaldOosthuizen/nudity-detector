@@ -46,9 +46,6 @@ class ScanningMixin:
     def _on_stop_clicked(self, _button):
         self.stop_scanning()
 
-    def _on_clear_all_clicked(self, _button):
-        self.clear_all_scan_results()
-
     # ------------------------------------------------------------------
     # Scan control
     # ------------------------------------------------------------------
@@ -200,11 +197,14 @@ class ScanningMixin:
             try:
                 detection_result = detect_with_timeout(detector, file_path, detect_timeout)
             except TimeoutError:
+                logging.debug(
+                    'Detection timed out after %ds for %s; worker thread may continue in background',
+                    detect_timeout, file_path,
+                )
                 GLib.idle_add(
                     self.log_message,
-                    f'Detection timed out after {detect_timeout}s — image skipped: '
-                    f'{os.path.basename(file_path)} (detection thread leaked and will '
-                    'complete in background)',
+                    f'Detection timed out after {detect_timeout}s and was skipped: '
+                    f'{os.path.basename(file_path)}',
                     'warning',
                 )
                 return
@@ -455,20 +455,15 @@ class ScanningMixin:
             )
 
         def _with_progress(fn):
-            """Wrap a classifier to count every processed file and flush every N.
-
-            The counter is incremented unconditionally (even after a stop) so
-            that files_processed[0] always reflects true work done and the
-            final completion log is accurate.
-            """
+            """Wrap a classifier to count files actually attempted while scanning is active."""
             def wrapper(file_path):
+                if not self.is_processing:
+                    return
                 fn(file_path)
                 with count_lock:
                     files_processed[0] += 1
                     count = files_processed[0]
-                # Always flush on the last file so the final batch is never lost.
-                is_last = (count == total_files)
-                if self.is_processing and (count % update_interval == 0 or is_last):
+                if count % update_interval == 0:
                     _flush_intermediate(count)
             return wrapper
 
@@ -499,11 +494,7 @@ class ScanningMixin:
             self.last_report_path = report_path
             session_state = self.build_session_state()
 
-            # Signal the async save thread to stop, then wait for all pending saves.
-            _save_queue.put(None)
-            save_thread.join()
-
-            # Write the final definitive report.
+            # Write the final definitive report (save thread already drained via finally).
             save_nudity_report(nudity_report, report_path, session_state=session_state)
             elapsed = datetime.now() - scan_start_time
             total_seconds = int(elapsed.total_seconds())
@@ -524,9 +515,12 @@ class ScanningMixin:
                 )
             GLib.idle_add(self.refresh_scan_history)
         except Exception as error:
-            _save_queue.put(None)  # Ensure save thread always terminates
             GLib.idle_add(self.log_message, f'Error during processing: {error}', 'error')
         finally:
+            # Always drain and terminate the async save thread before finish_processing
+            # so there is no background writer touching report files after the scan ends.
+            _save_queue.put(None)
+            save_thread.join()
             GLib.idle_add(self.finish_processing)
 
     # ------------------------------------------------------------------
@@ -583,37 +577,3 @@ class ScanningMixin:
         self.set_controls_for_processing(False)
         self.update_result_action_state()
         self.open_report_button.set_sensitive(os.path.exists(self.last_report_path))
-
-    # ------------------------------------------------------------------
-    # Clear all
-    # ------------------------------------------------------------------
-
-    def clear_all_scan_results(self):
-        if self.is_processing:
-            self._show_warning('Scan In Progress', 'Cannot clear results while a scan is running. Stop the scan first.')
-            return
-        self._ask_yes_no(
-            'Clear All Results',
-            'This will permanently delete all previous scan reports and cannot be undone.\n\nContinue?',
-            self._do_clear_all,
-        )
-
-    def _do_clear_all(self):
-        report_dir = DEFAULT_REPORT_DIR
-        if os.path.isdir(report_dir):
-            for name in os.listdir(report_dir):
-                entry_path = os.path.join(report_dir, name)
-                if os.path.isdir(entry_path):
-                    shutil.rmtree(entry_path, ignore_errors=True)
-                elif os.path.isfile(entry_path):
-                    try:
-                        os.remove(entry_path)
-                    except OSError:
-                        pass
-        reset_nudity_report()
-        self.detected_results = []
-        self.last_report_path = get_report_path()
-        self.populate_results([])
-        self.open_report_button.set_sensitive(False)
-        self.log_message('All previous scan results have been cleared.')
-        self.refresh_scan_history()

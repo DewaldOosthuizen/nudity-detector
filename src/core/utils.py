@@ -363,6 +363,9 @@ def classify_files_in_folder(
         worker_count: Number of concurrent worker threads
         worker_timeout: Seconds to wait for each worker to finish
     """
+    if worker_count < 1:
+        raise ValueError(f'worker_count must be at least 1, got {worker_count}')
+
     logging.debug('Starting classification in folder: %s', folder_path)
     file_queue = Queue()
     os.makedirs(DEFAULT_REPORT_DIR, exist_ok=True)
