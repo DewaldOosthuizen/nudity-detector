@@ -10,6 +10,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import threading
 import tkinter as tk
@@ -17,6 +18,8 @@ from datetime import datetime
 from functools import partial
 from io import BytesIO
 from tkinter import filedialog, messagebox, ttk
+
+import darkdetect
 
 import cv2
 
@@ -27,6 +30,7 @@ except ImportError:
     ImageTk = None
 
 from ..core import constants
+from ..processing.media_processor import ThumbnailGenerator
 from ..core.utils import (
     DEFAULT_REPORT_DIR,
     classify_files_in_folder,
@@ -58,17 +62,18 @@ class NudityDetectorGUI:
         self.style = ttk.Style()
         self.default_theme_name = self.style.theme_use()
 
-        self.model_var = tk.StringVar(value=constants.MODEL_NUDENET)
-        self.folder_var = tk.StringVar()
-        self.theme_var = tk.StringVar(value=constants.THEME_SYSTEM)
-        self.threshold_var = tk.DoubleVar(value=constants.DEFAULT_THRESHOLD_PERCENT)
+        cfg = self._load_config()
+        self.model_var = tk.StringVar(value=cfg.get('model', constants.MODEL_NUDENET))
+        self.folder_var = tk.StringVar(value=cfg.get('last_source_folder', ''))
+        self.theme_var = tk.StringVar(value=cfg.get('theme', constants.THEME_SYSTEM))
+        self.threshold_var = tk.DoubleVar(value=cfg.get('threshold_percent', constants.DEFAULT_THRESHOLD_PERCENT))
         self.status_var = tk.StringVar(value='Ready')
         self.summary_var = tk.StringVar(value='No scan has been run yet.')
 
         self.is_processing = False
         self.processing_thread = None
         self.detected_results = []
-        self.last_report_path = get_report_path()
+        self.last_report_path = self._find_latest_report_path() or get_report_path()
         self.thumbnail_photo = None
         self.thumbnail_meta_var = tk.StringVar(value='Select a result to preview.')
 
@@ -110,7 +115,7 @@ class NudityDetectorGUI:
             state='readonly',
         )
         self.theme_combo.grid(row=0, column=1, sticky='ew', padx=(8, 16), pady=(0, 8))
-        self.theme_combo.bind('<<ComboboxSelected>>', lambda _event: self.apply_theme(self.theme_var.get()))
+        self.theme_combo.bind('<<ComboboxSelected>>', lambda _event: [self.apply_theme(self.theme_var.get()), self._save_config()])
 
         ttk.Label(controls_frame, text='Model').grid(row=0, column=2, sticky='w')
         model_frame = ttk.Frame(controls_frame)
@@ -145,8 +150,8 @@ class NudityDetectorGUI:
 
         action_frame = ttk.Frame(main_frame)
         action_frame.grid(row=2, column=0, sticky='ew', pady=(0, 12))
-        for column in range(8):
-            action_frame.columnconfigure(column, weight=1 if column == 7 else 0)
+        for column in range(9):
+            action_frame.columnconfigure(column, weight=1 if column == 8 else 0)
 
         self.start_button = ttk.Button(action_frame, text='Start Scan', command=self.start_scanning)
         self.stop_button = ttk.Button(action_frame, text='Stop', command=self.stop_scanning, state='disabled')
@@ -154,13 +159,15 @@ class NudityDetectorGUI:
         self.load_session_button = ttk.Button(action_frame, text='Load Session', command=self.load_session_dialog)
         self.open_report_button = ttk.Button(action_frame, text='Open Report', command=self.open_report, state='disabled')
         self.open_reports_button = ttk.Button(action_frame, text='Open Reports Folder', command=self.open_reports_folder)
+        self.clear_all_button = ttk.Button(action_frame, text='Clear All Results', command=self.clear_all_scan_results)
 
         self.start_button.grid(row=0, column=0, padx=(0, 8))
         self.stop_button.grid(row=0, column=1, padx=(0, 8))
         self.save_session_button.grid(row=0, column=2, padx=(0, 8))
         self.load_session_button.grid(row=0, column=3, padx=(0, 8))
         self.open_report_button.grid(row=0, column=4, padx=(0, 8))
-        self.open_reports_button.grid(row=0, column=5)
+        self.open_reports_button.grid(row=0, column=5, padx=(0, 8))
+        self.clear_all_button.grid(row=0, column=6)
 
         results_frame = ttk.LabelFrame(main_frame, text='Detected Media Review', padding=12)
         results_frame.grid(row=3, column=0, sticky='nsew', pady=(0, 12))
@@ -248,12 +255,55 @@ class NudityDetectorGUI:
         self.progress_bar.grid(row=0, column=0, sticky='ew', padx=(0, 12))
         ttk.Label(footer_frame, textvariable=self.status_var).grid(row=0, column=1, sticky='e')
 
-    def load_initial_session(self):
-        if os.path.exists(self.last_report_path):
+    def _load_config(self) -> dict:
+        """Load persisted app settings from config/app_config.json."""
+        config_path = os.path.join(constants.CONFIG_DIR, constants.CONFIG_FILE_NAME)
+        if os.path.exists(config_path):
             try:
-                self.load_session_from_path(self.last_report_path, show_feedback=False)
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            except (OSError, json.JSONDecodeError):
+                pass
+        return {}
+
+    def _save_config(self):
+        """Persist current app settings to config/app_config.json."""
+        config_path = os.path.join(constants.CONFIG_DIR, constants.CONFIG_FILE_NAME)
+        try:
+            os.makedirs(constants.CONFIG_DIR, exist_ok=True)
+            data = {
+                'theme': self.theme_var.get(),
+                'model': self.model_var.get(),
+                'threshold_percent': self.threshold_var.get(),
+                'last_source_folder': self.folder_var.get().strip(),
+            }
+            with open(config_path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2)
+        except (OSError, IOError):
+            pass
+
+    def _find_latest_report_path(self):
+        """Return the report xlsx path from the most recent dated scan subfolder, or None."""
+        report_dir = DEFAULT_REPORT_DIR
+        if not os.path.isdir(report_dir):
+            return None
+        subdirs = sorted(
+            (d for d in os.listdir(report_dir) if os.path.isdir(os.path.join(report_dir, d))),
+            reverse=True,
+        )
+        for subdir in subdirs:
+            candidate = get_report_path(os.path.join(report_dir, subdir))
+            if os.path.exists(candidate):
+                return candidate
+        return None
+
+    def load_initial_session(self):
+        latest = self._find_latest_report_path()
+        if latest and os.path.exists(latest):
+            try:
+                self.load_session_from_path(latest, show_feedback=False)
             except (OSError, IOError, json.JSONDecodeError):
-                self.log_message('No previous session was loaded from the default report path.')
+                self.log_message('No previous session could be loaded.')
 
     def build_scan_config(self):
         return make_scan_config(
@@ -307,7 +357,23 @@ class NudityDetectorGUI:
                 'log': '#11181d',
             },
         }
-        colors = palette.get(theme_mode, palette['system'])
+        resolved = theme_mode
+        if theme_mode == constants.THEME_SYSTEM:
+            detected = darkdetect.theme()
+            if detected == 'Dark':
+                resolved = 'dark'
+            elif sys.platform.startswith('linux'):
+                try:
+                    r = subprocess.run(
+                        ['gsettings', 'get', 'org.gnome.desktop.interface', 'gtk-theme'],
+                        capture_output=True, text=True, timeout=1,
+                    )
+                    resolved = 'dark' if 'dark' in r.stdout.lower() else 'light'
+                except Exception:
+                    resolved = 'light'
+            else:
+                resolved = 'light'
+        colors = palette.get(resolved, palette['system'])
 
         self.style.theme_use(self.default_theme_name)
         self.root.configure(background=colors['frame'])
@@ -372,10 +438,12 @@ class NudityDetectorGUI:
         self.progress_bar.start(10)
         self.status_var.set('Scanning...')
         self.summary_var.set('Scan running...')
+        scan_run_dir = os.path.join(DEFAULT_REPORT_DIR, datetime.now().strftime(constants.SCAN_RUN_DATE_FORMAT))
         self.log_message(f"Starting {self.model_var.get()} scan at {self.threshold_var.get():.0f}% threshold")
         self.log_message(f'Source folder: {folder_path}')
+        self.log_message(f'Report folder: {scan_run_dir}')
 
-        self.processing_thread = threading.Thread(target=self.process_files, args=(folder_path,), daemon=True)
+        self.processing_thread = threading.Thread(target=self.process_files, args=(folder_path, scan_run_dir), daemon=True)
         self.processing_thread.start()
 
     def stop_scanning(self):
@@ -546,12 +614,12 @@ class NudityDetectorGUI:
             partial(self.run_deepstack_video, existing_files=existing_files, threshold_value=threshold_value, threshold_percent=threshold_percent, requests_module=requests, deepstack_url=deepstack_url),
         )
 
-    def process_files(self, folder_path):
+    def process_files(self, folder_path, scan_run_dir):
         model_name = self.model_var.get()
         threshold_percent = self.threshold_var.get()
         threshold_value = normalize_threshold(threshold_percent)
-        report_path = get_report_path()
-        existing_files = {entry.get('file') for entry in load_report_entries(report_path)}
+        report_path = get_report_path(scan_run_dir)
+        existing_files = set()
 
         try:
             if model_name == constants.MODEL_NUDENET:
@@ -580,6 +648,25 @@ class NudityDetectorGUI:
             self.root.after(0, lambda: self.log_message(f'Error during processing: {error_message}'))
         finally:
             self.root.after(0, self.finish_processing)
+
+    def clear_all_scan_results(self):
+        if not messagebox.askyesno(
+            'Clear All Results',
+            'This will permanently delete all previous scan reports and cannot be undone.\n\nContinue?',
+        ):
+            return
+        report_dir = DEFAULT_REPORT_DIR
+        if os.path.isdir(report_dir):
+            for name in os.listdir(report_dir):
+                subdir_path = os.path.join(report_dir, name)
+                if os.path.isdir(subdir_path):
+                    shutil.rmtree(subdir_path, ignore_errors=True)
+        reset_nudity_report()
+        self.detected_results = []
+        self.last_report_path = get_report_path()
+        self.populate_results([])
+        self.open_report_button.config(state='disabled')
+        self.log_message('All previous scan results have been cleared.')
 
     def finish_processing(self):
         self.is_processing = False
@@ -630,6 +717,28 @@ class NudityDetectorGUI:
         self.thumbnail_image_label.config(image='', text=constants.NO_THUMBNAIL_TEXT)
         self.thumbnail_meta_var.set('Select a result to preview.')
 
+    def _load_preview_from_file(self, file_path, media_type):
+        """Try to load a full-quality PIL image from the original file."""
+        resampler = Image.Resampling.LANCZOS if hasattr(Image, 'Resampling') else Image.LANCZOS
+        if media_type == constants.MEDIA_TYPE_IMAGE:
+            img = Image.open(file_path).copy()
+            img.thumbnail(constants.THUMBNAIL_SIZE_PREVIEW_IMAGE, resampler)
+            return img
+        if media_type == constants.MEDIA_TYPE_VIDEO:
+            b64 = ThumbnailGenerator.generate_from_video(file_path, constants.THUMBNAIL_SIZE_PREVIEW_IMAGE)
+            if b64:
+                return Image.open(BytesIO(base64.b64decode(b64)))
+        return None
+
+    def _load_preview_from_thumbnail(self, thumbnail_b64):
+        """Decode and upscale the stored (small) base64 thumbnail as a fallback."""
+        resampler = Image.Resampling.LANCZOS if hasattr(Image, 'Resampling') else Image.LANCZOS
+        img = Image.open(BytesIO(base64.b64decode(thumbnail_b64)))
+        if img.width < constants.THUMBNAIL_SIZE_PREVIEW_IMAGE[0] and img.height < constants.THUMBNAIL_SIZE_PREVIEW_IMAGE[1]:
+            return img.resize(constants.THUMBNAIL_SIZE_PREVIEW_IMAGE, resampler)
+        img.thumbnail(constants.THUMBNAIL_SIZE_PREVIEW_IMAGE, resampler)
+        return img
+
     def update_thumbnail_preview(self):
         _index, entry = self.get_selected_entry()
         if entry is None:
@@ -643,27 +752,41 @@ class NudityDetectorGUI:
             f"Model: {entry.get('model_name', '')}"
         )
 
-        if not thumbnail_b64 or Image is None or ImageTk is None:
-            self.thumbnail_photo = None
+        if Image is None or ImageTk is None:
             self.thumbnail_image_label.config(image='', text=constants.NO_THUMBNAIL_TEXT)
             self.thumbnail_meta_var.set(meta_text)
             return
 
-        try:
-            thumbnail_bytes = base64.b64decode(thumbnail_b64)
-            with Image.open(BytesIO(thumbnail_bytes)) as pil_image:
-                if hasattr(Image, 'Resampling'):
-                    pil_image.thumbnail(constants.THUMBNAIL_SIZE_PREVIEW, Image.Resampling.LANCZOS)
-                else:
-                    pil_image.thumbnail(constants.THUMBNAIL_SIZE_PREVIEW)
+        pil_image = self._load_preview_image(entry, thumbnail_b64)
+        if pil_image is not None:
+            try:
                 self.thumbnail_photo = ImageTk.PhotoImage(pil_image)
+                self.thumbnail_image_label.config(image=self.thumbnail_photo, text='')
+                self.thumbnail_meta_var.set(meta_text)
+                return
+            except Exception:
+                pass
 
-            self.thumbnail_image_label.config(image=self.thumbnail_photo, text='')
-            self.thumbnail_meta_var.set(meta_text)
-        except Exception:
-            self.thumbnail_photo = None
-            self.thumbnail_image_label.config(image='', text='Thumbnail unavailable')
-            self.thumbnail_meta_var.set(meta_text)
+        self.thumbnail_photo = None
+        fallback_text = constants.NO_THUMBNAIL_TEXT if not thumbnail_b64 else 'Thumbnail unavailable'
+        self.thumbnail_image_label.config(image='', text=fallback_text)
+        self.thumbnail_meta_var.set(meta_text)
+
+    def _load_preview_image(self, entry, thumbnail_b64):
+        """Return a PIL image for preview, sourcing from the original file when available."""
+        file_path = entry.get('file', '')
+        media_type = entry.get('media_type', '')
+        if file_path and os.path.exists(file_path):
+            try:
+                return self._load_preview_from_file(file_path, media_type)
+            except Exception:
+                pass
+        if thumbnail_b64:
+            try:
+                return self._load_preview_from_thumbnail(thumbnail_b64)
+            except Exception:
+                pass
+        return None
 
     def get_selected_entry(self):
         selection = self.results_tree.selection()
@@ -793,6 +916,7 @@ def main():
             if not messagebox.askokcancel('Quit', 'Scanning is in progress. Do you want to quit?'):
                 return
             app.is_processing = False
+        app._save_config()
         root.destroy()
 
     root.protocol('WM_DELETE_WINDOW', on_closing)
