@@ -1,12 +1,13 @@
 import json
 import os
 import shutil
+import threading
 from datetime import datetime
 
 import gi
 gi.require_version('Gtk', '4.0')
 gi.require_version('Adw', '1')
-from gi.repository import GLib, GObject, Gio, Gtk
+from gi.repository import Adw, GLib, GObject, Gio, Gtk
 
 from ..core import constants
 from ..core.utils import DEFAULT_REPORT_DIR, get_report_path, load_scan_session
@@ -107,6 +108,17 @@ class ScanHistoryMixin:
         self.history_export_button.connect('clicked', self._on_history_export_clicked)
         action_box.append(self.history_export_button)
 
+        self.history_delete_button = Gtk.Button(label='Delete Scan')
+        self.history_delete_button.add_css_class('destructive-action')
+        self.history_delete_button.set_sensitive(False)
+        self.history_delete_button.connect('clicked', self._on_history_delete_clicked)
+        action_box.append(self.history_delete_button)
+
+        self.history_clear_all_button = Gtk.Button(label='Clear All Scans')
+        self.history_clear_all_button.add_css_class('destructive-action')
+        self.history_clear_all_button.connect('clicked', self._on_history_clear_all_clicked)
+        action_box.append(self.history_clear_all_button)
+
         # Populate immediately
         self.refresh_scan_history()
 
@@ -204,6 +216,7 @@ class ScanHistoryMixin:
     def _update_history_action_state(self, has_selection):
         self.history_load_button.set_sensitive(has_selection)
         self.history_export_button.set_sensitive(has_selection)
+        self.history_delete_button.set_sensitive(has_selection)
 
     def _get_selected_history_item(self):
         selected = self._history_selection.get_selected()
@@ -266,11 +279,103 @@ class ScanHistoryMixin:
         # Prefer copying the existing xlsx; regenerate from session JSON if absent
         if os.path.exists(item.report_path):
             shutil.copy2(item.report_path, dest_path)
-            self.log_message(f'Exported report to {dest_path}')
+            self.log_message(f'Exported report to {dest_path}', 'success')
         elif os.path.exists(item.session_path):
             self._export_from_session_json(item.session_path, dest_path)
         else:
             self._show_error('Export Failed', 'No report data found for this scan run.')
+            self.log_message('Export failed: no report data found for this scan run.', 'error')
+
+    # ------------------------------------------------------------------
+    # Delete action
+    # ------------------------------------------------------------------
+
+    def _on_history_delete_clicked(self, _button):
+        item = self._get_selected_history_item()
+        if item is None:
+            return
+        dialog = Adw.AlertDialog(
+            heading='Delete Scan',
+            body=f'Permanently delete scan from {item.display_date}? This cannot be undone.',
+        )
+        dialog.add_response('cancel', 'Cancel')
+        dialog.add_response('delete', 'Delete')
+        dialog.set_response_appearance('delete', Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.set_default_response('cancel')
+        dialog.set_close_response('cancel')
+        dialog.connect('response', self._on_history_delete_response, item)
+        dialog.present(self)
+
+    def _on_history_delete_response(self, _dialog, response, item):
+        if response != 'delete':
+            return
+        subdir_path = os.path.join(DEFAULT_REPORT_DIR, item.dir_name)
+
+        # Disable action buttons while deletion runs in the background.
+        self.history_load_button.set_sensitive(False)
+        self.history_export_button.set_sensitive(False)
+        self.history_delete_button.set_sensitive(False)
+
+        def _do_delete():
+            try:
+                shutil.rmtree(subdir_path)
+            except OSError as exc:
+                GLib.idle_add(self._show_error, 'Delete Failed', str(exc))
+                GLib.idle_add(self.refresh_scan_history)
+                return
+            GLib.idle_add(self.log_message, f'Deleted scan: {item.dir_name}', 'success')
+            GLib.idle_add(self.refresh_scan_history)
+
+        threading.Thread(target=_do_delete, daemon=True).start()
+
+    def _on_history_clear_all_clicked(self, _button):
+        dialog = Adw.AlertDialog(
+            heading='Clear All Scans',
+            body='This will permanently delete all previous scan reports and cannot be undone.\n\nContinue?',
+        )
+        dialog.add_response('cancel', 'Cancel')
+        dialog.add_response('clear', 'Clear All')
+        dialog.set_response_appearance('clear', Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.set_default_response('cancel')
+        dialog.set_close_response('cancel')
+        dialog.connect('response', self._on_history_clear_all_response)
+        dialog.present(self)
+
+    def _on_history_clear_all_response(self, _dialog, response):
+        if response != 'clear':
+            return
+        report_dir = DEFAULT_REPORT_DIR
+
+        # Disable action buttons while deletion runs in the background.
+        self.history_load_button.set_sensitive(False)
+        self.history_export_button.set_sensitive(False)
+        self.history_delete_button.set_sensitive(False)
+
+        def _do_clear_all():
+            errors = []
+            if os.path.isdir(report_dir):
+                for name in os.listdir(report_dir):
+                    entry_path = os.path.join(report_dir, name)
+                    try:
+                        if os.path.isdir(entry_path):
+                            shutil.rmtree(entry_path)
+                        elif os.path.isfile(entry_path):
+                            os.remove(entry_path)
+                    except OSError as exc:
+                        errors.append(str(exc))
+            if errors:
+                GLib.idle_add(
+                    self._show_error,
+                    'Clear Failed',
+                    'Some items could not be deleted:\n' + '\n'.join(errors),
+                )
+                GLib.idle_add(self.log_message, f'Scan history partially cleared; {len(errors)} item(s) could not be deleted.', 'warning')
+            else:
+                GLib.idle_add(self.log_message, 'All scan history has been cleared.', 'success')
+            GLib.idle_add(self.history_clear_all_button.set_sensitive, True)
+            GLib.idle_add(self.refresh_scan_history)
+
+        threading.Thread(target=_do_clear_all, daemon=True).start()
 
     def _export_from_session_json(self, session_path, dest_path):
         try:
@@ -279,6 +384,7 @@ class ScanHistoryMixin:
             data = load_scan_session(session_path)
             entries = [ReportEntry.from_dict(r) for r in data.get('results', [])]
             ReportManager.save_entries(entries, dest_path)
-            self.log_message(f'Exported report to {dest_path}')
+            self.log_message(f'Exported report to {dest_path}', 'success')
         except Exception as exc:
             self._show_error('Export Failed', str(exc))
+            self.log_message(f'Export failed: {exc}', 'error')

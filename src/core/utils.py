@@ -18,7 +18,7 @@ import os
 import subprocess
 import sys
 from datetime import datetime
-from queue import Empty, Queue
+from queue import Queue
 from threading import Lock, Thread
 from typing import Optional, Tuple
 
@@ -322,57 +322,113 @@ def process_file(file_path: str, classify_image, classify_video) -> None:
         classify_video(file_path)
 
 
-def process_file_queue(file_queue: Queue, classify_image, classify_video) -> None:
-    """Worker thread: process files from queue."""
-    while True:
-        try:
-            file_path = file_queue.get_nowait()
-        except Empty:
-            break
-        try:
-            process_file(file_path, classify_image, classify_video)
-        except Exception as e:
-            logging.error('Error processing file %s: %s', file_path, e)
-        finally:
-            file_queue.task_done()
+def count_supported_files(folder_path: str) -> int:
+    """Count all supported media files in a folder tree.
+
+    Performs a single os.walk pass to count files where is_supported_file()
+    returns True.  Used to calculate a deterministic total before scanning
+    begins so the progress bar can show a real fraction and completion can be
+    verified.
+
+    Args:
+        folder_path: Root folder to walk
+
+    Returns:
+        Number of supported files found
+    """
+    total = 0
+    for _root, _dirs, files in os.walk(folder_path):
+        for file_name in files:
+            if is_supported_file(file_name):
+                total += 1
+    return total
 
 
-def classify_files_in_folder(folder_path: str, classify_image, classify_video) -> None:
+def classify_files_in_folder(
+    folder_path: str,
+    classify_image,
+    classify_video,
+    worker_count: int = constants.WORKER_THREAD_COUNT,
+    worker_timeout: int = constants.WORKER_THREAD_TIMEOUT,
+) -> None:
     """Classify all supported files in folder using worker threads.
+
+    Workers are started before directory traversal so they begin processing
+    immediately as files are discovered (streaming discovery).
 
     Args:
         folder_path: Root folder to scan
         classify_image: Image classification callable
         classify_video: Video classification callable
+        worker_count: Number of concurrent worker threads
+        worker_timeout: Seconds to wait for each worker to finish
     """
+    if worker_count < 1:
+        raise ValueError(f'worker_count must be at least 1, got {worker_count}')
+
     logging.debug('Starting classification in folder: %s', folder_path)
     file_queue = Queue()
     os.makedirs(DEFAULT_REPORT_DIR, exist_ok=True)
 
-    # Queue all files
-    for root, _, files in os.walk(folder_path):
-        for file_name in files:
-            file_queue.put(os.path.join(root, file_name))
+    _SENTINEL = object()
 
-    # Create and start worker threads
+    def _worker():
+        while True:
+            item = file_queue.get()
+            if item is _SENTINEL:
+                file_queue.task_done()
+                break
+            try:
+                process_file(item, classify_image, classify_video)
+            except Exception as e:
+                logging.error('Error processing file %s: %s', item, e)
+            finally:
+                file_queue.task_done()
+
+    # Start workers before queuing files so they can begin immediately.
     workers = []
-    for _ in range(constants.WORKER_THREAD_COUNT):
-        worker = Thread(
-            target=process_file_queue,
-            args=(file_queue, classify_image, classify_video),
-            daemon=False,
-        )
+    for _ in range(worker_count):
+        worker = Thread(target=_worker, daemon=False)
         worker.start()
         workers.append(worker)
 
-    # Wait for processing to complete
-    file_queue.join()
+    try:
+        # Stream files into the queue as they are discovered.
+        for root, _, files in os.walk(folder_path):
+            for file_name in files:
+                file_queue.put(os.path.join(root, file_name))
+    finally:
+        # Send one sentinel per worker to signal completion, even if
+        # directory traversal fails before all files are queued.
+        for _ in workers:
+            file_queue.put(_SENTINEL)
 
-    # Wait for workers to finish
+    # Collect worker threads; apply timeout so a stuck worker is detected.
+    # We join workers *before* file_queue.join() so that a hung worker
+    # (one whose process_file() call never returns and never calls task_done())
+    # does not cause an indefinite block here.  Once all workers have exited
+    # they have called task_done() for every item they received, so a
+    # subsequent file_queue.join() will return immediately.
+    all_exited = True
     for worker in workers:
-        worker.join(timeout=constants.WORKER_THREAD_TIMEOUT)
+        worker.join(timeout=worker_timeout)
         if worker.is_alive():
-            logging.warning('Worker thread did not complete within timeout')
+            all_exited = False
+            logging.warning(
+                'Worker thread did not exit within %ds — '
+                'a detection may be stuck. Thread: %s',
+                worker_timeout,
+                worker.name,
+            )
+
+    if all_exited:
+        # All workers have finished; drain any residual unacknowledged items.
+        file_queue.join()
+    else:
+        logging.warning(
+            'Skipping file_queue.join() because one or more worker threads are still alive; '
+            'results may be incomplete.'
+        )
 
 
 # ============================================================================

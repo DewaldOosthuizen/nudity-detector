@@ -59,6 +59,29 @@ class ResultsMixin:
         self.update_result_action_state()
         self.clear_thumbnail_preview()
 
+    def append_results(self, new_entries, start_index):
+        """Append only new result entries to the list store without a full rebuild.
+
+        Called during an active scan to add incremental results as they arrive,
+        avoiding the O(n) cost of remove_all() + re-append on every flush.
+
+        Args:
+            new_entries: List of result dicts to append (the NEW items only).
+            start_index: Absolute index for the first item in new_entries within
+                the full detected_results list (used for ResultItem.index).
+        """
+        for offset, entry in enumerate(new_entries):
+            item = ResultItem(
+                index=start_index + offset,
+                name=os.path.basename(entry.get('file', '')),
+                media_type=entry.get('media_type', 'unknown'),
+                confidence=f"{float(entry.get('confidence_percent', 0)):.2f}%",
+                model_name=entry.get('model_name', ''),
+                path=entry.get('file', ''),
+            )
+            self._list_store.append(item)
+        self.update_result_action_state()
+
     # ------------------------------------------------------------------
     # Selection
     # ------------------------------------------------------------------
@@ -98,10 +121,14 @@ class ResultsMixin:
         file_path = entry.get('file', '')
         if not os.path.exists(file_path):
             self._show_error('Error', f'File no longer exists: {file_path}')
+            self.log_message(f'File not found: {file_path}', 'error')
             return
         success, error_message = open_file(file_path)
         if not success:
             self._show_error('Error', f'Could not open file: {error_message}')
+            self.log_message(f'Could not open file: {error_message}', 'error')
+        else:
+            self.log_message(f'Opened: {file_path}')
 
     def open_selected_location(self):
         entry = self.get_selected_entry()
@@ -110,6 +137,7 @@ class ResultsMixin:
         success, error_message = open_file_location(entry.get('file', ''))
         if not success:
             self._show_error('Error', f'Could not open location: {error_message}')
+            self.log_message(f'Could not open location: {error_message}', 'error')
 
     def delete_selected_result(self):
         selection = self.column_view.get_model()
@@ -135,4 +163,4 @@ class ResultsMixin:
         replace_nudity_report(remaining)
         save_nudity_report(nudity_report, self.last_report_path, session_state=self.build_session_state())
         self.populate_results(self.detected_results)
-        self.log_message(f"Deleted {entry.get('file', '')}. {message}")
+        self.log_message(f"Deleted {entry.get('file', '')}. {message}", 'success')
