@@ -7,3 +7,5 @@ opencv-python
 requests
 Send2Trash
 darkdetect
+# GTK4 + libadwaita are system packages, install via:
+#   sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 gir1.2-gdkpixbuf-2.0
