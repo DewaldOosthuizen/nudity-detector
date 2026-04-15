@@ -321,7 +321,7 @@ class ScanHistoryMixin:
                 shutil.rmtree(subdir_path)
             except OSError as exc:
                 GLib.idle_add(self._show_error, 'Delete Failed', str(exc))
-                GLib.idle_add(self._update_history_action_state, True)
+                GLib.idle_add(self.refresh_scan_history)
                 return
             GLib.idle_add(self.log_message, f'Deleted scan: {item.dir_name}', 'success')
             GLib.idle_add(self.refresh_scan_history)

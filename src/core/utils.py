@@ -403,19 +403,32 @@ def classify_files_in_folder(
         for _ in workers:
             file_queue.put(_SENTINEL)
 
-    # Block until all queued items (including sentinels) have been processed.
-    file_queue.join()
-
     # Collect worker threads; apply timeout so a stuck worker is detected.
+    # We join workers *before* file_queue.join() so that a hung worker
+    # (one whose process_file() call never returns and never calls task_done())
+    # does not cause an indefinite block here.  Once all workers have exited
+    # they have called task_done() for every item they received, so a
+    # subsequent file_queue.join() will return immediately.
+    all_exited = True
     for worker in workers:
         worker.join(timeout=worker_timeout)
         if worker.is_alive():
+            all_exited = False
             logging.warning(
-                'Worker thread did not exit within %ds after scan completion — '
+                'Worker thread did not exit within %ds — '
                 'a detection may be stuck. Thread: %s',
                 worker_timeout,
                 worker.name,
             )
+
+    if all_exited:
+        # All workers have finished; drain any residual unacknowledged items.
+        file_queue.join()
+    else:
+        logging.warning(
+            'Skipping file_queue.join() because one or more worker threads are still alive; '
+            'results may be incomplete.'
+        )
 
 
 # ============================================================================

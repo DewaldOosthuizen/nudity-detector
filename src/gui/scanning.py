@@ -444,8 +444,13 @@ class ScanningMixin:
                     results=snapshot,
                 )
                 _save_queue.put((snapshot, intermediate_session, report_path))
-            except Exception:
-                pass
+            except Exception as exc:
+                logging.exception(
+                    'Failed to queue intermediate report snapshot at count=%s, report_path=%s, snapshot_size=%s',
+                    count,
+                    report_path,
+                    len(snapshot),
+                )
 
             current_results = get_detected_results(snapshot)
             detected_count = len(current_results)
@@ -463,16 +468,23 @@ class ScanningMixin:
             )
 
         def _with_progress(fn):
-            """Wrap a classifier to count files actually attempted while scanning is active."""
+            """Wrap a classifier to count files attempted while scanning is active.
+
+            The counter is incremented in a ``finally`` block so that exceptions
+            inside ``fn`` still count toward attempted files and don't inflate
+            the "skipped" total.
+            """
             def wrapper(file_path):
                 if not self.is_processing:
                     return
-                fn(file_path)
-                with count_lock:
-                    files_processed[0] += 1
-                    count = files_processed[0]
-                if count % update_interval == 0:
-                    _flush_intermediate(count)
+                try:
+                    fn(file_path)
+                finally:
+                    with count_lock:
+                        files_processed[0] += 1
+                        count = files_processed[0]
+                    if count % update_interval == 0:
+                        _flush_intermediate(count)
             return wrapper
 
         try:
@@ -509,18 +521,36 @@ class ScanningMixin:
             minutes, seconds = divmod(total_seconds, 60)
             elapsed_str = f'{minutes}m {seconds}s' if minutes else f'{seconds}s'
             GLib.idle_add(self.populate_results, self.detected_results)
-            GLib.idle_add(
-                self.log_message,
-                f'Scan complete: {processed}/{total_files} file(s) processed, '
-                f'{len(self.detected_results)} detection(s) — took {elapsed_str}.',
-                'success',
-            )
-            if skipped > 0:
+            # stop_scanning() sets is_processing=False on the UI thread; process_files()
+            # runs on a worker thread and never sets is_processing back to True, so if
+            # is_processing is False here the user must have clicked Stop.
+            was_stopped = not self.is_processing
+            if was_stopped:
                 GLib.idle_add(
                     self.log_message,
-                    f'Warning: {skipped} file(s) were skipped, timed out, or encountered errors.',
+                    f'Scan stopped: {processed}/{total_files} file(s) processed, '
+                    f'{len(self.detected_results)} detection(s) — took {elapsed_str}.',
                     'warning',
                 )
+                if skipped > 0:
+                    GLib.idle_add(
+                        self.log_message,
+                        f'{skipped} file(s) were not scanned (scan stopped early).',
+                        'warning',
+                    )
+            else:
+                GLib.idle_add(
+                    self.log_message,
+                    f'Scan complete: {processed}/{total_files} file(s) processed, '
+                    f'{len(self.detected_results)} detection(s) — took {elapsed_str}.',
+                    'success',
+                )
+                if skipped > 0:
+                    GLib.idle_add(
+                        self.log_message,
+                        f'Warning: {skipped} file(s) were skipped, timed out, or encountered errors.',
+                        'warning',
+                    )
             GLib.idle_add(self.refresh_scan_history)
         except Exception as error:
             GLib.idle_add(self.log_message, f'Error during processing: {error}', 'error')
