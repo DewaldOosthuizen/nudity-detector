@@ -194,6 +194,8 @@ class ScanningMixin:
         def classify_image(file_path):
             if not self.is_processing or file_path in existing_files:
                 return
+            if self._verbose_log:
+                GLib.idle_add(self.log_message, f'Processing image: {os.path.basename(file_path)}')
             try:
                 detection_result = detect_with_timeout(detector, file_path, detect_timeout)
             except TimeoutError:
@@ -228,6 +230,8 @@ class ScanningMixin:
         def classify_video(file_path):
             if not self.is_processing or file_path in existing_files:
                 return
+            if self._verbose_log:
+                GLib.idle_add(self.log_message, f'Processing video: {os.path.basename(file_path)}')
             temp_dir, frame_paths = self.extract_video_frames(file_path, constants.FRAME_TEMP_DIR_PREFIX_GUI_NUDENET)
             try:
                 detection_results = []
@@ -296,6 +300,8 @@ class ScanningMixin:
     def run_deepstack_image(self, file_path, existing_files, threshold_value, threshold_percent, requests_module, deepstack_url, request_timeout):
         if not self.is_processing or file_path in existing_files:
             return
+        if self._verbose_log:
+            GLib.idle_add(self.log_message, f'Processing image: {os.path.basename(file_path)}')
         scored_result = self.request_deepstack_score(file_path, requests_module, deepstack_url, request_timeout)
         if scored_result is None:
             GLib.idle_add(self.log_message, f'Failed to classify {os.path.basename(file_path)}', 'error')
@@ -314,6 +320,8 @@ class ScanningMixin:
     def run_deepstack_video(self, file_path, existing_files, threshold_value, threshold_percent, requests_module, deepstack_url, request_timeout):
         if not self.is_processing or file_path in existing_files:
             return
+        if self._verbose_log:
+            GLib.idle_add(self.log_message, f'Processing video: {os.path.basename(file_path)}')
         temp_dir, frame_paths = self.extract_video_frames(file_path, constants.FRAME_TEMP_DIR_PREFIX_GUI_DEEPSTACK)
         try:
             frame_scores = []

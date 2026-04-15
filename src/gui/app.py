@@ -95,6 +95,7 @@ class NudityDetectorWindow(
         self._total_files = 0          # total supported files identified before scan
         self._last_populated_count = 0  # last len(detected_results) pushed to the list store
         self._progress_fraction = 0.0  # current 0‑1 progress fraction driven by _pulse_tick
+        self._verbose_log = False      # when True, log every file processed
 
         self._build_ui()
         self._apply_theme(self._theme_mode)
@@ -665,6 +666,12 @@ class NudityDetectorWindow(
         self.tail_log_button.connect('toggled', self._on_tail_log_toggled)
         log_header.append(self.tail_log_button)
 
+        self.verbose_log_button = Gtk.ToggleButton(label='Verbose')
+        self.verbose_log_button.set_active(False)
+        self.verbose_log_button.set_tooltip_text('Log every file as it is processed (may slow down large scans)')
+        self.verbose_log_button.connect('toggled', self._on_verbose_log_toggled)
+        log_header.append(self.verbose_log_button)
+
         self.log_scroll = Gtk.ScrolledWindow()
         self.log_scroll.set_vexpand(True)
         self.log_scroll.set_min_content_height(150)
@@ -870,6 +877,9 @@ class NudityDetectorWindow(
         if self._tail_log:
             end_iter = self.log_buffer.get_end_iter()
             self.log_view.scroll_to_iter(end_iter, 0.0, False, 0.0, 1.0)
+
+    def _on_verbose_log_toggled(self, button):
+        self._verbose_log = button.get_active()
 
     def log_message(self, message, level='info'):
         timestamp = datetime.now().strftime('%H:%M:%S')
