@@ -19,7 +19,6 @@ Two detector backends are available:
 ## Features
 
 1. **Graphical User Interface**: Modern GTK4 + libadwaita GUI with native theming, model selection, threshold control, and progress tracking.
-1. **Graphical User Interface**: Modern GTK4 + libadwaita GUI with native theming, model selection, threshold control, and progress tracking.
 2. **File Classification**: Identifies nudity in supported image and video files.
 3. **File Management**: Keeps detected files in their original location for direct review.
 4. **Report Generation**: Creates an Excel report in the `reports` folder summarizing detection results.
@@ -63,12 +62,12 @@ Two detector backends are available:
   ./.venv/bin/pip install -r requirements.txt
   ```
 
-4. **Install docker and docker compose**
+1. **Install docker and docker compose**
 
     - Follow the instructions for your OS on the official Docker website: <https://docs.docker.com/get-docker/>
     - Ensure Docker Compose is installed. Instructions can be found here: <https://docs.docker.com/compose/install/>
   
-5. **Prepare Models**:
+2. **Prepare Models**:
 
    - Nudenet
      - For Nudenet no setup is required.
@@ -86,7 +85,7 @@ Two detector backends are available:
     curl -X POST -F image=@test.jpg 'http://localhost:5000/v1/vision/detection'
     ```
 
-6. **Run the process**:
+3. **Run the process**:
 
 ### Option 1: GUI Application (Recommended)
 
