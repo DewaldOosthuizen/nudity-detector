@@ -48,6 +48,12 @@ MAX_THRESHOLD_PERCENT = 100.0
 THRESHOLD_TOLERANCE = 0.001  # For normalize_threshold equality checks
 
 # ============================================================================
+# App Configuration
+# ============================================================================
+CONFIG_DIR = 'config'
+CONFIG_FILE_NAME = 'app_config.json'
+
+# ============================================================================
 # Report Configuration
 # ============================================================================
 DEFAULT_REPORT_DIR = 'reports'
@@ -55,6 +61,7 @@ REPORT_FILE_NAME = 'nudity_report.xlsx'
 XLSX_EXTENSION = '.xlsx'
 SESSION_FILE_SUFFIX = '_session.json'
 SESSION_VERSION = 1
+SCAN_RUN_DATE_FORMAT = '%Y-%m-%d_%H-%M-%S'
 
 REPORT_HEADERS = (
     'File',
@@ -72,7 +79,11 @@ REPORT_HEADERS = (
 # Thumbnail Configuration
 # ============================================================================
 THUMBNAIL_SIZE_REPORT = (100, 100)  # Size for Excel embedding
-THUMBNAIL_SIZE_PREVIEW = (220, 220)  # Size for GUI preview
+THUMBNAIL_SIZE_PREVIEW = (320, 320)  # Size for GUI preview container
+THUMBNAIL_SIZE_PREVIEW_IMAGE = (
+    int(THUMBNAIL_SIZE_PREVIEW[0] * 0.70),
+    int(THUMBNAIL_SIZE_PREVIEW[1] * 0.70),
+)  # Actual rendered image size within the preview container (70% of container)
 THUMBNAIL_FORMAT = 'PNG'
 THUMBNAIL_IMAGE_INDEX = 0.25  # Video frame at 25% progress
 NO_THUMBNAIL_TEXT = 'No thumbnail available'
