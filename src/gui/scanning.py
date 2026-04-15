@@ -15,9 +15,11 @@ from ..core import constants
 from ..core.utils import (
     DEFAULT_REPORT_DIR,
     classify_files_in_folder,
+    create_session_state,
     get_detected_results,
     get_report_path,
     handle_results,
+    make_scan_config,
     nudity_report,
     normalize_threshold,
     reset_nudity_report,
@@ -86,6 +88,26 @@ class ScanningMixin:
         self.log_message(f"Starting {self._get_model()} scan at {self.threshold_spin.get_value():.0f}% threshold")
         self.log_message(f'Source folder: {folder_path}')
         self.log_message(f'Report folder: {scan_run_dir}')
+
+        # Create the report folder and write an initial empty session immediately
+        # so the run appears in history before any files are processed.
+        try:
+            os.makedirs(scan_run_dir, exist_ok=True)
+            initial_report_path = get_report_path(scan_run_dir)
+            initial_session = create_session_state(
+                scan_config=make_scan_config(
+                    source_folder=folder_path,
+                    model_name=self._get_model(),
+                    threshold_percent=int(self.threshold_spin.get_value()),
+                    theme_mode=self._get_theme_mode(),
+                ),
+                results=[],
+            )
+            save_nudity_report([], initial_report_path, session_state=initial_session)
+            self.last_report_path = initial_report_path
+            self.refresh_scan_history()
+        except Exception:
+            pass
 
         self.processing_thread = threading.Thread(
             target=self.process_files,
@@ -300,8 +322,42 @@ class ScanningMixin:
         model_name = self._get_model()
         threshold_percent = self.threshold_spin.get_value()
         threshold_value = normalize_threshold(threshold_percent)
+        theme_mode = self._get_theme_mode()
         report_path = get_report_path(scan_run_dir)
         existing_files = set()
+        update_interval = self._get_progress_interval()
+        files_processed = [0]
+        count_lock = threading.Lock()
+
+        def _flush_intermediate():
+            """Save a partial report snapshot and push results to the UI (worker thread)."""
+            try:
+                snapshot = list(nudity_report)
+                intermediate_session = create_session_state(
+                    scan_config=make_scan_config(
+                        source_folder=folder_path,
+                        model_name=model_name,
+                        threshold_percent=threshold_percent,
+                        theme_mode=theme_mode,
+                    ),
+                    results=snapshot,
+                )
+                save_nudity_report(snapshot, report_path, session_state=intermediate_session)
+            except Exception:
+                pass
+            current_results = get_detected_results(nudity_report)
+            GLib.idle_add(self._apply_intermediate_results, list(current_results))
+
+        def _with_progress(fn):
+            """Wrap a classifier to count processed files and flush every N."""
+            def wrapper(file_path):
+                fn(file_path)
+                with count_lock:
+                    files_processed[0] += 1
+                    count = files_processed[0]
+                if count % update_interval == 0:
+                    _flush_intermediate()
+            return wrapper
 
         try:
             if model_name == constants.MODEL_NUDENET:
@@ -312,6 +368,9 @@ class ScanningMixin:
                 classify_image, classify_video = self.create_deepstack_classifiers(
                     existing_files, threshold_value, threshold_percent,
                 )
+
+            classify_image = _with_progress(classify_image)
+            classify_video = _with_progress(classify_video)
 
             classify_files_in_folder(folder_path, classify_image, classify_video)
 
@@ -342,6 +401,17 @@ class ScanningMixin:
         self._pulse_source_id = None
         self.progress_bar.set_fraction(0.0)
         return False
+
+    def _apply_intermediate_results(self, results):
+        """Update the results view with a mid-scan snapshot (called on the main thread)."""
+        self.detected_results = results
+        self.populate_results(results)
+        count = len(results)
+        if self.is_processing:
+            self.summary_label.set_text(
+                f'{count} explicit item(s) detected so far. Scan still running...'
+                if count else 'Scan running... No detections yet.'
+            )
 
     def finish_processing(self):
         self.is_processing = False

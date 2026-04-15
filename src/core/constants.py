@@ -184,3 +184,8 @@ TREEVIEW_Heading_BACKGROUND = 'accent'
 TREEVIEW_Heading_FOREGROUND = 'panel'
 TREEVIEW_SELECTED_BACKGROUND = 'accent'
 TREEVIEW_SELECTED_FOREGROUND = 'panel'
+
+# ============================================================================
+# Scan Progress
+# ============================================================================
+SCAN_PROGRESS_UPDATE_INTERVAL = 100  # Flush UI results every N files processed
