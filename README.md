@@ -62,12 +62,12 @@ Two detector backends are available:
   ./.venv/bin/pip install -r requirements.txt
   ```
 
-1. **Install docker and docker compose**
+4. **Install docker and docker compose**
 
     - Follow the instructions for your OS on the official Docker website: <https://docs.docker.com/get-docker/>
     - Ensure Docker Compose is installed. Instructions can be found here: <https://docs.docker.com/compose/install/>
   
-2. **Prepare Models**:
+5. **Prepare Models**:
 
    - Nudenet
      - For Nudenet no setup is required.
@@ -85,7 +85,7 @@ Two detector backends are available:
     curl -X POST -F image=@test.jpg 'http://localhost:5000/v1/vision/detection'
     ```
 
-3. **Run the process**:
+6. **Run the process**:
 
 ### Option 1: GUI Application (Recommended)
 

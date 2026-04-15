@@ -9,7 +9,7 @@ gi.require_version('Adw', '1')
 from gi.repository import GLib, GObject, Gio, Gtk
 
 from ..core import constants
-from ..core.utils import DEFAULT_REPORT_DIR, get_report_path
+from ..core.utils import DEFAULT_REPORT_DIR, get_report_path, load_scan_session
 
 
 class ScanRunItem(GObject.Object):
@@ -254,6 +254,12 @@ class ScanHistoryMixin:
             return
 
         dest_path = file.get_path()
+        if not dest_path:
+            self._show_error(
+                'Export Failed',
+                'The selected export location is not a local filesystem path.'
+            )
+            return
         if not dest_path.endswith('.xlsx'):
             dest_path += '.xlsx'
 
@@ -268,11 +274,10 @@ class ScanHistoryMixin:
 
     def _export_from_session_json(self, session_path, dest_path):
         try:
-            with open(session_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
             from ..core.models import ReportEntry
             from ..reporting.report_manager import ReportManager
-            entries = [ReportEntry(**r) for r in data.get('results', [])]
+            data = load_scan_session(session_path)
+            entries = [ReportEntry.from_dict(r) for r in data.get('results', [])]
             ReportManager.save_entries(entries, dest_path)
             self.log_message(f'Exported report to {dest_path}')
         except Exception as exc:
