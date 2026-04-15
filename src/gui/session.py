@@ -176,6 +176,10 @@ class SessionMixin:
         if show_feedback:
             self.log_message(f'Loaded session from {file_path}')
 
+        # Ensure the Scan tab is visible after loading a session
+        if hasattr(self, 'view_stack'):
+            self.view_stack.set_visible_child_name('scan')
+
     # ------------------------------------------------------------------
     # Open report / reports folder
     # ------------------------------------------------------------------
