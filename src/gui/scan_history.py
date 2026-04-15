@@ -1,6 +1,7 @@
 import json
 import os
 import shutil
+import threading
 from datetime import datetime
 
 import gi
@@ -115,7 +116,7 @@ class ScanHistoryMixin:
 
         self.history_clear_all_button = Gtk.Button(label='Clear All Scans')
         self.history_clear_all_button.add_css_class('destructive-action')
-        self.history_clear_all_button.connect('clicked', self._on_clear_all_clicked)
+        self.history_clear_all_button.connect('clicked', self._on_history_clear_all_clicked)
         action_box.append(self.history_clear_all_button)
 
         # Populate immediately
@@ -308,12 +309,55 @@ class ScanHistoryMixin:
         if response != 'delete':
             return
         subdir_path = os.path.join(DEFAULT_REPORT_DIR, item.dir_name)
-        try:
-            shutil.rmtree(subdir_path)
-        except OSError as exc:
-            self._show_error('Delete Failed', str(exc))
+
+        # Disable action buttons while deletion runs in the background.
+        self.history_load_button.set_sensitive(False)
+        self.history_export_button.set_sensitive(False)
+        self.history_delete_button.set_sensitive(False)
+
+        def _do_delete():
+            try:
+                shutil.rmtree(subdir_path)
+            except OSError as exc:
+                GLib.idle_add(self._show_error, 'Delete Failed', str(exc))
+                GLib.idle_add(self._update_history_action_state, True)
+                return
+            GLib.idle_add(self.log_message, f'Deleted scan: {item.dir_name}')
+            GLib.idle_add(self.refresh_scan_history)
+
+        threading.Thread(target=_do_delete, daemon=True).start()
+
+    def _on_history_clear_all_clicked(self, _button):
+        dialog = Adw.AlertDialog(
+            heading='Clear All Scans',
+            body='This will permanently delete all previous scan reports and cannot be undone.\n\nContinue?',
+        )
+        dialog.add_response('cancel', 'Cancel')
+        dialog.add_response('clear', 'Clear All')
+        dialog.set_response_appearance('clear', Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.set_default_response('cancel')
+        dialog.set_close_response('cancel')
+        dialog.connect('response', self._on_history_clear_all_response)
+        dialog.present(self)
+
+    def _on_history_clear_all_response(self, _dialog, response):
+        if response != 'clear':
             return
-        self.log_message(f'Deleted scan: {item.dir_name}')
+        report_dir = DEFAULT_REPORT_DIR
+        errors = []
+        if os.path.isdir(report_dir):
+            for name in os.listdir(report_dir):
+                entry_path = os.path.join(report_dir, name)
+                try:
+                    if os.path.isdir(entry_path):
+                        shutil.rmtree(entry_path)
+                    elif os.path.isfile(entry_path):
+                        os.remove(entry_path)
+                except OSError as exc:
+                    errors.append(str(exc))
+        if errors:
+            self._show_error('Clear Failed', 'Some items could not be deleted:\n' + '\n'.join(errors))
+        self.log_message('All scan history has been cleared.')
         self.refresh_scan_history()
 
     def _export_from_session_json(self, session_path, dest_path):

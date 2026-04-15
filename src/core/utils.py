@@ -351,11 +351,14 @@ def classify_files_in_folder(
         while True:
             item = file_queue.get()
             if item is _SENTINEL:
+                file_queue.task_done()
                 break
             try:
                 process_file(item, classify_image, classify_video)
             except Exception as e:
                 logging.error('Error processing file %s: %s', item, e)
+            finally:
+                file_queue.task_done()
 
     # Start workers before queuing files so they can begin immediately.
     workers = []
@@ -364,20 +367,23 @@ def classify_files_in_folder(
         worker.start()
         workers.append(worker)
 
-    # Stream files into the queue as they are discovered.
-    for root, _, files in os.walk(folder_path):
-        for file_name in files:
-            file_queue.put(os.path.join(root, file_name))
+    try:
+        # Stream files into the queue as they are discovered.
+        for root, _, files in os.walk(folder_path):
+            for file_name in files:
+                file_queue.put(os.path.join(root, file_name))
+    finally:
+        # Send one sentinel per worker to signal completion, even if
+        # directory traversal fails before all files are queued.
+        for _ in workers:
+            file_queue.put(_SENTINEL)
 
-    # Send one sentinel per worker to signal completion.
-    for _ in workers:
-        file_queue.put(_SENTINEL)
+    # Block until all queued items (including sentinels) have been processed.
+    file_queue.join()
 
-    # Wait for all workers to finish.
+    # Workers have exited their loops; collect threads.
     for worker in workers:
-        worker.join(timeout=worker_timeout)
-        if worker.is_alive():
-            logging.warning('Worker thread did not complete within timeout')
+        worker.join()
 
 
 # ============================================================================

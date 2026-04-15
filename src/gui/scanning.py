@@ -1,3 +1,4 @@
+import logging
 import os
 import shutil
 import sys
@@ -187,7 +188,14 @@ class ScanningMixin:
             if not self.is_processing or file_path in existing_files:
                 return
             GLib.idle_add(self.log_message, f'Processing image: {os.path.basename(file_path)}')
-            detection_result = detect_with_timeout(detector, file_path, detect_timeout)
+            try:
+                detection_result = detect_with_timeout(detector, file_path, detect_timeout)
+            except TimeoutError:
+                GLib.idle_add(self.log_message, f'Detection timed out for {os.path.basename(file_path)}')
+                return
+            except Exception as e:
+                GLib.idle_add(self.log_message, f'Detection error for {os.path.basename(file_path)}: {e}')
+                return
             if detection_result is None:
                 GLib.idle_add(self.log_message, f'No result for {os.path.basename(file_path)}')
                 return
@@ -213,7 +221,14 @@ class ScanningMixin:
                 for frame_path in frame_paths:
                     if not self.is_processing:
                         break
-                    frame_result = detect_with_timeout(detector, frame_path, detect_timeout)
+                    try:
+                        frame_result = detect_with_timeout(detector, frame_path, detect_timeout)
+                    except TimeoutError:
+                        GLib.idle_add(self.log_message, f'Frame detection timed out for {os.path.basename(frame_path)}')
+                        continue
+                    except Exception as e:
+                        GLib.idle_add(self.log_message, f'Frame detection error for {os.path.basename(frame_path)}: {e}')
+                        continue
                     if frame_result is None:
                         continue
                     simplified_frame = simplify_results(frame_result)
@@ -365,8 +380,9 @@ class ScanningMixin:
                 snap, sess, path = item
                 try:
                     save_nudity_report(snap, path, session_state=sess)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logging.exception('Intermediate report save failed: %s', exc)
+                    GLib.idle_add(self.log_message, f'Warning: could not save intermediate report: {exc}')
 
         save_thread = threading.Thread(target=_save_worker, daemon=True)
         save_thread.start()
@@ -430,9 +446,9 @@ class ScanningMixin:
             self.last_report_path = report_path
             session_state = self.build_session_state()
 
-            # Signal the async save thread to stop, then wait for pending saves.
+            # Signal the async save thread to stop, then wait for all pending saves.
             _save_queue.put(None)
-            save_thread.join(timeout=30)
+            save_thread.join()
 
             # Write the final definitive report.
             save_nudity_report(nudity_report, report_path, session_state=session_state)
