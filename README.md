@@ -44,7 +44,35 @@ Two detector backends are available:
    cd nudity-detector
    ```
 
-3. **Install requirements**:
+3. **Create a virtual environment** (optional but recommended):
+
+   ```bash
+   python3 -m venv .venv
+   ```
+
+4. **Install system GTK dependencies** (required for the GUI):
+
+   On Ubuntu/Debian:
+
+   ```bash
+   sudo apt-get install python3-gi python3-gi-cairo gir1.2-gtk-4.0 gir1.2-adw-1
+   ```
+
+   > **Note:** Windows and macOS are not officially supported by GTK4 on Python. The GUI is designed for Linux.
+
+5. **Expose the system GTK bindings to the virtual environment** (required for the GUI):
+
+   PyGObject (`gi`) is a system package and cannot be installed via pip. Run the following to make it accessible inside the venv:
+
+   ```bash
+   VENV_SITE_PACKAGES="$(.venv/bin/python3 -c 'import site; print(site.getsitepackages()[0])')"
+   GI_SYSTEM_PATH="$(/usr/bin/python3 -c 'import gi, pathlib; print(pathlib.Path(gi.__file__).resolve().parent.parent)')"
+   printf '%s\n' "$GI_SYSTEM_PATH" > "$VENV_SITE_PACKAGES/system-gi.pth"
+   ```
+
+   > **Note:** If you see `ModuleNotFoundError: No module named 'gi'` when running the GUI, this step was not completed. Step 4 must be done first.
+
+6. **Install requirements**:
 
   Activate the venv environment if you are using one.
 
@@ -62,12 +90,12 @@ Two detector backends are available:
   ./.venv/bin/pip install -r requirements.txt
   ```
 
-4. **Install docker and docker compose**
+7. **Install docker and docker compose**
 
     - Follow the instructions for your OS on the official Docker website: <https://docs.docker.com/get-docker/>
     - Ensure Docker Compose is installed. Instructions can be found here: <https://docs.docker.com/compose/install/>
   
-5. **Prepare Models**:
+8. **Prepare Models**:
 
    - Nudenet
      - For Nudenet no setup is required.
@@ -85,31 +113,11 @@ Two detector backends are available:
     curl -X POST -F image=@test.jpg 'http://localhost:5000/v1/vision/detection'
     ```
 
-6. **Run the process**:
+9. **Run the process**:
 
 ### Option 1: GUI Application (Recommended)
 
 The GUI requires **GTK4** and **libadwaita**. These are pre-installed on most modern GNOME-based Linux desktops.
-
-  On Ubuntu/Debian, you can install them using:
-
-  ```bash
-  sudo apt-get install python3-gi python3-gi-cairo gir1.2-gtk-4.0 gir1.2-adw-1
-  ```
-
-  > **Note:** Windows and macOS are not officially supported by GTK4 on Python. The GUI is designed for Linux.
-
-  If you use a virtual environment, expose the system `gi` package to it:
-
-  ```bash
-  VENV_SITE_PACKAGES="$(
-    .venv/bin/python3 -c 'import site; print(site.getsitepackages()[0])'
-  )"
-  GI_SYSTEM_PATH="$(
-    python3 -c 'import gi, pathlib; print(pathlib.Path(gi.__file__).resolve().parent.parent)'
-  )"
-  printf '%s\n' "$GI_SYSTEM_PATH" > "$VENV_SITE_PACKAGES/system-gi.pth"
-  ```
 
   Then run:
 
