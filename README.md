@@ -18,7 +18,7 @@ Two detector backends are available:
 
 ## Features
 
-1. **Graphical User Interface**: Easy-to-use tkinter GUI with theme selection, model selection, threshold control, and progress tracking.
+1. **Graphical User Interface**: Modern GTK4 + libadwaita GUI with native theming, model selection, threshold control, and progress tracking.
 2. **File Classification**: Identifies nudity in supported image and video files.
 3. **File Management**: Keeps detected files in their original location for direct review.
 4. **Report Generation**: Creates an Excel report in the `reports` folder summarizing detection results.
@@ -89,18 +89,20 @@ Two detector backends are available:
 
 ### Option 1: GUI Application (Recommended)
 
-This will require tkinter to be installed.
+The GUI requires **GTK4** and **libadwaita**. These are pre-installed on most modern GNOME-based Linux desktops.
 
-  On Ubuntu/Debian, you can install it using:
+  On Ubuntu/Debian, you can install them using:
 
   ```bash
-  sudo apt-get install python3-tk
+  sudo apt-get install python3-gi python3-gi-cairo gir1.2-gtk-4.0 gir1.2-adw-1
   ```
 
-  On Windows, it is included with the standard Python installation, or you can use:
+  > **Note:** Windows and macOS are not officially supported by GTK4 on Python. The GUI is designed for Linux.
+
+  If you use a virtual environment, expose the system `gi` package to it:
 
   ```bash
-  pip install tk
+  echo "/usr/lib/python3/dist-packages" > .venv/lib/python3.*/site-packages/system-gi.pth
   ```
 
   Then run:
@@ -109,15 +111,16 @@ This will require tkinter to be installed.
   python3 run_gui.py
   ```
 
-  The GUI provides an easy-to-use interface with:
+  The GUI provides a modern libadwaita interface with:
 
 - Model selection (NudeNet or DeepStack)
-- Theme selection (`system`, `light`, `dark`)
+- Theme selection (`system`, `light`, `dark`) via `Adw.StyleManager`
 - Folder browsing and selection
 - Detection threshold control in percentages
 - Progress tracking with visual indicators
 - Automatic report and session generation
 - Detected media review table with confidence percentages
+- Thumbnail preview panel for selected results
 - Save/load workflow for returning to a previous review session
 - Quick access to reports and source file locations
 
