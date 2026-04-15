@@ -456,6 +456,14 @@ class NudityDetectorWindow(
         self.nudenet_radio.set_sensitive(not processing)
         self.deepstack_radio.set_sensitive(not processing)
         self.clear_all_button.set_sensitive(not processing)
+        for button_name in (
+            'save_session_button',
+            'load_session_button',
+            'open_report_button',
+            'open_reports_button',
+        ):
+            if hasattr(self, button_name):
+                getattr(self, button_name).set_sensitive(not processing)
 
     # ------------------------------------------------------------------
     # Activity log
@@ -517,6 +525,8 @@ class NudityDetectorApp(Adw.Application):
         if response == 'quit':
             win.is_processing = False
             win._save_config()
+            if hasattr(win, 'processing_thread') and win.processing_thread is not None:
+                win.processing_thread.join(timeout=constants.WORKER_THREAD_TIMEOUT)
             self.quit()
 
 

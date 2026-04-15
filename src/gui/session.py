@@ -1,6 +1,5 @@
 import json
 import os
-import subprocess
 
 import gi
 gi.require_version('Gtk', '4.0')
@@ -191,12 +190,7 @@ class SessionMixin:
         if not os.path.exists(self.last_report_path):
             self._show_warning('Warning', 'No report has been saved yet.')
             return
-        try:
-            if os.name == 'nt':
-                os.startfile(self.last_report_path)
-            elif os.uname().sysname == 'Darwin':
-                subprocess.run(['open', self.last_report_path], check=False)
-            else:
-                subprocess.run(['xdg-open', self.last_report_path], check=False)
-        except Exception as error:
-            self._show_error('Error', f'Could not open report: {error}')
+        from ..core.utils import open_file
+        success, error_message = open_file(self.last_report_path)
+        if not success:
+            self._show_error('Error', f'Could not open report: {error_message}')

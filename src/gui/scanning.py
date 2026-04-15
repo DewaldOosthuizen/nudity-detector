@@ -113,8 +113,8 @@ class ScanningMixin:
                 ret, frame = cap.read()
                 if not ret:
                     break
-                if frame_count % 5 == 0:
-                    frame_path = os.path.join(temp_dir, f'frame_{frame_count}.jpg')
+                if frame_count % constants.VIDEO_FRAME_RATE == 0:
+                    frame_path = os.path.join(temp_dir, constants.FRAME_FILE_NAME_PATTERN.format(frame_count))
                     cv2.imwrite(frame_path, frame)
                     frame_paths.append(frame_path)
                 frame_count += 1
@@ -168,7 +168,7 @@ class ScanningMixin:
             if not self.is_processing or file_path in existing_files:
                 return
             GLib.idle_add(self.log_message, f'Processing video: {os.path.basename(file_path)}')
-            temp_dir, frame_paths = self.extract_video_frames(file_path, 'gui_nudenet_frames_')
+            temp_dir, frame_paths = self.extract_video_frames(file_path, constants.FRAME_TEMP_DIR_PREFIX_GUI_NUDENET)
             try:
                 detection_results = []
                 max_confidence = 0.0
@@ -202,8 +202,13 @@ class ScanningMixin:
     # ------------------------------------------------------------------
 
     def request_deepstack_score(self, image_path, requests_module, deepstack_url):
+        request_url = deepstack_url or constants.DEEPSTACK_URL
         with open(image_path, 'rb') as image_file:
-            response = requests_module.post(deepstack_url, files={'image': image_file}, timeout=30)
+            response = requests_module.post(
+                request_url,
+                files={'image': image_file},
+                timeout=constants.DEEPSTACK_REQUEST_TIMEOUT,
+            )
         if response.status_code != 200:
             return None
         result = response.json()
@@ -237,7 +242,7 @@ class ScanningMixin:
         if not self.is_processing or file_path in existing_files:
             return
         GLib.idle_add(self.log_message, f'Processing video: {os.path.basename(file_path)}')
-        temp_dir, frame_paths = self.extract_video_frames(file_path, 'gui_deepstack_frames_')
+        temp_dir, frame_paths = self.extract_video_frames(file_path, constants.FRAME_TEMP_DIR_PREFIX_GUI_DEEPSTACK)
         try:
             frame_scores = []
             max_confidence = 0.0
@@ -267,7 +272,7 @@ class ScanningMixin:
     def create_deepstack_classifiers(self, existing_files, threshold_value, threshold_percent):
         import requests
 
-        deepstack_url = 'http://localhost:5000/v1/vision/nsfw'
+        deepstack_url = constants.DEEPSTACK_URL
         return (
             partial(
                 self.run_deepstack_image,
