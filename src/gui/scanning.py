@@ -22,6 +22,7 @@ from ..core.utils import (
     make_scan_config,
     nudity_report,
     normalize_threshold,
+    report_lock,
     reset_nudity_report,
     save_nudity_report,
 )
@@ -106,8 +107,8 @@ class ScanningMixin:
             save_nudity_report([], initial_report_path, session_state=initial_session)
             self.last_report_path = initial_report_path
             self.refresh_scan_history()
-        except Exception:
-            pass
+        except OSError as error:
+            self.log_message(f'Warning: could not create initial report: {error}')
 
         self.processing_thread = threading.Thread(
             target=self.process_files,
@@ -331,8 +332,10 @@ class ScanningMixin:
 
         def _flush_intermediate():
             """Save a partial report snapshot and push results to the UI (worker thread)."""
+            snapshot = []
             try:
-                snapshot = list(nudity_report)
+                with report_lock:
+                    snapshot = list(nudity_report)
                 intermediate_session = create_session_state(
                     scan_config=make_scan_config(
                         source_folder=folder_path,
@@ -345,13 +348,15 @@ class ScanningMixin:
                 save_nudity_report(snapshot, report_path, session_state=intermediate_session)
             except Exception:
                 pass
-            current_results = get_detected_results(nudity_report)
+            current_results = get_detected_results(snapshot)
             GLib.idle_add(self._apply_intermediate_results, list(current_results))
 
         def _with_progress(fn):
             """Wrap a classifier to count processed files and flush every N."""
             def wrapper(file_path):
                 fn(file_path)
+                if not self.is_processing:
+                    return
                 with count_lock:
                     files_processed[0] += 1
                     count = files_processed[0]
@@ -404,14 +409,15 @@ class ScanningMixin:
 
     def _apply_intermediate_results(self, results):
         """Update the results view with a mid-scan snapshot (called on the main thread)."""
+        if not self.is_processing:
+            return
         self.detected_results = results
         self.populate_results(results)
         count = len(results)
-        if self.is_processing:
-            self.summary_label.set_text(
-                f'{count} explicit item(s) detected so far. Scan still running...'
-                if count else 'Scan running... No detections yet.'
-            )
+        self.summary_label.set_text(
+            f'{count} explicit item(s) detected so far. Scan still running...'
+            if count else 'Scan running... No detections yet.'
+        )
 
     def finish_processing(self):
         self.is_processing = False

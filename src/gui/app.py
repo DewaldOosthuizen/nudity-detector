@@ -50,7 +50,10 @@ class NudityDetectorWindow(
         self._folder = cfg.get('last_source_folder', '')
         self._theme_mode = cfg.get('theme', constants.THEME_SYSTEM)
         self._threshold = float(cfg.get('threshold_percent', constants.DEFAULT_THRESHOLD_PERCENT))
-        self._progress_interval = int(cfg.get('progress_update_interval', constants.SCAN_PROGRESS_UPDATE_INTERVAL))
+        try:
+            self._progress_interval = max(1, int(cfg.get('progress_update_interval', constants.SCAN_PROGRESS_UPDATE_INTERVAL)))
+        except (ValueError, TypeError):
+            self._progress_interval = constants.SCAN_PROGRESS_UPDATE_INTERVAL
 
         self.is_processing = False
         self.processing_thread = None
