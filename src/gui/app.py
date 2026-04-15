@@ -22,11 +22,13 @@ from .dialogs import DialogsMixin
 from .preview import PreviewMixin
 from .result_item import ResultItem
 from .results import ResultsMixin
+from .scan_history import ScanHistoryMixin
 from .scanning import ScanningMixin
 from .session import SessionMixin
 
 
 class NudityDetectorWindow(
+    ScanHistoryMixin,
     ScanningMixin,
     PreviewMixin,
     SessionMixin,
@@ -70,6 +72,28 @@ class NudityDetectorWindow(
         header_bar = Adw.HeaderBar()
         toolbar_view.add_top_bar(header_bar)
 
+        # Tab stack
+        self.view_stack = Adw.ViewStack()
+        self.view_stack.set_vexpand(True)
+        toolbar_view.set_content(self.view_stack)
+
+        # ViewSwitcherTitle replaces the plain window title in the header bar
+        switcher_title = Adw.ViewSwitcherTitle()
+        switcher_title.set_stack(self.view_stack)
+        header_bar.set_title_widget(switcher_title)
+
+        # Scan tab (existing behaviour)
+        scan_widget = self._build_scan_page()
+        scan_page = self.view_stack.add_titled(scan_widget, 'scan', 'Scan')
+        scan_page.set_icon_name('edit-find-symbolic')
+
+        # All Scans tab
+        history_widget = self._build_scan_history_tab()
+        history_page = self.view_stack.add_titled(history_widget, 'all-scans', 'All Scans')
+        history_page.set_icon_name('document-open-recent-symbolic')
+
+    def _build_scan_page(self):
+        """Build and return the Scan tab widget (the original single-page layout)."""
         outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         outer.set_margin_top(12)
         outer.set_margin_bottom(12)
@@ -80,7 +104,6 @@ class NudityDetectorWindow(
         scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         scroll.set_child(outer)
         scroll.set_vexpand(True)
-        toolbar_view.set_content(scroll)
 
         # --- Header ---
         header_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
@@ -362,6 +385,8 @@ class NudityDetectorWindow(
         self.status_label = Gtk.Label(label='Ready')
         self.status_label.set_xalign(1)
         footer_box.append(self.status_label)
+
+        return scroll
 
     # ------------------------------------------------------------------
     # ColumnView factory helpers

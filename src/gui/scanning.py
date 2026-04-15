@@ -321,6 +321,7 @@ class ScanningMixin:
             save_nudity_report(nudity_report, report_path, session_state=session_state)
             GLib.idle_add(self.populate_results, self.detected_results)
             GLib.idle_add(self.log_message, f'Scan complete. {len(self.detected_results)} detections listed.')
+            GLib.idle_add(self.refresh_scan_history)
         except Exception as error:
             GLib.idle_add(self.log_message, f'Error during processing: {error}')
         finally:
@@ -381,3 +382,4 @@ class ScanningMixin:
         self.populate_results([])
         self.open_report_button.set_sensitive(False)
         self.log_message('All previous scan results have been cleared.')
+        self.refresh_scan_history()
