@@ -18,7 +18,7 @@ import os
 import subprocess
 import sys
 from datetime import datetime
-from queue import Empty, Queue
+from queue import Queue
 from threading import Lock, Thread
 from typing import Optional, Tuple
 
@@ -322,55 +322,60 @@ def process_file(file_path: str, classify_image, classify_video) -> None:
         classify_video(file_path)
 
 
-def process_file_queue(file_queue: Queue, classify_image, classify_video) -> None:
-    """Worker thread: process files from queue."""
-    while True:
-        try:
-            file_path = file_queue.get_nowait()
-        except Empty:
-            break
-        try:
-            process_file(file_path, classify_image, classify_video)
-        except Exception as e:
-            logging.error('Error processing file %s: %s', file_path, e)
-        finally:
-            file_queue.task_done()
-
-
-def classify_files_in_folder(folder_path: str, classify_image, classify_video) -> None:
+def classify_files_in_folder(
+    folder_path: str,
+    classify_image,
+    classify_video,
+    worker_count: int = constants.WORKER_THREAD_COUNT,
+    worker_timeout: int = constants.WORKER_THREAD_TIMEOUT,
+) -> None:
     """Classify all supported files in folder using worker threads.
+
+    Workers are started before directory traversal so they begin processing
+    immediately as files are discovered (streaming discovery).
 
     Args:
         folder_path: Root folder to scan
         classify_image: Image classification callable
         classify_video: Video classification callable
+        worker_count: Number of concurrent worker threads
+        worker_timeout: Seconds to wait for each worker to finish
     """
     logging.debug('Starting classification in folder: %s', folder_path)
     file_queue = Queue()
     os.makedirs(DEFAULT_REPORT_DIR, exist_ok=True)
 
-    # Queue all files
+    _SENTINEL = object()
+
+    def _worker():
+        while True:
+            item = file_queue.get()
+            if item is _SENTINEL:
+                break
+            try:
+                process_file(item, classify_image, classify_video)
+            except Exception as e:
+                logging.error('Error processing file %s: %s', item, e)
+
+    # Start workers before queuing files so they can begin immediately.
+    workers = []
+    for _ in range(worker_count):
+        worker = Thread(target=_worker, daemon=False)
+        worker.start()
+        workers.append(worker)
+
+    # Stream files into the queue as they are discovered.
     for root, _, files in os.walk(folder_path):
         for file_name in files:
             file_queue.put(os.path.join(root, file_name))
 
-    # Create and start worker threads
-    workers = []
-    for _ in range(constants.WORKER_THREAD_COUNT):
-        worker = Thread(
-            target=process_file_queue,
-            args=(file_queue, classify_image, classify_video),
-            daemon=False,
-        )
-        worker.start()
-        workers.append(worker)
+    # Send one sentinel per worker to signal completion.
+    for _ in workers:
+        file_queue.put(_SENTINEL)
 
-    # Wait for processing to complete
-    file_queue.join()
-
-    # Wait for workers to finish
+    # Wait for all workers to finish.
     for worker in workers:
-        worker.join(timeout=constants.WORKER_THREAD_TIMEOUT)
+        worker.join(timeout=worker_timeout)
         if worker.is_alive():
             logging.warning('Worker thread did not complete within timeout')
 

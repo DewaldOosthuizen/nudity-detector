@@ -54,6 +54,36 @@ class NudityDetectorWindow(
             self._progress_interval = max(1, int(cfg.get('progress_update_interval', constants.SCAN_PROGRESS_UPDATE_INTERVAL)))
         except (ValueError, TypeError):
             self._progress_interval = constants.SCAN_PROGRESS_UPDATE_INTERVAL
+        self._deepstack_host = cfg.get('deepstack_host', constants.DEEPSTACK_HOST)
+        try:
+            self._deepstack_port = int(cfg.get('deepstack_port', constants.DEEPSTACK_PORT))
+        except (ValueError, TypeError):
+            self._deepstack_port = constants.DEEPSTACK_PORT
+        self._deepstack_api_endpoint = cfg.get('deepstack_api_endpoint', constants.DEEPSTACK_API_ENDPOINT)
+        try:
+            self._deepstack_request_timeout = int(cfg.get('deepstack_request_timeout', constants.DEEPSTACK_REQUEST_TIMEOUT))
+        except (ValueError, TypeError):
+            self._deepstack_request_timeout = constants.DEEPSTACK_REQUEST_TIMEOUT
+        try:
+            self._deepstack_health_check_timeout = int(cfg.get('deepstack_health_check_timeout', constants.DEEPSTACK_HEALTH_CHECK_TIMEOUT))
+        except (ValueError, TypeError):
+            self._deepstack_health_check_timeout = constants.DEEPSTACK_HEALTH_CHECK_TIMEOUT
+        try:
+            self._worker_thread_count = max(1, int(cfg.get('worker_thread_count', constants.WORKER_THREAD_COUNT)))
+        except (ValueError, TypeError):
+            self._worker_thread_count = constants.WORKER_THREAD_COUNT
+        try:
+            self._worker_thread_timeout = max(1, int(cfg.get('worker_thread_timeout', constants.WORKER_THREAD_TIMEOUT)))
+        except (ValueError, TypeError):
+            self._worker_thread_timeout = constants.WORKER_THREAD_TIMEOUT
+        try:
+            self._detect_timeout = max(1, int(cfg.get('detect_timeout', constants.DETECT_TIMEOUT)))
+        except (ValueError, TypeError):
+            self._detect_timeout = constants.DETECT_TIMEOUT
+        try:
+            self._video_frame_rate = max(1, int(cfg.get('video_frame_rate', constants.VIDEO_FRAME_RATE)))
+        except (ValueError, TypeError):
+            self._video_frame_rate = constants.VIDEO_FRAME_RATE
 
         self.is_processing = False
         self.processing_thread = None
@@ -95,6 +125,299 @@ class NudityDetectorWindow(
         history_widget = self._build_scan_history_tab()
         history_page = self.view_stack.add_titled(history_widget, 'all-scans', 'All Scans')
         history_page.set_icon_name('document-open-recent-symbolic')
+
+        # Settings tab
+        settings_widget = self._build_settings_tab()
+        settings_page = self.view_stack.add_titled(settings_widget, 'settings', 'Settings')
+        settings_page.set_icon_name('preferences-system-symbolic')
+
+    def _build_settings_tab(self):
+        """Build and return the Settings tab widget."""
+        outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        outer.set_margin_top(12)
+        outer.set_margin_bottom(12)
+        outer.set_margin_start(16)
+        outer.set_margin_end(16)
+
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scroll.set_child(outer)
+        scroll.set_vexpand(True)
+
+        def _frame(label):
+            f = Gtk.Frame()
+            f.set_label(label)
+            f.set_margin_bottom(12)
+            g = Gtk.Grid()
+            g.set_column_spacing(12)
+            g.set_row_spacing(8)
+            g.set_margin_top(12)
+            g.set_margin_bottom(12)
+            g.set_margin_start(12)
+            g.set_margin_end(12)
+            f.set_child(g)
+            outer.append(f)
+            return g
+
+        # --- Appearance ---
+        ag = _frame('Appearance')
+        theme_label = Gtk.Label(label='Theme')
+        theme_label.set_xalign(0)
+        ag.attach(theme_label, 0, 0, 1, 1)
+
+        self.theme_dropdown = Gtk.DropDown.new_from_strings(list(constants.SUPPORTED_THEMES))
+        self.theme_dropdown.set_hexpand(True)
+        try:
+            idx = list(constants.SUPPORTED_THEMES).index(self._theme_mode)
+        except ValueError:
+            idx = 0
+        self.theme_dropdown.set_selected(idx)
+        self.theme_dropdown.connect('notify::selected', self._on_theme_selected)
+        ag.attach(self.theme_dropdown, 1, 0, 1, 1)
+
+        theme_help = Gtk.Label(label='Choose between system, light, or dark appearance.')
+        theme_help.set_xalign(0)
+        theme_help.add_css_class('dim-label')
+        theme_help.set_wrap(True)
+        theme_help.set_hexpand(True)
+        ag.attach(theme_help, 2, 0, 1, 1)
+
+        # --- Detection ---
+        dg = _frame('Detection')
+        threshold_label = Gtk.Label(label='Threshold %')
+        threshold_label.set_xalign(0)
+        dg.attach(threshold_label, 0, 0, 1, 1)
+
+        adj = Gtk.Adjustment(
+            value=self._threshold,
+            lower=0,
+            upper=100,
+            step_increment=1,
+            page_increment=10,
+        )
+        self.threshold_spin = Gtk.SpinButton(adjustment=adj, climb_rate=1, digits=0)
+        dg.attach(self.threshold_spin, 1, 0, 1, 1)
+
+        threshold_help = Gtk.Label(
+            label='Only detections at or above this confidence are treated as explicit.'
+        )
+        threshold_help.set_xalign(0)
+        threshold_help.add_css_class('dim-label')
+        threshold_help.set_wrap(True)
+        threshold_help.set_hexpand(True)
+        dg.attach(threshold_help, 2, 0, 1, 1)
+
+        interval_label = Gtk.Label(label='Update Every')
+        interval_label.set_xalign(0)
+        dg.attach(interval_label, 0, 1, 1, 1)
+
+        interval_adj = Gtk.Adjustment(
+            value=self._progress_interval,
+            lower=1,
+            upper=10000,
+            step_increment=10,
+            page_increment=100,
+        )
+        self.progress_interval_spin = Gtk.SpinButton(adjustment=interval_adj, climb_rate=1, digits=0)
+        dg.attach(self.progress_interval_spin, 1, 1, 1, 1)
+
+        interval_help = Gtk.Label(
+            label='Refresh detected results in the view every N files processed during a scan.'
+        )
+        interval_help.set_xalign(0)
+        interval_help.add_css_class('dim-label')
+        interval_help.set_wrap(True)
+        interval_help.set_hexpand(True)
+        dg.attach(interval_help, 2, 1, 1, 1)
+
+        frame_rate_label = Gtk.Label(label='Video Frame Rate')
+        frame_rate_label.set_xalign(0)
+        dg.attach(frame_rate_label, 0, 2, 1, 1)
+
+        frame_rate_adj = Gtk.Adjustment(
+            value=self._video_frame_rate,
+            lower=1,
+            upper=120,
+            step_increment=1,
+            page_increment=5,
+        )
+        self.video_frame_rate_spin = Gtk.SpinButton(adjustment=frame_rate_adj, climb_rate=1, digits=0)
+        dg.attach(self.video_frame_rate_spin, 1, 2, 1, 1)
+
+        frame_rate_help = Gtk.Label(label='Extract every Nth frame from videos during scanning.')
+        frame_rate_help.set_xalign(0)
+        frame_rate_help.add_css_class('dim-label')
+        frame_rate_help.set_wrap(True)
+        frame_rate_help.set_hexpand(True)
+        dg.attach(frame_rate_help, 2, 2, 1, 1)
+
+        # --- Processing ---
+        pg = _frame('Processing')
+
+        workers_label = Gtk.Label(label='Worker Threads')
+        workers_label.set_xalign(0)
+        pg.attach(workers_label, 0, 0, 1, 1)
+
+        workers_adj = Gtk.Adjustment(
+            value=self._worker_thread_count,
+            lower=1,
+            upper=64,
+            step_increment=1,
+            page_increment=4,
+        )
+        self.worker_thread_count_spin = Gtk.SpinButton(adjustment=workers_adj, climb_rate=1, digits=0)
+        pg.attach(self.worker_thread_count_spin, 1, 0, 1, 1)
+
+        workers_help = Gtk.Label(label='Number of concurrent worker threads used during a scan.')
+        workers_help.set_xalign(0)
+        workers_help.add_css_class('dim-label')
+        workers_help.set_wrap(True)
+        workers_help.set_hexpand(True)
+        pg.attach(workers_help, 2, 0, 1, 1)
+
+        thread_timeout_label = Gtk.Label(label='Thread Timeout (s)')
+        thread_timeout_label.set_xalign(0)
+        pg.attach(thread_timeout_label, 0, 1, 1, 1)
+
+        thread_timeout_adj = Gtk.Adjustment(
+            value=self._worker_thread_timeout,
+            lower=1,
+            upper=300,
+            step_increment=1,
+            page_increment=10,
+        )
+        self.worker_thread_timeout_spin = Gtk.SpinButton(adjustment=thread_timeout_adj, climb_rate=1, digits=0)
+        pg.attach(self.worker_thread_timeout_spin, 1, 1, 1, 1)
+
+        thread_timeout_help = Gtk.Label(label='Seconds to wait for each worker thread to finish after scanning stops.')
+        thread_timeout_help.set_xalign(0)
+        thread_timeout_help.add_css_class('dim-label')
+        thread_timeout_help.set_wrap(True)
+        thread_timeout_help.set_hexpand(True)
+        pg.attach(thread_timeout_help, 2, 1, 1, 1)
+
+        detect_timeout_label = Gtk.Label(label='Detect Timeout (s)')
+        detect_timeout_label.set_xalign(0)
+        pg.attach(detect_timeout_label, 0, 2, 1, 1)
+
+        detect_timeout_adj = Gtk.Adjustment(
+            value=self._detect_timeout,
+            lower=1,
+            upper=600,
+            step_increment=5,
+            page_increment=30,
+        )
+        self.detect_timeout_spin = Gtk.SpinButton(adjustment=detect_timeout_adj, climb_rate=1, digits=0)
+        pg.attach(self.detect_timeout_spin, 1, 2, 1, 1)
+
+        detect_timeout_help = Gtk.Label(label='Maximum seconds allowed for a single file detection before it is skipped.')
+        detect_timeout_help.set_xalign(0)
+        detect_timeout_help.add_css_class('dim-label')
+        detect_timeout_help.set_wrap(True)
+        detect_timeout_help.set_hexpand(True)
+        pg.attach(detect_timeout_help, 2, 2, 1, 1)
+
+        # --- DeepStack ---
+        sg = _frame('DeepStack')
+
+        ds_host_label = Gtk.Label(label='Host')
+        ds_host_label.set_xalign(0)
+        sg.attach(ds_host_label, 0, 0, 1, 1)
+
+        self.deepstack_host_entry = Gtk.Entry()
+        self.deepstack_host_entry.set_text(self._deepstack_host)
+        self.deepstack_host_entry.set_hexpand(True)
+        self.deepstack_host_entry.set_placeholder_text(constants.DEEPSTACK_HOST)
+        sg.attach(self.deepstack_host_entry, 1, 0, 1, 1)
+
+        ds_host_help = Gtk.Label(label=f'Default: {constants.DEEPSTACK_HOST}')
+        ds_host_help.set_xalign(0)
+        ds_host_help.add_css_class('dim-label')
+        ds_host_help.set_wrap(True)
+        ds_host_help.set_hexpand(True)
+        sg.attach(ds_host_help, 2, 0, 1, 1)
+
+        ds_port_label = Gtk.Label(label='Port')
+        ds_port_label.set_xalign(0)
+        sg.attach(ds_port_label, 0, 1, 1, 1)
+
+        ds_port_adj = Gtk.Adjustment(
+            value=self._deepstack_port,
+            lower=1,
+            upper=65535,
+            step_increment=1,
+            page_increment=100,
+        )
+        self.deepstack_port_spin = Gtk.SpinButton(adjustment=ds_port_adj, climb_rate=1, digits=0)
+        sg.attach(self.deepstack_port_spin, 1, 1, 1, 1)
+
+        ds_port_help = Gtk.Label(label=f'Default: {constants.DEEPSTACK_PORT}')
+        ds_port_help.set_xalign(0)
+        ds_port_help.add_css_class('dim-label')
+        ds_port_help.set_wrap(True)
+        ds_port_help.set_hexpand(True)
+        sg.attach(ds_port_help, 2, 1, 1, 1)
+
+        ds_endpoint_label = Gtk.Label(label='API Endpoint')
+        ds_endpoint_label.set_xalign(0)
+        sg.attach(ds_endpoint_label, 0, 2, 1, 1)
+
+        self.deepstack_endpoint_entry = Gtk.Entry()
+        self.deepstack_endpoint_entry.set_text(self._deepstack_api_endpoint)
+        self.deepstack_endpoint_entry.set_hexpand(True)
+        self.deepstack_endpoint_entry.set_placeholder_text(constants.DEEPSTACK_API_ENDPOINT)
+        sg.attach(self.deepstack_endpoint_entry, 1, 2, 1, 1)
+
+        ds_endpoint_help = Gtk.Label(label=f'Default: {constants.DEEPSTACK_API_ENDPOINT}')
+        ds_endpoint_help.set_xalign(0)
+        ds_endpoint_help.add_css_class('dim-label')
+        ds_endpoint_help.set_wrap(True)
+        ds_endpoint_help.set_hexpand(True)
+        sg.attach(ds_endpoint_help, 2, 2, 1, 1)
+
+        ds_req_timeout_label = Gtk.Label(label='Request Timeout (s)')
+        ds_req_timeout_label.set_xalign(0)
+        sg.attach(ds_req_timeout_label, 0, 3, 1, 1)
+
+        ds_req_timeout_adj = Gtk.Adjustment(
+            value=self._deepstack_request_timeout,
+            lower=1,
+            upper=300,
+            step_increment=1,
+            page_increment=10,
+        )
+        self.deepstack_request_timeout_spin = Gtk.SpinButton(adjustment=ds_req_timeout_adj, climb_rate=1, digits=0)
+        sg.attach(self.deepstack_request_timeout_spin, 1, 3, 1, 1)
+
+        ds_req_timeout_help = Gtk.Label(label=f'Seconds to wait for a DeepStack detection response. Default: {constants.DEEPSTACK_REQUEST_TIMEOUT}s')
+        ds_req_timeout_help.set_xalign(0)
+        ds_req_timeout_help.add_css_class('dim-label')
+        ds_req_timeout_help.set_wrap(True)
+        ds_req_timeout_help.set_hexpand(True)
+        sg.attach(ds_req_timeout_help, 2, 3, 1, 1)
+
+        ds_health_timeout_label = Gtk.Label(label='Health Check Timeout (s)')
+        ds_health_timeout_label.set_xalign(0)
+        sg.attach(ds_health_timeout_label, 0, 4, 1, 1)
+
+        ds_health_timeout_adj = Gtk.Adjustment(
+            value=self._deepstack_health_check_timeout,
+            lower=1,
+            upper=60,
+            step_increment=1,
+            page_increment=5,
+        )
+        self.deepstack_health_check_timeout_spin = Gtk.SpinButton(adjustment=ds_health_timeout_adj, climb_rate=1, digits=0)
+        sg.attach(self.deepstack_health_check_timeout_spin, 1, 4, 1, 1)
+
+        ds_health_timeout_help = Gtk.Label(label=f'Seconds to wait when checking if DeepStack is reachable. Default: {constants.DEEPSTACK_HEALTH_CHECK_TIMEOUT}s')
+        ds_health_timeout_help.set_xalign(0)
+        ds_health_timeout_help.add_css_class('dim-label')
+        ds_health_timeout_help.set_wrap(True)
+        ds_health_timeout_help.set_hexpand(True)
+        sg.attach(ds_health_timeout_help, 2, 4, 1, 1)
+
+        return scroll
 
     def _build_scan_page(self):
         """Build and return the Scan tab widget (the original single-page layout)."""
@@ -139,24 +462,10 @@ class NudityDetectorWindow(
         settings_box.set_child(grid)
         outer.append(settings_box)
 
-        # Theme row
-        theme_label = Gtk.Label(label='Theme')
-        theme_label.set_xalign(0)
-        grid.attach(theme_label, 0, 0, 1, 1)
-
-        self.theme_dropdown = Gtk.DropDown.new_from_strings(list(constants.SUPPORTED_THEMES))
-        self.theme_dropdown.set_hexpand(True)
-        try:
-            idx = list(constants.SUPPORTED_THEMES).index(self._theme_mode)
-        except ValueError:
-            idx = 0
-        self.theme_dropdown.set_selected(idx)
-        self.theme_dropdown.connect('notify::selected', self._on_theme_selected)
-        grid.attach(self.theme_dropdown, 1, 0, 1, 1)
-
+        # Model row
         model_label = Gtk.Label(label='Model')
         model_label.set_xalign(0)
-        grid.attach(model_label, 2, 0, 1, 1)
+        grid.attach(model_label, 0, 0, 1, 1)
 
         model_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
         self.nudenet_radio = Gtk.CheckButton(label='NudeNet')
@@ -168,7 +477,7 @@ class NudityDetectorWindow(
             self.deepstack_radio.set_active(True)
         model_box.append(self.nudenet_radio)
         model_box.append(self.deepstack_radio)
-        grid.attach(model_box, 3, 0, 1, 1)
+        grid.attach(model_box, 1, 0, 3, 1)
 
         # Source folder row
         folder_label = Gtk.Label(label='Source Folder')
@@ -183,54 +492,6 @@ class NudityDetectorWindow(
         self.browse_button = Gtk.Button(label='Browse…')
         self.browse_button.connect('clicked', self._on_browse_clicked)
         grid.attach(self.browse_button, 3, 1, 1, 1)
-
-        # Threshold row
-        threshold_label = Gtk.Label(label='Threshold %')
-        threshold_label.set_xalign(0)
-        grid.attach(threshold_label, 0, 2, 1, 1)
-
-        adj = Gtk.Adjustment(
-            value=self._threshold,
-            lower=0,
-            upper=100,
-            step_increment=1,
-            page_increment=10,
-        )
-        self.threshold_spin = Gtk.SpinButton(adjustment=adj, climb_rate=1, digits=0)
-        grid.attach(self.threshold_spin, 1, 2, 1, 1)
-
-        threshold_help = Gtk.Label(
-            label='Only detections at or above this confidence are treated as explicit.'
-        )
-        threshold_help.set_xalign(0)
-        threshold_help.add_css_class('dim-label')
-        threshold_help.set_wrap(True)
-        threshold_help.set_hexpand(True)
-        grid.attach(threshold_help, 2, 2, 2, 1)
-
-        # Progress update interval row
-        interval_label = Gtk.Label(label='Update Every')
-        interval_label.set_xalign(0)
-        grid.attach(interval_label, 0, 3, 1, 1)
-
-        interval_adj = Gtk.Adjustment(
-            value=self._progress_interval,
-            lower=1,
-            upper=10000,
-            step_increment=10,
-            page_increment=100,
-        )
-        self.progress_interval_spin = Gtk.SpinButton(adjustment=interval_adj, climb_rate=1, digits=0)
-        grid.attach(self.progress_interval_spin, 1, 3, 1, 1)
-
-        interval_help = Gtk.Label(
-            label='Refresh detected results in the view every N files processed during a scan.'
-        )
-        interval_help.set_xalign(0)
-        interval_help.add_css_class('dim-label')
-        interval_help.set_wrap(True)
-        interval_help.set_hexpand(True)
-        grid.attach(interval_help, 2, 3, 2, 1)
 
         # --- Action buttons ---
         action_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
@@ -264,10 +525,6 @@ class NudityDetectorWindow(
         self.open_reports_button = Gtk.Button(label='Open Reports Folder')
         self.open_reports_button.connect('clicked', self._on_open_reports_clicked)
         action_box.append(self.open_reports_button)
-
-        self.clear_all_button = Gtk.Button(label='Clear All Results')
-        self.clear_all_button.connect('clicked', self._on_clear_all_clicked)
-        action_box.append(self.clear_all_button)
 
         # --- Results section ---
         results_outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
@@ -388,10 +645,10 @@ class NudityDetectorWindow(
         log_inner.set_margin_end(8)
         log_frame.set_child(log_inner)
 
-        log_scroll = Gtk.ScrolledWindow()
-        log_scroll.set_vexpand(True)
-        log_scroll.set_min_content_height(150)
-        log_inner.append(log_scroll)
+        self.log_scroll = Gtk.ScrolledWindow()
+        self.log_scroll.set_vexpand(True)
+        self.log_scroll.set_min_content_height(150)
+        log_inner.append(self.log_scroll)
 
         self.log_buffer = Gtk.TextBuffer()
         self.log_view = Gtk.TextView(buffer=self.log_buffer)
@@ -399,7 +656,7 @@ class NudityDetectorWindow(
         self.log_view.set_cursor_visible(False)
         self.log_view.set_wrap_mode(Gtk.WrapMode.WORD)
         self.log_view.add_css_class('monospace')
-        log_scroll.set_child(self.log_view)
+        self.log_scroll.set_child(self.log_view)
 
         # --- Footer ---
         footer_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
@@ -461,6 +718,15 @@ class NudityDetectorWindow(
                 'threshold_percent': self.threshold_spin.get_value(),
                 'last_source_folder': self.folder_entry.get_text().strip(),
                 'progress_update_interval': self._get_progress_interval(),
+                'video_frame_rate': self._get_video_frame_rate(),
+                'worker_thread_count': self._get_worker_thread_count(),
+                'worker_thread_timeout': self._get_worker_thread_timeout(),
+                'detect_timeout': self._get_detect_timeout(),
+                'deepstack_host': self._get_deepstack_host(),
+                'deepstack_port': self._get_deepstack_port(),
+                'deepstack_api_endpoint': self._get_deepstack_api_endpoint(),
+                'deepstack_request_timeout': self._get_deepstack_request_timeout(),
+                'deepstack_health_check_timeout': self._get_deepstack_health_check_timeout(),
             }
             with open(config_path, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=2)
@@ -481,6 +747,45 @@ class NudityDetectorWindow(
 
     def _get_progress_interval(self) -> int:
         return max(1, int(self.progress_interval_spin.get_value()))
+
+    def _get_video_frame_rate(self) -> int:
+        return max(1, int(self.video_frame_rate_spin.get_value()))
+
+    def _get_worker_thread_count(self) -> int:
+        return max(1, int(self.worker_thread_count_spin.get_value()))
+
+    def _get_worker_thread_timeout(self) -> int:
+        return max(1, int(self.worker_thread_timeout_spin.get_value()))
+
+    def _get_detect_timeout(self) -> int:
+        return max(1, int(self.detect_timeout_spin.get_value()))
+
+    def _get_deepstack_host(self) -> str:
+        return self.deepstack_host_entry.get_text().strip() or constants.DEEPSTACK_HOST
+
+    def _get_deepstack_port(self) -> int:
+        val = int(self.deepstack_port_spin.get_value())
+        return val if 1 <= val <= 65535 else constants.DEEPSTACK_PORT
+
+    def _get_deepstack_api_endpoint(self) -> str:
+        return self.deepstack_endpoint_entry.get_text().strip() or constants.DEEPSTACK_API_ENDPOINT
+
+    def _get_deepstack_request_timeout(self) -> int:
+        return max(1, int(self.deepstack_request_timeout_spin.get_value()))
+
+    def _get_deepstack_health_check_timeout(self) -> int:
+        return max(1, int(self.deepstack_health_check_timeout_spin.get_value()))
+
+    def _get_deepstack_url(self) -> str:
+        host = self._get_deepstack_host()
+        port = self._get_deepstack_port()
+        endpoint = self._get_deepstack_api_endpoint()
+        return f'http://{host}:{port}{endpoint}'
+
+    def _get_deepstack_check_url(self) -> str:
+        host = self._get_deepstack_host()
+        port = self._get_deepstack_port()
+        return f'http://{host}:{port}'
 
     # ------------------------------------------------------------------
     # Theme
@@ -512,8 +817,16 @@ class NudityDetectorWindow(
         self.threshold_spin.set_sensitive(not processing)
         self.nudenet_radio.set_sensitive(not processing)
         self.deepstack_radio.set_sensitive(not processing)
-        self.clear_all_button.set_sensitive(not processing)
         self.progress_interval_spin.set_sensitive(not processing)
+        self.video_frame_rate_spin.set_sensitive(not processing)
+        self.worker_thread_count_spin.set_sensitive(not processing)
+        self.worker_thread_timeout_spin.set_sensitive(not processing)
+        self.detect_timeout_spin.set_sensitive(not processing)
+        self.deepstack_host_entry.set_sensitive(not processing)
+        self.deepstack_port_spin.set_sensitive(not processing)
+        self.deepstack_endpoint_entry.set_sensitive(not processing)
+        self.deepstack_request_timeout_spin.set_sensitive(not processing)
+        self.deepstack_health_check_timeout_spin.set_sensitive(not processing)
         for button_name in (
             'save_session_button',
             'load_session_button',
@@ -530,10 +843,13 @@ class NudityDetectorWindow(
     def log_message(self, message):
         timestamp = datetime.now().strftime('%H:%M:%S')
         line = f'[{timestamp}] {message}\n'
+        adj = self.log_scroll.get_vadjustment()
+        at_bottom = adj.get_value() >= adj.get_upper() - adj.get_page_size() - 1.0
         end_iter = self.log_buffer.get_end_iter()
         self.log_buffer.insert(end_iter, line)
-        end_iter = self.log_buffer.get_end_iter()
-        self.log_view.scroll_to_iter(end_iter, 0.0, False, 0.0, 1.0)
+        if at_bottom:
+            end_iter = self.log_buffer.get_end_iter()
+            self.log_view.scroll_to_iter(end_iter, 0.0, False, 0.0, 1.0)
 
     # ------------------------------------------------------------------
     # Folder browse

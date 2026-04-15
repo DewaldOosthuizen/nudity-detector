@@ -1,5 +1,6 @@
 import os
 import shutil
+import sys
 import tempfile
 import threading
 from datetime import datetime
@@ -16,6 +17,7 @@ from ..core.utils import (
     DEFAULT_REPORT_DIR,
     classify_files_in_folder,
     create_session_state,
+    detect_with_timeout,
     get_detected_results,
     get_report_path,
     handle_results,
@@ -53,8 +55,8 @@ class ScanningMixin:
         try:
             import requests
             response = requests.get(
-                constants.DEEPSTACK_CONNECTION_CHECK_URL,
-                timeout=constants.DEEPSTACK_HEALTH_CHECK_TIMEOUT,
+                self._get_deepstack_check_url(),
+                timeout=self._get_deepstack_health_check_timeout(),
             )
             return response.ok
         except Exception:
@@ -71,7 +73,7 @@ class ScanningMixin:
         if self._get_model() == constants.MODEL_DEEPSTACK and not self.check_deepstack_server():
             self._show_error(
                 'Error',
-                f'DeepStack server is not available at {constants.DEEPSTACK_CONNECTION_CHECK_URL}\n'
+                f'DeepStack server is not available at {self._get_deepstack_check_url()}\n'
                 'Please start it before scanning.',
             )
             return
@@ -126,17 +128,25 @@ class ScanningMixin:
     # Video frame extraction
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _frame_temp_dir_base():
+        """Return /dev/shm on Linux when available (RAM disk), otherwise None."""
+        if sys.platform.startswith('linux') and os.path.isdir('/dev/shm'):
+            return '/dev/shm'
+        return None
+
     def extract_video_frames(self, file_path, temp_prefix):
-        temp_dir = tempfile.mkdtemp(prefix=temp_prefix)
+        temp_dir = tempfile.mkdtemp(prefix=temp_prefix, dir=self._frame_temp_dir_base())
         frame_paths = []
         cap = cv2.VideoCapture(file_path)
         frame_count = 0
+        video_frame_rate = self._get_video_frame_rate()
         try:
             while cap.isOpened() and self.is_processing:
                 ret, frame = cap.read()
                 if not ret:
                     break
-                if frame_count % constants.VIDEO_FRAME_RATE == 0:
+                if frame_count % video_frame_rate == 0:
                     frame_path = os.path.join(temp_dir, constants.FRAME_FILE_NAME_PATTERN.format(frame_count))
                     cv2.imwrite(frame_path, frame)
                     frame_paths.append(frame_path)
@@ -171,11 +181,16 @@ class ScanningMixin:
             ]
             return max(scores, default=0.0)
 
+        detect_timeout = self._get_detect_timeout()
+
         def classify_image(file_path):
             if not self.is_processing or file_path in existing_files:
                 return
             GLib.idle_add(self.log_message, f'Processing image: {os.path.basename(file_path)}')
-            detection_result = detector.detect(file_path)
+            detection_result = detect_with_timeout(detector, file_path, detect_timeout)
+            if detection_result is None:
+                GLib.idle_add(self.log_message, f'No result for {os.path.basename(file_path)}')
+                return
             confidence_score = confidence_for_results(detection_result)
             handle_results(
                 file_path,
@@ -198,7 +213,9 @@ class ScanningMixin:
                 for frame_path in frame_paths:
                     if not self.is_processing:
                         break
-                    frame_result = detector.detect(frame_path)
+                    frame_result = detect_with_timeout(detector, frame_path, detect_timeout)
+                    if frame_result is None:
+                        continue
                     simplified_frame = simplify_results(frame_result)
                     detection_results.append(
                         {'frame': os.path.basename(frame_path), 'detections': simplified_frame}
@@ -224,13 +241,13 @@ class ScanningMixin:
     # DeepStack classifiers
     # ------------------------------------------------------------------
 
-    def request_deepstack_score(self, image_path, requests_module, deepstack_url):
+    def request_deepstack_score(self, image_path, requests_module, deepstack_url, request_timeout):
         request_url = deepstack_url or constants.DEEPSTACK_URL
         with open(image_path, 'rb') as image_file:
             response = requests_module.post(
                 request_url,
                 files={'image': image_file},
-                timeout=constants.DEEPSTACK_REQUEST_TIMEOUT,
+                timeout=request_timeout,
             )
         if response.status_code != 200:
             return None
@@ -242,11 +259,11 @@ class ScanningMixin:
                 break
         return result, confidence_score
 
-    def run_deepstack_image(self, file_path, existing_files, threshold_value, threshold_percent, requests_module, deepstack_url):
+    def run_deepstack_image(self, file_path, existing_files, threshold_value, threshold_percent, requests_module, deepstack_url, request_timeout):
         if not self.is_processing or file_path in existing_files:
             return
         GLib.idle_add(self.log_message, f'Processing image: {os.path.basename(file_path)}')
-        scored_result = self.request_deepstack_score(file_path, requests_module, deepstack_url)
+        scored_result = self.request_deepstack_score(file_path, requests_module, deepstack_url, request_timeout)
         if scored_result is None:
             GLib.idle_add(self.log_message, f'Failed to classify {file_path}')
             return
@@ -261,7 +278,7 @@ class ScanningMixin:
             threshold_percent=threshold_percent,
         )
 
-    def run_deepstack_video(self, file_path, existing_files, threshold_value, threshold_percent, requests_module, deepstack_url):
+    def run_deepstack_video(self, file_path, existing_files, threshold_value, threshold_percent, requests_module, deepstack_url, request_timeout):
         if not self.is_processing or file_path in existing_files:
             return
         GLib.idle_add(self.log_message, f'Processing video: {os.path.basename(file_path)}')
@@ -272,7 +289,7 @@ class ScanningMixin:
             for frame_path in frame_paths:
                 if not self.is_processing:
                     break
-                scored_result = self.request_deepstack_score(frame_path, requests_module, deepstack_url)
+                scored_result = self.request_deepstack_score(frame_path, requests_module, deepstack_url, request_timeout)
                 if scored_result is None:
                     continue
                 _result, confidence_score = scored_result
@@ -295,7 +312,8 @@ class ScanningMixin:
     def create_deepstack_classifiers(self, existing_files, threshold_value, threshold_percent):
         import requests
 
-        deepstack_url = constants.DEEPSTACK_URL
+        deepstack_url = self._get_deepstack_url()
+        request_timeout = self._get_deepstack_request_timeout()
         return (
             partial(
                 self.run_deepstack_image,
@@ -304,6 +322,7 @@ class ScanningMixin:
                 threshold_percent=threshold_percent,
                 requests_module=requests,
                 deepstack_url=deepstack_url,
+                request_timeout=request_timeout,
             ),
             partial(
                 self.run_deepstack_video,
@@ -312,6 +331,7 @@ class ScanningMixin:
                 threshold_percent=threshold_percent,
                 requests_module=requests,
                 deepstack_url=deepstack_url,
+                request_timeout=request_timeout,
             ),
         )
 
@@ -330,8 +350,29 @@ class ScanningMixin:
         files_processed = [0]
         count_lock = threading.Lock()
 
+        # ------------------------------------------------------------------
+        # Async save thread — receives (snapshot, session, path) from worker
+        # threads so Excel writes never block file-processing workers.
+        # ------------------------------------------------------------------
+        from queue import Queue as _Queue
+        _save_queue = _Queue()
+
+        def _save_worker():
+            while True:
+                item = _save_queue.get()
+                if item is None:
+                    break
+                snap, sess, path = item
+                try:
+                    save_nudity_report(snap, path, session_state=sess)
+                except Exception:
+                    pass
+
+        save_thread = threading.Thread(target=_save_worker, daemon=True)
+        save_thread.start()
+
         def _flush_intermediate():
-            """Save a partial report snapshot and push results to the UI (worker thread)."""
+            """Queue a partial report snapshot for async save, then push results to UI."""
             snapshot = []
             try:
                 with report_lock:
@@ -345,7 +386,7 @@ class ScanningMixin:
                     ),
                     results=snapshot,
                 )
-                save_nudity_report(snapshot, report_path, session_state=intermediate_session)
+                _save_queue.put((snapshot, intermediate_session, report_path))
             except Exception:
                 pass
             current_results = get_detected_results(snapshot)
@@ -377,16 +418,29 @@ class ScanningMixin:
             classify_image = _with_progress(classify_image)
             classify_video = _with_progress(classify_video)
 
-            classify_files_in_folder(folder_path, classify_image, classify_video)
+            classify_files_in_folder(
+                folder_path,
+                classify_image,
+                classify_video,
+                worker_count=self._get_worker_thread_count(),
+                worker_timeout=self._get_worker_thread_timeout(),
+            )
 
             self.detected_results = get_detected_results(nudity_report)
             self.last_report_path = report_path
             session_state = self.build_session_state()
+
+            # Signal the async save thread to stop, then wait for pending saves.
+            _save_queue.put(None)
+            save_thread.join(timeout=30)
+
+            # Write the final definitive report.
             save_nudity_report(nudity_report, report_path, session_state=session_state)
             GLib.idle_add(self.populate_results, self.detected_results)
             GLib.idle_add(self.log_message, f'Scan complete. {len(self.detected_results)} detections listed.')
             GLib.idle_add(self.refresh_scan_history)
         except Exception as error:
+            _save_queue.put(None)  # Ensure save thread always terminates
             GLib.idle_add(self.log_message, f'Error during processing: {error}')
         finally:
             GLib.idle_add(self.finish_processing)

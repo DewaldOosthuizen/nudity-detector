@@ -6,7 +6,7 @@ from datetime import datetime
 import gi
 gi.require_version('Gtk', '4.0')
 gi.require_version('Adw', '1')
-from gi.repository import GLib, GObject, Gio, Gtk
+from gi.repository import Adw, GLib, GObject, Gio, Gtk
 
 from ..core import constants
 from ..core.utils import DEFAULT_REPORT_DIR, get_report_path, load_scan_session
@@ -107,6 +107,17 @@ class ScanHistoryMixin:
         self.history_export_button.connect('clicked', self._on_history_export_clicked)
         action_box.append(self.history_export_button)
 
+        self.history_delete_button = Gtk.Button(label='Delete Scan')
+        self.history_delete_button.add_css_class('destructive-action')
+        self.history_delete_button.set_sensitive(False)
+        self.history_delete_button.connect('clicked', self._on_history_delete_clicked)
+        action_box.append(self.history_delete_button)
+
+        self.history_clear_all_button = Gtk.Button(label='Clear All Scans')
+        self.history_clear_all_button.add_css_class('destructive-action')
+        self.history_clear_all_button.connect('clicked', self._on_clear_all_clicked)
+        action_box.append(self.history_clear_all_button)
+
         # Populate immediately
         self.refresh_scan_history()
 
@@ -204,6 +215,7 @@ class ScanHistoryMixin:
     def _update_history_action_state(self, has_selection):
         self.history_load_button.set_sensitive(has_selection)
         self.history_export_button.set_sensitive(has_selection)
+        self.history_delete_button.set_sensitive(has_selection)
 
     def _get_selected_history_item(self):
         selected = self._history_selection.get_selected()
@@ -271,6 +283,38 @@ class ScanHistoryMixin:
             self._export_from_session_json(item.session_path, dest_path)
         else:
             self._show_error('Export Failed', 'No report data found for this scan run.')
+
+    # ------------------------------------------------------------------
+    # Delete action
+    # ------------------------------------------------------------------
+
+    def _on_history_delete_clicked(self, _button):
+        item = self._get_selected_history_item()
+        if item is None:
+            return
+        dialog = Adw.AlertDialog(
+            heading='Delete Scan',
+            body=f'Permanently delete scan from {item.display_date}? This cannot be undone.',
+        )
+        dialog.add_response('cancel', 'Cancel')
+        dialog.add_response('delete', 'Delete')
+        dialog.set_response_appearance('delete', Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.set_default_response('cancel')
+        dialog.set_close_response('cancel')
+        dialog.connect('response', self._on_history_delete_response, item)
+        dialog.present(self)
+
+    def _on_history_delete_response(self, _dialog, response, item):
+        if response != 'delete':
+            return
+        subdir_path = os.path.join(DEFAULT_REPORT_DIR, item.dir_name)
+        try:
+            shutil.rmtree(subdir_path)
+        except OSError as exc:
+            self._show_error('Delete Failed', str(exc))
+            return
+        self.log_message(f'Deleted scan: {item.dir_name}')
+        self.refresh_scan_history()
 
     def _export_from_session_json(self, session_path, dest_path):
         try:
