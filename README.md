@@ -102,7 +102,13 @@ The GUI requires **GTK4** and **libadwaita**. These are pre-installed on most mo
   If you use a virtual environment, expose the system `gi` package to it:
 
   ```bash
-  echo "/usr/lib/python3/dist-packages" > .venv/lib/python3.*/site-packages/system-gi.pth
+  VENV_SITE_PACKAGES="$(
+    .venv/bin/python3 -c 'import site; print(site.getsitepackages()[0])'
+  )"
+  GI_SYSTEM_PATH="$(
+    python3 -c 'import gi, pathlib; print(pathlib.Path(gi.__file__).resolve().parent.parent)'
+  )"
+  printf '%s\n' "$GI_SYSTEM_PATH" > "$VENV_SITE_PACKAGES/system-gi.pth"
   ```
 
   Then run:
