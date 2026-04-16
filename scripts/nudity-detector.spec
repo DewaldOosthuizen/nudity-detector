@@ -57,7 +57,7 @@ all_hiddenimports = (
         'src.core.utils',
         'src.detectors',
         'src.detectors.nudenet',
-        'src.detectors.deepstack',
+        'src.detectors.helloz_nsfw',
         'src.processing',
         'src.processing.media_processor',
         'src.reporting',

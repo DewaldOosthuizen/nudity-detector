@@ -36,7 +36,7 @@ def prompt_threshold_percent(default_percent=constants.DEFAULT_THRESHOLD_PERCENT
 
 def extract_frames(file_path, frame_rate=constants.VIDEO_FRAME_RATE):
     """Legacy wrapper for backward compatibility."""
-    extractor = FrameExtractor(frame_rate=frame_rate, temp_prefix=constants.FRAME_TEMP_DIR_PREFIX_CLI_DEEPSTACK)
+    extractor = FrameExtractor(frame_rate=frame_rate, temp_prefix=constants.FRAME_TEMP_DIR_PREFIX_CLI_HELLOZ_NSFW)
     return extractor.extract(file_path)
 
 
@@ -49,7 +49,7 @@ def main():
     threshold_value = normalize_threshold(threshold_percent)
     scan_config = make_scan_config(
         source_folder=folder_to_classify,
-        model_name=constants.MODEL_DEEPSTACK,
+        model_name=constants.MODEL_HELLOZ_NSFW,
         threshold_percent=threshold_percent,
         theme_mode=constants.THEME_SYSTEM,
     )
@@ -61,26 +61,21 @@ def main():
 
         try:
             with open(file_path, 'rb') as image_file:
-                response = requests.post(constants.DEEPSTACK_URL, files={'image': image_file}, timeout=constants.DEEPSTACK_REQUEST_TIMEOUT)
+                response = requests.post(constants.HELLOZ_NSFW_URL, files={'file': image_file}, timeout=constants.HELLOZ_NSFW_REQUEST_TIMEOUT)
 
             if response.status_code != 200:
                 logging.error('Failed to classify image %s. HTTP status: %s', file_path, response.status_code)
                 return
 
             result = response.json()
-            confidence_score = 0.0
-            predictions = result.get('predictions', [])
-            for pred in predictions:
-                if pred.get('label') == 'nsfw':
-                    confidence_score = float(pred.get('confidence', 0.0))
-                    break
+            confidence_score = float(result.get('data', {}).get('nsfw', 0.0))
             handle_results(
                 file_path,
                 confidence_score >= threshold_value,
                 result,
                 confidence_score=confidence_score,
                 media_type=constants.MEDIA_TYPE_IMAGE,
-                model_name=constants.MODEL_DEEPSTACK,
+                model_name=constants.MODEL_HELLOZ_NSFW,
                 threshold_percent=threshold_percent,
             )
         except Exception as error:
@@ -95,7 +90,7 @@ def main():
         try:
             extractor = FrameExtractor(
                 frame_rate=constants.VIDEO_FRAME_RATE,
-                temp_prefix=constants.FRAME_TEMP_DIR_PREFIX_CLI_DEEPSTACK,
+                temp_prefix=constants.FRAME_TEMP_DIR_PREFIX_CLI_HELLOZ_NSFW,
             )
             temp_dir, frame_paths = extractor.extract(file_path)
             frame_scores = []
@@ -103,18 +98,13 @@ def main():
 
             for frame_path in frame_paths:
                 with open(frame_path, 'rb') as image_file:
-                    response = requests.post(constants.DEEPSTACK_URL, files={'image': image_file}, timeout=constants.DEEPSTACK_REQUEST_TIMEOUT)
+                    response = requests.post(constants.HELLOZ_NSFW_URL, files={'file': image_file}, timeout=constants.HELLOZ_NSFW_REQUEST_TIMEOUT)
                 if response.status_code != 200:
                     logging.error('Failed to classify frame %s. HTTP status: %s', frame_path, response.status_code)
                     continue
 
                 result = response.json()
-                confidence_score = 0.0
-                predictions = result.get('predictions', [])
-                for pred in predictions:
-                    if pred.get('label') == 'nsfw':
-                        confidence_score = float(pred.get('confidence', 0.0))
-                        break
+                confidence_score = float(result.get('data', {}).get('nsfw', 0.0))
                 max_confidence = max(max_confidence, confidence_score)
                 frame_scores.append({'frame': os.path.basename(frame_path), 'unsafe_score': confidence_score})
                 if max_confidence >= threshold_value:
@@ -126,7 +116,7 @@ def main():
                 frame_scores,
                 confidence_score=max_confidence,
                 media_type=constants.MEDIA_TYPE_VIDEO,
-                model_name=constants.MODEL_DEEPSTACK,
+                model_name=constants.MODEL_HELLOZ_NSFW,
                 threshold_percent=threshold_percent,
             )
         except Exception as error:

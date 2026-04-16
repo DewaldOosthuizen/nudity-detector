@@ -1,18 +1,11 @@
 version: '3.8'
 
 services:
-  deepstack:
-    image: deepquestai/deepstack:latest
-    container_name: deepstack
+  helloz_nsfw:
+    image: helloz/nsfw
+    container_name: helloz_nsfw
     restart: unless-stopped
     ports:
-      - "5000:5000" # Map port 5000 of the container to port 5000 on the host
-    volumes:
-      - deepstack_storage:/datastore # Persistent storage for custom models or data
+      - "6086:6086"
     environment:
-      - VISION-DETECTION=True # Enable object detection
-      - VISION-FACE=True      # Enable face detection and recognition
-      - VISION-SCENE=True     # Enable scene recognition
-      - VISION-NUDITY=True    # Enable nudity recognition
-volumes:
-  deepstack_storage:
+      - WORKERS=1

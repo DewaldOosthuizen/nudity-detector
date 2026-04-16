@@ -156,7 +156,7 @@ class SessionMixin:
         if scan_config.get('model_name', 'nudenet') == constants.MODEL_NUDENET:
             self.nudenet_radio.set_active(True)
         else:
-            self.deepstack_radio.set_active(True)
+            self.helloz_nsfw_radio.set_active(True)
 
         theme = scan_config.get('theme_mode', 'system')
         try:

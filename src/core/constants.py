@@ -36,8 +36,8 @@ NUDITY_CLASSES_EXTENDED = frozenset({
 NUDITY_CLASSES_STRICT = frozenset(NUDITY_CLASSES | NUDITY_CLASSES_EXTENDED)
 
 MODEL_NUDENET = 'nudenet'
-MODEL_DEEPSTACK = 'deepstack'
-SUPPORTED_MODELS = (MODEL_NUDENET, MODEL_DEEPSTACK)
+MODEL_HELLOZ_NSFW = 'helloz_nsfw'
+SUPPORTED_MODELS = (MODEL_NUDENET, MODEL_HELLOZ_NSFW)
 
 # ============================================================================
 # Nudity Detection - Thresholds
@@ -93,21 +93,21 @@ NO_THUMBNAIL_TEXT = 'No thumbnail available'
 # ============================================================================
 VIDEO_FRAME_RATE = 5  # Extract every Nth frame
 FRAME_TEMP_DIR_PREFIX_GUI_NUDENET = 'gui_nudenet_frames_'
-FRAME_TEMP_DIR_PREFIX_GUI_DEEPSTACK = 'gui_deepstack_frames_'
+FRAME_TEMP_DIR_PREFIX_GUI_HELLOZ_NSFW = 'gui_helloz_nsfw_frames_'
 FRAME_TEMP_DIR_PREFIX_CLI_NUDENET = 'nudenet_frames_'
-FRAME_TEMP_DIR_PREFIX_CLI_DEEPSTACK = 'deepstack_frames_'
+FRAME_TEMP_DIR_PREFIX_CLI_HELLOZ_NSFW = 'helloz_nsfw_frames_'
 FRAME_FILE_NAME_PATTERN = 'frame_{}.jpg'
 
 # ============================================================================
-# DeepStack API
+# Helloz NSFW API
 # ============================================================================
-DEEPSTACK_HOST = 'localhost'
-DEEPSTACK_PORT = 5000
-DEEPSTACK_API_ENDPOINT = '/v1/vision/nsfw'
-DEEPSTACK_URL = f'http://{DEEPSTACK_HOST}:{DEEPSTACK_PORT}{DEEPSTACK_API_ENDPOINT}'
-DEEPSTACK_REQUEST_TIMEOUT = 30  # seconds
-DEEPSTACK_HEALTH_CHECK_TIMEOUT = 5  # seconds
-DEEPSTACK_CONNECTION_CHECK_URL = f'http://{DEEPSTACK_HOST}:{DEEPSTACK_PORT}'
+HELLOZ_NSFW_HOST = 'localhost'
+HELLOZ_NSFW_PORT = 6086
+HELLOZ_NSFW_API_ENDPOINT = '/api/upload_check'
+HELLOZ_NSFW_URL = f'http://{HELLOZ_NSFW_HOST}:{HELLOZ_NSFW_PORT}{HELLOZ_NSFW_API_ENDPOINT}'
+HELLOZ_NSFW_REQUEST_TIMEOUT = 30  # seconds
+HELLOZ_NSFW_HEALTH_CHECK_TIMEOUT = 5  # seconds
+HELLOZ_NSFW_CONNECTION_CHECK_URL = f'http://{HELLOZ_NSFW_HOST}:{HELLOZ_NSFW_PORT}'
 
 # ============================================================================
 # GUI Configuration - UI Constants

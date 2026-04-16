@@ -50,14 +50,14 @@ class ScanningMixin:
     # Scan control
     # ------------------------------------------------------------------
 
-    def check_deepstack_server(self):
+    def check_helloz_nsfw_server(self):
         try:
             import requests
             response = requests.get(
-                self._get_deepstack_check_url(),
-                timeout=self._get_deepstack_health_check_timeout(),
+                self._get_helloz_nsfw_check_url(),
+                timeout=self._get_helloz_nsfw_health_check_timeout(),
             )
-            return response.ok
+            return response.status_code < 500
         except Exception:
             return False
 
@@ -69,13 +69,13 @@ class ScanningMixin:
         if not os.path.isdir(folder_path):
             self._show_error('Error', 'Selected folder does not exist.')
             return
-        if self._get_model() == constants.MODEL_DEEPSTACK and not self.check_deepstack_server():
+        if self._get_model() == constants.MODEL_HELLOZ_NSFW and not self.check_helloz_nsfw_server():
             self._show_error(
                 'Error',
-                f'DeepStack server is not available at {self._get_deepstack_check_url()}\n'
+                f'Helloz NSFW server is not available at {self._get_helloz_nsfw_check_url()}\n'
                 'Please start it before scanning.',
             )
-            self.log_message(f'DeepStack server not reachable at {self._get_deepstack_check_url()}', 'error')
+            self.log_message(f'Helloz NSFW server not reachable at {self._get_helloz_nsfw_check_url()}', 'error')
             return
 
         self.is_processing = True
@@ -276,33 +276,29 @@ class ScanningMixin:
         return classify_image, classify_video
 
     # ------------------------------------------------------------------
-    # DeepStack classifiers
+    # Helloz NSFW classifiers
     # ------------------------------------------------------------------
 
-    def request_deepstack_score(self, image_path, requests_module, deepstack_url, request_timeout):
-        request_url = deepstack_url or constants.DEEPSTACK_URL
+    def request_helloz_nsfw_score(self, image_path, requests_module, helloz_nsfw_url, request_timeout):
+        request_url = helloz_nsfw_url or constants.HELLOZ_NSFW_URL
         with open(image_path, 'rb') as image_file:
             response = requests_module.post(
                 request_url,
-                files={'image': image_file},
+                files={'file': image_file},
                 timeout=request_timeout,
             )
         if response.status_code != 200:
             return None
         result = response.json()
-        confidence_score = 0.0
-        for pred in result.get('predictions', []):
-            if pred.get('label') == 'nsfw':
-                confidence_score = float(pred.get('confidence', 0.0))
-                break
+        confidence_score = float(result.get('data', {}).get('nsfw', 0.0))
         return result, confidence_score
 
-    def run_deepstack_image(self, file_path, existing_files, threshold_value, threshold_percent, requests_module, deepstack_url, request_timeout):
+    def run_helloz_nsfw_image(self, file_path, existing_files, threshold_value, threshold_percent, requests_module, helloz_nsfw_url, request_timeout):
         if not self.is_processing or file_path in existing_files:
             return
         if self._verbose_log:
             GLib.idle_add(self.log_message, f'Processing image: {os.path.basename(file_path)}')
-        scored_result = self.request_deepstack_score(file_path, requests_module, deepstack_url, request_timeout)
+        scored_result = self.request_helloz_nsfw_score(file_path, requests_module, helloz_nsfw_url, request_timeout)
         if scored_result is None:
             GLib.idle_add(self.log_message, f'Failed to classify {os.path.basename(file_path)}', 'error')
             return
@@ -313,23 +309,23 @@ class ScanningMixin:
             result,
             confidence_score=confidence_score,
             media_type='image',
-            model_name='deepstack',
+            model_name='helloz_nsfw',
             threshold_percent=threshold_percent,
         )
 
-    def run_deepstack_video(self, file_path, existing_files, threshold_value, threshold_percent, requests_module, deepstack_url, request_timeout):
+    def run_helloz_nsfw_video(self, file_path, existing_files, threshold_value, threshold_percent, requests_module, helloz_nsfw_url, request_timeout):
         if not self.is_processing or file_path in existing_files:
             return
         if self._verbose_log:
             GLib.idle_add(self.log_message, f'Processing video: {os.path.basename(file_path)}')
-        temp_dir, frame_paths = self.extract_video_frames(file_path, constants.FRAME_TEMP_DIR_PREFIX_GUI_DEEPSTACK)
+        temp_dir, frame_paths = self.extract_video_frames(file_path, constants.FRAME_TEMP_DIR_PREFIX_GUI_HELLOZ_NSFW)
         try:
             frame_scores = []
             max_confidence = 0.0
             for frame_path in frame_paths:
                 if not self.is_processing:
                     break
-                scored_result = self.request_deepstack_score(frame_path, requests_module, deepstack_url, request_timeout)
+                scored_result = self.request_helloz_nsfw_score(frame_path, requests_module, helloz_nsfw_url, request_timeout)
                 if scored_result is None:
                     continue
                 _result, confidence_score = scored_result
@@ -343,34 +339,34 @@ class ScanningMixin:
                 frame_scores,
                 confidence_score=max_confidence,
                 media_type='video',
-                model_name='deepstack',
+                model_name='helloz_nsfw',
                 threshold_percent=threshold_percent,
             )
         finally:
             self.cleanup_frame_dir(temp_dir, frame_paths)
 
-    def create_deepstack_classifiers(self, existing_files, threshold_value, threshold_percent):
+    def create_helloz_nsfw_classifiers(self, existing_files, threshold_value, threshold_percent):
         import requests
 
-        deepstack_url = self._get_deepstack_url()
-        request_timeout = self._get_deepstack_request_timeout()
+        helloz_nsfw_url = self._get_helloz_nsfw_url()
+        request_timeout = self._get_helloz_nsfw_request_timeout()
         return (
             partial(
-                self.run_deepstack_image,
+                self.run_helloz_nsfw_image,
                 existing_files=existing_files,
                 threshold_value=threshold_value,
                 threshold_percent=threshold_percent,
                 requests_module=requests,
-                deepstack_url=deepstack_url,
+                helloz_nsfw_url=helloz_nsfw_url,
                 request_timeout=request_timeout,
             ),
             partial(
-                self.run_deepstack_video,
+                self.run_helloz_nsfw_video,
                 existing_files=existing_files,
                 threshold_value=threshold_value,
                 threshold_percent=threshold_percent,
                 requests_module=requests,
-                deepstack_url=deepstack_url,
+                helloz_nsfw_url=helloz_nsfw_url,
                 request_timeout=request_timeout,
             ),
         )
@@ -493,7 +489,7 @@ class ScanningMixin:
                     existing_files, threshold_value, threshold_percent,
                 )
             else:
-                classify_image, classify_video = self.create_deepstack_classifiers(
+                classify_image, classify_video = self.create_helloz_nsfw_classifiers(
                     existing_files, threshold_value, threshold_percent,
                 )
 

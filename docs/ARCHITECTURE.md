@@ -6,7 +6,7 @@
 nudity-detector/
 ├── run_gui.py                      ← Launch the GUI
 ├── run_nudenet.py                  ← Launch the NudeNet CLI
-├── run_deepstack.py                ← Launch the DeepStack CLI
+├── run_helloz_nsfw.py              ← Launch the Helloz NSFW CLI
 ├── requirements.txt
 ├── docker-compose.yml
 ├── scripts/                        ← Build tooling
@@ -33,7 +33,7 @@ nudity-detector/
     │   └── result_item.py          ← ResultItem     (GObject model for ColumnView rows)
     └── detectors/
         ├── nudenet.py              ← NudeNet CLI detector
-        └── deepstack.py            ← DeepStack CLI detector
+        └── helloz_nsfw.py          ← Helloz NSFW CLI detector
 ```
 
 ## Module Dependency Graph
@@ -43,13 +43,13 @@ nudity-detector/
 │                        Entry Points                              │
 ├──────────────────────────────────────────────────────────────────┤
 │                                                                  │
-│  run_gui.py          run_nudenet.py          run_deepstack.py    │
+│  run_gui.py          run_nudenet.py          run_helloz_nsfw.py  │
 │      │                    │                       │              │
 └──────┼────────────────────┼───────────────────────┼──────────────┘
        │                    │                       │
        ▼                    ▼                       ▼
-  src/gui/app.py    src/detectors/nudenet.py  src/detectors/deepstack.py
-  (GTK4/Adw UI)     (NudeNet CLI)             (DeepStack CLI)
+  src/gui/app.py    src/detectors/nudenet.py  src/detectors/helloz_nsfw.py
+  (GTK4/Adw UI)     (NudeNet CLI)             (Helloz NSFW CLI)
        │
        ├─ scanning.py   (ScanningMixin)
        ├─ preview.py    (PreviewMixin)
@@ -95,7 +95,7 @@ src/gui/results.py          → Results table ONLY   (ColumnView population, row
 src/gui/dialogs.py          → Dialog helpers ONLY  (error, warning, confirm via Adw.AlertDialog)
 src/gui/result_item.py      → GObject model ONLY   (ResultItem for Gio.ListStore ColumnView)
 src/detectors/nudenet.py    → NudeNet CLI ONLY
-src/detectors/deepstack.py  → DeepStack CLI ONLY
+src/detectors/helloz_nsfw.py → Helloz NSFW CLI ONLY
 ```
 
 ## Data Flow
@@ -104,7 +104,7 @@ src/detectors/deepstack.py  → DeepStack CLI ONLY
 User Input
     │
     ▼
-src/gui/app.py  (or src/detectors/nudenet.py / deepstack.py)
+src/gui/app.py  (or src/detectors/nudenet.py / helloz_nsfw.py)
     ├─ Reads config from src/core/constants.py
     ├─ Uses src/core/models.ScanConfig for type safety
     │

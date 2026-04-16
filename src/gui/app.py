@@ -2,7 +2,7 @@
 """
 Nudity Detector GUI
 A GTK4 + libadwaita graphical user interface for the nudity detection system.
-Supports both NudeNet and DeepStack models with theme support and session persistence.
+Supports both NudeNet and Helloz NSFW models with theme support and session persistence.
 """
 
 import json
@@ -54,20 +54,20 @@ class NudityDetectorWindow(
             self._progress_interval = max(1, int(cfg.get('progress_update_interval', constants.SCAN_PROGRESS_UPDATE_INTERVAL)))
         except (ValueError, TypeError):
             self._progress_interval = constants.SCAN_PROGRESS_UPDATE_INTERVAL
-        self._deepstack_host = cfg.get('deepstack_host', constants.DEEPSTACK_HOST)
+        self._helloz_nsfw_host = cfg.get('helloz_nsfw_host', constants.HELLOZ_NSFW_HOST)
         try:
-            self._deepstack_port = int(cfg.get('deepstack_port', constants.DEEPSTACK_PORT))
+            self._helloz_nsfw_port = int(cfg.get('helloz_nsfw_port', constants.HELLOZ_NSFW_PORT))
         except (ValueError, TypeError):
-            self._deepstack_port = constants.DEEPSTACK_PORT
-        self._deepstack_api_endpoint = cfg.get('deepstack_api_endpoint', constants.DEEPSTACK_API_ENDPOINT)
+            self._helloz_nsfw_port = constants.HELLOZ_NSFW_PORT
+        self._helloz_nsfw_api_endpoint = cfg.get('helloz_nsfw_api_endpoint', constants.HELLOZ_NSFW_API_ENDPOINT)
         try:
-            self._deepstack_request_timeout = int(cfg.get('deepstack_request_timeout', constants.DEEPSTACK_REQUEST_TIMEOUT))
+            self._helloz_nsfw_request_timeout = int(cfg.get('helloz_nsfw_request_timeout', constants.HELLOZ_NSFW_REQUEST_TIMEOUT))
         except (ValueError, TypeError):
-            self._deepstack_request_timeout = constants.DEEPSTACK_REQUEST_TIMEOUT
+            self._helloz_nsfw_request_timeout = constants.HELLOZ_NSFW_REQUEST_TIMEOUT
         try:
-            self._deepstack_health_check_timeout = int(cfg.get('deepstack_health_check_timeout', constants.DEEPSTACK_HEALTH_CHECK_TIMEOUT))
+            self._helloz_nsfw_health_check_timeout = int(cfg.get('helloz_nsfw_health_check_timeout', constants.HELLOZ_NSFW_HEALTH_CHECK_TIMEOUT))
         except (ValueError, TypeError):
-            self._deepstack_health_check_timeout = constants.DEEPSTACK_HEALTH_CHECK_TIMEOUT
+            self._helloz_nsfw_health_check_timeout = constants.HELLOZ_NSFW_HEALTH_CHECK_TIMEOUT
         try:
             self._worker_thread_count = max(1, int(cfg.get('worker_thread_count', constants.WORKER_THREAD_COUNT)))
         except (ValueError, TypeError):
@@ -323,20 +323,20 @@ class NudityDetectorWindow(
         detect_timeout_help.set_hexpand(True)
         pg.attach(detect_timeout_help, 2, 2, 1, 1)
 
-        # --- DeepStack ---
-        sg = _frame('DeepStack')
+        # --- Helloz NSFW ---
+        sg = _frame('Helloz NSFW')
 
         ds_host_label = Gtk.Label(label='Host')
         ds_host_label.set_xalign(0)
         sg.attach(ds_host_label, 0, 0, 1, 1)
 
-        self.deepstack_host_entry = Gtk.Entry()
-        self.deepstack_host_entry.set_text(self._deepstack_host)
-        self.deepstack_host_entry.set_hexpand(True)
-        self.deepstack_host_entry.set_placeholder_text(constants.DEEPSTACK_HOST)
-        sg.attach(self.deepstack_host_entry, 1, 0, 1, 1)
+        self.helloz_nsfw_host_entry = Gtk.Entry()
+        self.helloz_nsfw_host_entry.set_text(self._helloz_nsfw_host)
+        self.helloz_nsfw_host_entry.set_hexpand(True)
+        self.helloz_nsfw_host_entry.set_placeholder_text(constants.HELLOZ_NSFW_HOST)
+        sg.attach(self.helloz_nsfw_host_entry, 1, 0, 1, 1)
 
-        ds_host_help = Gtk.Label(label=f'Default: {constants.DEEPSTACK_HOST}')
+        ds_host_help = Gtk.Label(label=f'Default: {constants.HELLOZ_NSFW_HOST}')
         ds_host_help.set_xalign(0)
         ds_host_help.add_css_class('dim-label')
         ds_host_help.set_wrap(True)
@@ -348,16 +348,16 @@ class NudityDetectorWindow(
         sg.attach(ds_port_label, 0, 1, 1, 1)
 
         ds_port_adj = Gtk.Adjustment(
-            value=self._deepstack_port,
+            value=self._helloz_nsfw_port,
             lower=1,
             upper=65535,
             step_increment=1,
             page_increment=100,
         )
-        self.deepstack_port_spin = Gtk.SpinButton(adjustment=ds_port_adj, climb_rate=1, digits=0)
-        sg.attach(self.deepstack_port_spin, 1, 1, 1, 1)
+        self.helloz_nsfw_port_spin = Gtk.SpinButton(adjustment=ds_port_adj, climb_rate=1, digits=0)
+        sg.attach(self.helloz_nsfw_port_spin, 1, 1, 1, 1)
 
-        ds_port_help = Gtk.Label(label=f'Default: {constants.DEEPSTACK_PORT}')
+        ds_port_help = Gtk.Label(label=f'Default: {constants.HELLOZ_NSFW_PORT}')
         ds_port_help.set_xalign(0)
         ds_port_help.add_css_class('dim-label')
         ds_port_help.set_wrap(True)
@@ -368,13 +368,13 @@ class NudityDetectorWindow(
         ds_endpoint_label.set_xalign(0)
         sg.attach(ds_endpoint_label, 0, 2, 1, 1)
 
-        self.deepstack_endpoint_entry = Gtk.Entry()
-        self.deepstack_endpoint_entry.set_text(self._deepstack_api_endpoint)
-        self.deepstack_endpoint_entry.set_hexpand(True)
-        self.deepstack_endpoint_entry.set_placeholder_text(constants.DEEPSTACK_API_ENDPOINT)
-        sg.attach(self.deepstack_endpoint_entry, 1, 2, 1, 1)
+        self.helloz_nsfw_endpoint_entry = Gtk.Entry()
+        self.helloz_nsfw_endpoint_entry.set_text(self._helloz_nsfw_api_endpoint)
+        self.helloz_nsfw_endpoint_entry.set_hexpand(True)
+        self.helloz_nsfw_endpoint_entry.set_placeholder_text(constants.HELLOZ_NSFW_API_ENDPOINT)
+        sg.attach(self.helloz_nsfw_endpoint_entry, 1, 2, 1, 1)
 
-        ds_endpoint_help = Gtk.Label(label=f'Default: {constants.DEEPSTACK_API_ENDPOINT}')
+        ds_endpoint_help = Gtk.Label(label=f'Default: {constants.HELLOZ_NSFW_API_ENDPOINT}')
         ds_endpoint_help.set_xalign(0)
         ds_endpoint_help.add_css_class('dim-label')
         ds_endpoint_help.set_wrap(True)
@@ -386,16 +386,16 @@ class NudityDetectorWindow(
         sg.attach(ds_req_timeout_label, 0, 3, 1, 1)
 
         ds_req_timeout_adj = Gtk.Adjustment(
-            value=self._deepstack_request_timeout,
+            value=self._helloz_nsfw_request_timeout,
             lower=1,
             upper=300,
             step_increment=1,
             page_increment=10,
         )
-        self.deepstack_request_timeout_spin = Gtk.SpinButton(adjustment=ds_req_timeout_adj, climb_rate=1, digits=0)
-        sg.attach(self.deepstack_request_timeout_spin, 1, 3, 1, 1)
+        self.helloz_nsfw_request_timeout_spin = Gtk.SpinButton(adjustment=ds_req_timeout_adj, climb_rate=1, digits=0)
+        sg.attach(self.helloz_nsfw_request_timeout_spin, 1, 3, 1, 1)
 
-        ds_req_timeout_help = Gtk.Label(label=f'Seconds to wait for a DeepStack detection response. Default: {constants.DEEPSTACK_REQUEST_TIMEOUT}s')
+        ds_req_timeout_help = Gtk.Label(label=f'Seconds to wait for a Helloz NSFW detection response. Default: {constants.HELLOZ_NSFW_REQUEST_TIMEOUT}s')
         ds_req_timeout_help.set_xalign(0)
         ds_req_timeout_help.add_css_class('dim-label')
         ds_req_timeout_help.set_wrap(True)
@@ -407,16 +407,16 @@ class NudityDetectorWindow(
         sg.attach(ds_health_timeout_label, 0, 4, 1, 1)
 
         ds_health_timeout_adj = Gtk.Adjustment(
-            value=self._deepstack_health_check_timeout,
+            value=self._helloz_nsfw_health_check_timeout,
             lower=1,
             upper=60,
             step_increment=1,
             page_increment=5,
         )
-        self.deepstack_health_check_timeout_spin = Gtk.SpinButton(adjustment=ds_health_timeout_adj, climb_rate=1, digits=0)
-        sg.attach(self.deepstack_health_check_timeout_spin, 1, 4, 1, 1)
+        self.helloz_nsfw_health_check_timeout_spin = Gtk.SpinButton(adjustment=ds_health_timeout_adj, climb_rate=1, digits=0)
+        sg.attach(self.helloz_nsfw_health_check_timeout_spin, 1, 4, 1, 1)
 
-        ds_health_timeout_help = Gtk.Label(label=f'Seconds to wait when checking if DeepStack is reachable. Default: {constants.DEEPSTACK_HEALTH_CHECK_TIMEOUT}s')
+        ds_health_timeout_help = Gtk.Label(label=f'Seconds to wait when checking if Helloz NSFW is reachable. Default: {constants.HELLOZ_NSFW_HEALTH_CHECK_TIMEOUT}s')
         ds_health_timeout_help.set_xalign(0)
         ds_health_timeout_help.add_css_class('dim-label')
         ds_health_timeout_help.set_wrap(True)
@@ -475,14 +475,14 @@ class NudityDetectorWindow(
 
         model_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
         self.nudenet_radio = Gtk.CheckButton(label='NudeNet')
-        self.deepstack_radio = Gtk.CheckButton(label='DeepStack')
-        self.deepstack_radio.set_group(self.nudenet_radio)
+        self.helloz_nsfw_radio = Gtk.CheckButton(label='Helloz NSFW')
+        self.helloz_nsfw_radio.set_group(self.nudenet_radio)
         if self._model == constants.MODEL_NUDENET:
             self.nudenet_radio.set_active(True)
         else:
-            self.deepstack_radio.set_active(True)
+            self.helloz_nsfw_radio.set_active(True)
         model_box.append(self.nudenet_radio)
-        model_box.append(self.deepstack_radio)
+        model_box.append(self.helloz_nsfw_radio)
         grid.attach(model_box, 1, 0, 3, 1)
 
         # Source folder row
@@ -754,11 +754,11 @@ class NudityDetectorWindow(
                 'worker_thread_count': self._get_worker_thread_count(),
                 'worker_thread_timeout': self._get_worker_thread_timeout(),
                 'detect_timeout': self._get_detect_timeout(),
-                'deepstack_host': self._get_deepstack_host(),
-                'deepstack_port': self._get_deepstack_port(),
-                'deepstack_api_endpoint': self._get_deepstack_api_endpoint(),
-                'deepstack_request_timeout': self._get_deepstack_request_timeout(),
-                'deepstack_health_check_timeout': self._get_deepstack_health_check_timeout(),
+                'helloz_nsfw_host': self._get_helloz_nsfw_host(),
+                'helloz_nsfw_port': self._get_helloz_nsfw_port(),
+                'helloz_nsfw_api_endpoint': self._get_helloz_nsfw_api_endpoint(),
+                'helloz_nsfw_request_timeout': self._get_helloz_nsfw_request_timeout(),
+                'helloz_nsfw_health_check_timeout': self._get_helloz_nsfw_health_check_timeout(),
             }
             with open(config_path, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=2)
@@ -770,7 +770,7 @@ class NudityDetectorWindow(
     # ------------------------------------------------------------------
 
     def _get_model(self):
-        return constants.MODEL_NUDENET if self.nudenet_radio.get_active() else constants.MODEL_DEEPSTACK
+        return constants.MODEL_NUDENET if self.nudenet_radio.get_active() else constants.MODEL_HELLOZ_NSFW
 
     def _get_theme_mode(self):
         idx = self.theme_dropdown.get_selected()
@@ -792,31 +792,31 @@ class NudityDetectorWindow(
     def _get_detect_timeout(self) -> int:
         return max(1, int(self.detect_timeout_spin.get_value()))
 
-    def _get_deepstack_host(self) -> str:
-        return self.deepstack_host_entry.get_text().strip() or constants.DEEPSTACK_HOST
+    def _get_helloz_nsfw_host(self) -> str:
+        return self.helloz_nsfw_host_entry.get_text().strip() or constants.HELLOZ_NSFW_HOST
 
-    def _get_deepstack_port(self) -> int:
-        val = int(self.deepstack_port_spin.get_value())
-        return val if 1 <= val <= 65535 else constants.DEEPSTACK_PORT
+    def _get_helloz_nsfw_port(self) -> int:
+        val = int(self.helloz_nsfw_port_spin.get_value())
+        return val if 1 <= val <= 65535 else constants.HELLOZ_NSFW_PORT
 
-    def _get_deepstack_api_endpoint(self) -> str:
-        return self.deepstack_endpoint_entry.get_text().strip() or constants.DEEPSTACK_API_ENDPOINT
+    def _get_helloz_nsfw_api_endpoint(self) -> str:
+        return self.helloz_nsfw_endpoint_entry.get_text().strip() or constants.HELLOZ_NSFW_API_ENDPOINT
 
-    def _get_deepstack_request_timeout(self) -> int:
-        return max(1, int(self.deepstack_request_timeout_spin.get_value()))
+    def _get_helloz_nsfw_request_timeout(self) -> int:
+        return max(1, int(self.helloz_nsfw_request_timeout_spin.get_value()))
 
-    def _get_deepstack_health_check_timeout(self) -> int:
-        return max(1, int(self.deepstack_health_check_timeout_spin.get_value()))
+    def _get_helloz_nsfw_health_check_timeout(self) -> int:
+        return max(1, int(self.helloz_nsfw_health_check_timeout_spin.get_value()))
 
-    def _get_deepstack_url(self) -> str:
-        host = self._get_deepstack_host()
-        port = self._get_deepstack_port()
-        endpoint = self._get_deepstack_api_endpoint()
+    def _get_helloz_nsfw_url(self) -> str:
+        host = self._get_helloz_nsfw_host()
+        port = self._get_helloz_nsfw_port()
+        endpoint = self._get_helloz_nsfw_api_endpoint()
         return f'http://{host}:{port}{endpoint}'
 
-    def _get_deepstack_check_url(self) -> str:
-        host = self._get_deepstack_host()
-        port = self._get_deepstack_port()
+    def _get_helloz_nsfw_check_url(self) -> str:
+        host = self._get_helloz_nsfw_host()
+        port = self._get_helloz_nsfw_port()
         return f'http://{host}:{port}'
 
     # ------------------------------------------------------------------
@@ -848,17 +848,17 @@ class NudityDetectorWindow(
         self.theme_dropdown.set_sensitive(not processing)
         self.threshold_spin.set_sensitive(not processing)
         self.nudenet_radio.set_sensitive(not processing)
-        self.deepstack_radio.set_sensitive(not processing)
+        self.helloz_nsfw_radio.set_sensitive(not processing)
         self.progress_interval_spin.set_sensitive(not processing)
         self.video_frame_rate_spin.set_sensitive(not processing)
         self.worker_thread_count_spin.set_sensitive(not processing)
         self.worker_thread_timeout_spin.set_sensitive(not processing)
         self.detect_timeout_spin.set_sensitive(not processing)
-        self.deepstack_host_entry.set_sensitive(not processing)
-        self.deepstack_port_spin.set_sensitive(not processing)
-        self.deepstack_endpoint_entry.set_sensitive(not processing)
-        self.deepstack_request_timeout_spin.set_sensitive(not processing)
-        self.deepstack_health_check_timeout_spin.set_sensitive(not processing)
+        self.helloz_nsfw_host_entry.set_sensitive(not processing)
+        self.helloz_nsfw_port_spin.set_sensitive(not processing)
+        self.helloz_nsfw_endpoint_entry.set_sensitive(not processing)
+        self.helloz_nsfw_request_timeout_spin.set_sensitive(not processing)
+        self.helloz_nsfw_health_check_timeout_spin.set_sensitive(not processing)
         for button_name in (
             'save_session_button',
             'load_session_button',

@@ -14,7 +14,7 @@ Two detector backends are available:
   - Basic
   - Not always accurate
   - Processes videos by extracting frames and analysing them as images.
-- **DeepStack**: Uses the `DeepStack` AI server for detection.
+- **Helloz NSFW**: Uses the `helloz/nsfw` Docker AI server for detection.
 
 ## Features
 
@@ -99,18 +99,18 @@ Two detector backends are available:
 
    - Nudenet
      - For Nudenet no setup is required.
-   - Deepstack
+   - Helloz NSFW
      - Run the docker-compose.yml file to start your server
 
        ```bash
        docker-compose up --build
        ```
 
-   - Once started, DeepStack will be available at <http://localhost:5000>.
+   - Once started, Helloz NSFW will be available at <http://localhost:6086>.
    - You can test if your server is running by executing the following (Replace the image path with an existing image)
 
     ```bash
-    curl -X POST -F image=@test.jpg 'http://localhost:5000/v1/vision/detection'
+    curl -X POST -F file=@test.jpg 'http://localhost:6086/api/upload_check'
     ```
 
 9. **Run the process**:
@@ -127,7 +127,7 @@ The GUI requires **GTK4** and **libadwaita**. These are pre-installed on most mo
 
   The GUI provides a modern libadwaita interface with:
 
-- Model selection (NudeNet or DeepStack)
+- Model selection (NudeNet or Helloz NSFW)
 - Theme selection (`system`, `light`, `dark`) via `Adw.StyleManager`
 - Folder browsing and selection
 - Detection threshold control in percentages
@@ -150,10 +150,10 @@ The GUI requires **GTK4** and **libadwaita**. These are pre-installed on most mo
   - source folder path
   - detection threshold percentage
 
-- DeepStack
+- Helloz NSFW
 
   ```bash
-  python3 run_deepstack.py
+  python3 run_helloz_nsfw.py
   ```
 
   Prompts:
@@ -294,7 +294,7 @@ Both artifacts are written to the `dist/` folder, which is excluded from version
 
 ## Notes
 
-DeepStack requires the AI server to be running during script execution.
+Helloz NSFW requires the Docker AI server to be running during script execution.
 Ensure sufficient disk space for processing large files or folders.
 
 ## License
