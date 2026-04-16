@@ -8,4 +8,4 @@ services:
     ports:
       - "6086:6086"
     environment:
-      - WORKERS=1
+      - WORKERS=10
