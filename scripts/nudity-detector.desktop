@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Nudity Detector
+GenericName=Content Moderation Tool
+Comment=Detect nudity in images and videos using AI models
+Exec=nudity-detector
+Icon=nudity-detector
+Terminal=false
+Categories=Utility;Graphics;
+Keywords=nudity;detection;moderation;ai;images;videos;
+StartupNotify=true

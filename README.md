@@ -227,6 +227,71 @@ Each saved report now stores companion session data so the GUI can restore:
 
 Use the GUI `Save Session` and `Load Session` actions to resume review work later.
 
+## Building a Linux Package
+
+The `scripts/build_linux.sh` script produces two distributable artifacts in the `dist/` folder:
+
+| Artifact | Path | Description |
+|---|---|---|
+| PyInstaller bundle | `dist/nudity-detector/` | Self-contained directory, run without installing Python |
+| AppImage | `dist/NudityDetector-x86_64.AppImage` | Single portable file, runs on any x86-64 Linux |
+
+### Build prerequisites
+
+Install the following before running the build script:
+
+```bash
+sudo apt-get install python3 python3-pip python3-venv patchelf \
+    python3-gi python3-gi-cairo gir1.2-gtk-4.0 gir1.2-adw-1 \
+    libgtk-4-dev libadwaita-1-dev glib2.0-dev-bin
+```
+
+FUSE support is required to run AppImages. On systems without FUSE (e.g. some CI environments) set:
+
+```bash
+export APPIMAGE_EXTRACT_AND_RUN=1
+```
+
+### Run the build
+
+```bash
+bash scripts/build_linux.sh
+```
+
+The script will:
+1. Download `appimagetool` and `linuxdeploy` (with GTK plugin) into `scripts/` on first run (cached for subsequent builds).
+2. Create an isolated build virtual environment in `build/`.
+3. Run PyInstaller using `scripts/nudity-detector.spec` to produce `dist/nudity-detector/`.
+4. Bundle GTK4 typelibs and copy them into the PyInstaller output.
+5. Assemble an AppDir and run `linuxdeploy --plugin gtk` to gather GTK4 shared libraries, schemas, and themes.
+6. Package everything into `dist/NudityDetector-x86_64.AppImage` with `appimagetool`.
+
+### Running the artifacts
+
+```bash
+# PyInstaller bundle (no install required)
+./dist/nudity-detector/nudity-detector
+
+# AppImage (make executable first)
+chmod +x dist/NudityDetector-x86_64.AppImage
+./dist/NudityDetector-x86_64.AppImage
+```
+
+### Custom icon
+
+Place a `256×256` PNG at `scripts/nudity-detector.png` before building to embed a custom icon in the AppImage. If no custom icon is found, a system fallback icon is used.
+
+### Runtime requirements on the target system
+
+- GTK4 (`libgtk-4-1`) and libadwaita (`libadwaita-1-0`) must be installed on the target system. The `linuxdeploy` GTK plugin bundles the GTK shared libraries where possible, but full GTK4 portability depends on the target distribution.
+- NudeNet model weights are **downloaded on first run** and require internet access.
+
+### Build output location
+
+Both artifacts are written to the `dist/` folder, which is excluded from version control via `.gitignore`.
+
+---
+
 ## Notes
 
 DeepStack requires the AI server to be running during script execution.

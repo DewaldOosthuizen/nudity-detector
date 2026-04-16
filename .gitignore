@@ -30,6 +30,13 @@ share/python-wheels/
 #  before PyInstaller builds the exe, so as to inject date/other infos into it.
 *.manifest
 *.spec
+# Un-ignore the tracked PyInstaller spec kept in scripts/
+!scripts/*.spec
+
+# Build tools downloaded by scripts/build_linux.sh (not committed)
+scripts/appimagetool*.AppImage
+scripts/linuxdeploy*.AppImage
+scripts/linuxdeploy-plugin-gtk.sh
 
 # Installer logs
 pip-log.txt
@@ -117,6 +124,7 @@ dmypy.json
 # VS Code
 .vscode/
 .history/
+.lh
 
 # App specific folder
 samples/

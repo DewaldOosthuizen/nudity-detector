@@ -1,0 +1,41 @@
+#!/bin/bash
+# AppImage entry point for Nudity Detector.
+# Sets up all environment variables relative to the AppImage mount point ($HERE)
+# so that GTK4, GLib, typelibs, schemas and themes are found correctly before
+# delegating to the PyInstaller one-dir binary.
+
+set -e
+
+# The directory the AppImage is mounted at (set by the AppImage runtime).
+HERE="$(dirname "$(readlink -f "${0}")")"
+
+# ── Python / binary ──────────────────────────────────────────────────────────
+export PATH="${HERE}/usr/bin:${PATH}"
+
+# ── Shared libraries ─────────────────────────────────────────────────────────
+export LD_LIBRARY_PATH="${HERE}/usr/lib:${HERE}/usr/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH}"
+
+# ── GObject-Introspection typelibs ───────────────────────────────────────────
+export GI_TYPELIB_PATH="${HERE}/usr/lib/girepository-1.0:${GI_TYPELIB_PATH}"
+
+# ── GLib / Gio schemas ───────────────────────────────────────────────────────
+export GSETTINGS_SCHEMA_DIR="${HERE}/usr/share/glib-2.0/schemas:${GSETTINGS_SCHEMA_DIR}"
+
+# ── XDG data (icons, themes, locale) ─────────────────────────────────────────
+export XDG_DATA_DIRS="${HERE}/usr/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+
+# ── GTK4 theme / module paths ────────────────────────────────────────────────
+export GTK_PATH="${HERE}/usr/lib/gtk-4.0:${GTK_PATH}"
+export GTK_EXE_PREFIX="${HERE}/usr"
+export GTK_DATA_PREFIX="${HERE}/usr"
+
+# ── Pixbuf loaders ───────────────────────────────────────────────────────────
+GDK_PIXBUF_MODULEDIR="${HERE}/usr/lib/x86_64-linux-gnu/gdk-pixbuf-2.0/2.10.0/loaders"
+GDK_PIXBUF_MODULE_FILE="${GDK_PIXBUF_MODULEDIR}/../loaders.cache"
+if [[ -f "${GDK_PIXBUF_MODULE_FILE}" ]]; then
+    export GDK_PIXBUF_MODULEDIR
+    export GDK_PIXBUF_MODULE_FILE
+fi
+
+# ── Exec the PyInstaller bundle ───────────────────────────────────────────────
+exec "${HERE}/usr/bin/nudity-detector-bin/nudity-detector" "$@"
