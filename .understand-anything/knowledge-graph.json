@@ -1,0 +1,2099 @@
+{
+  "project": {
+    "name": "nudity-detector",
+    "description": "A Python-based desktop application designed to detect nudity in images and videos using multiple AI detectors (NudeNet, HelloZ NSFW). Provides an automated solution for identifying explicit content, suitable for content moderation, safety filters, and compliance checks. Features a GTK4/Libadwaita GUI.",
+    "languages": [
+      "Python",
+      "YAML",
+      "JSON",
+      "Shell",
+      "Markdown"
+    ],
+    "frameworks": [
+      "GTK4",
+      "Libadwaita",
+      "NudeNet",
+      "OpenCV",
+      "PyInstaller",
+      "openpyxl",
+      "Pillow"
+    ],
+    "gitCommitHash": "200b0911b8307de6476f1862144eb4ec41246960",
+    "analyzedAt": "2026-05-28T15:55:45.445068+00:00"
+  },
+  "nodes": [
+    {
+      "id": "file:file-LICENSE",
+      "label": "LICENSE",
+      "type": "doc",
+      "layer": "unknown",
+      "description": "GNU General Public License v3 governing the project's distribution and modification terms.",
+      "filePath": "LICENSE",
+      "language": "Text",
+      "importance": 3,
+      "complexity": "moderate",
+      "layerName": "Documentation"
+    },
+    {
+      "id": "file:file-README",
+      "label": "README.md",
+      "type": "doc",
+      "layer": "unknown",
+      "description": "Main project documentation covering installation, usage, features, and output formats for the Nudity Detector application.",
+      "filePath": "README.md",
+      "language": "Markdown",
+      "importance": 8,
+      "complexity": "moderate",
+      "layerName": "Documentation"
+    },
+    {
+      "id": "config:file-docker-compose",
+      "label": "docker-compose.yml",
+      "type": "config",
+      "layer": "infrastructure",
+      "description": "Docker Compose configuration that runs the helloz/nsfw AI detection server on port 6086 with 10 workers.",
+      "filePath": "docker-compose.yml",
+      "language": "YAML",
+      "importance": 6,
+      "complexity": "moderate",
+      "layerName": "Infrastructure"
+    },
+    {
+      "id": "config:file-requirements",
+      "label": "requirements.txt",
+      "type": "config",
+      "layer": "infrastructure",
+      "description": "Python package dependencies including nudenet, openpyxl, Pillow, opencv-python, requests, Send2Trash, and darkdetect.",
+      "filePath": "requirements.txt",
+      "language": "Text",
+      "importance": 5,
+      "complexity": "moderate",
+      "layerName": "Infrastructure"
+    },
+    {
+      "id": "file:file-run-gui",
+      "label": "run_gui.py",
+      "type": "file",
+      "layer": "presentation",
+      "description": "Entry-point script that launches the GTK4 GUI application by calling main() from src/gui/app.py.",
+      "filePath": "run_gui.py",
+      "language": "Python",
+      "importance": 7,
+      "complexity": "moderate",
+      "layerName": "Presentation"
+    },
+    {
+      "id": "file:file-run-helloz",
+      "label": "run_helloz_nsfw.py",
+      "type": "file",
+      "layer": "application",
+      "description": "Entry-point script that launches the Helloz NSFW CLI detector by calling main() from src/detectors/helloz_nsfw.py.",
+      "filePath": "run_helloz_nsfw.py",
+      "language": "Python",
+      "importance": 6,
+      "complexity": "moderate",
+      "layerName": "Application"
+    },
+    {
+      "id": "file:file-run-nudenet",
+      "label": "run_nudenet.py",
+      "type": "file",
+      "layer": "application",
+      "description": "Entry-point script that launches the NudeNet CLI detector by calling main() from src/detectors/nudenet.py.",
+      "filePath": "run_nudenet.py",
+      "language": "Python",
+      "importance": 6,
+      "complexity": "moderate",
+      "layerName": "Application"
+    },
+    {
+      "id": "concept:concept-helloz-service",
+      "label": "HellozNSFWService",
+      "type": "concept",
+      "layer": "infrastructure",
+      "description": "Docker-hosted AI service (helloz/nsfw) that exposes an HTTP API endpoint for NSFW image detection.",
+      "filePath": "docker-compose.yml",
+      "language": "YAML",
+      "importance": 7,
+      "complexity": "moderate",
+      "layerName": "Infrastructure"
+    },
+    {
+      "id": "concept:concept-nudenet-detector",
+      "label": "NudeNetDetector",
+      "type": "concept",
+      "layer": "domain",
+      "description": "Local nudity detection backend using the nudenet Python library for image and video frame analysis.",
+      "filePath": "README.md",
+      "language": "Markdown",
+      "importance": 8,
+      "complexity": "moderate",
+      "layerName": "Domain"
+    },
+    {
+      "id": "concept:concept-gui-app",
+      "label": "GUIApplication",
+      "type": "concept",
+      "layer": "presentation",
+      "description": "GTK4 + libadwaita GUI application providing model selection, threshold control, progress tracking, and detected-media review.",
+      "filePath": "README.md",
+      "language": "Markdown",
+      "importance": 9,
+      "complexity": "moderate",
+      "layerName": "Presentation"
+    },
+    {
+      "id": "config:file-openspec-yaml",
+      "label": ".openspec.yaml",
+      "type": "config",
+      "layer": "unknown",
+      "description": "OpenSpec metadata file declaring the schema type and creation date for the modernize-ui-scan-workflow change specification.",
+      "filePath": "openspec/changes/modernize-ui-scan-workflow/.openspec.yaml",
+      "language": "YAML",
+      "importance": 3,
+      "complexity": "moderate",
+      "layerName": "Infrastructure"
+    },
+    {
+      "id": "file:file-design-md",
+      "label": "design.md",
+      "type": "doc",
+      "layer": "unknown",
+      "description": "Architectural design document detailing context, goals, decisions, and risks for the modernized UI scan workflow change.",
+      "filePath": "openspec/changes/modernize-ui-scan-workflow/design.md",
+      "language": "Markdown",
+      "importance": 8,
+      "complexity": "moderate",
+      "layerName": "Documentation"
+    },
+    {
+      "id": "file:file-proposal-md",
+      "label": "proposal.md",
+      "type": "doc",
+      "layer": "unknown",
+      "description": "Change proposal describing what capabilities will be added or modified for the modernized UI scan workflow.",
+      "filePath": "openspec/changes/modernize-ui-scan-workflow/proposal.md",
+      "language": "Markdown",
+      "importance": 7,
+      "complexity": "moderate",
+      "layerName": "Documentation"
+    },
+    {
+      "id": "file:file-tasks-md",
+      "label": "tasks.md",
+      "type": "doc",
+      "layer": "unknown",
+      "description": "Task checklist tracking implementation progress across shared state, detection pipeline, GUI workflow, and documentation work.",
+      "filePath": "openspec/changes/modernize-ui-scan-workflow/tasks.md",
+      "language": "Markdown",
+      "importance": 6,
+      "complexity": "moderate",
+      "layerName": "Documentation"
+    },
+    {
+      "id": "concept:concept-scan-session-persistence",
+      "label": "ScanSessionPersistence",
+      "type": "concept",
+      "layer": "application",
+      "description": "Design concept for persisting scan settings and detected results alongside reports to allow resuming moderation sessions.",
+      "filePath": "openspec/changes/modernize-ui-scan-workflow/design.md",
+      "language": "Markdown",
+      "importance": 8,
+      "complexity": "moderate",
+      "layerName": "Application"
+    },
+    {
+      "id": "concept:concept-detected-media-review",
+      "label": "DetectedMediaReview",
+      "type": "concept",
+      "layer": "presentation",
+      "description": "UI concept for a structured results table showing detected explicit media with confidence scores and row-level actions.",
+      "filePath": "openspec/changes/modernize-ui-scan-workflow/design.md",
+      "language": "Markdown",
+      "importance": 8,
+      "complexity": "moderate",
+      "layerName": "Presentation"
+    },
+    {
+      "id": "concept:concept-theme-preferences",
+      "label": "ThemePreferences",
+      "type": "concept",
+      "layer": "presentation",
+      "description": "Runtime theme selection capability supporting System, Light, and Dark modes in the GUI.",
+      "filePath": "openspec/changes/modernize-ui-scan-workflow/proposal.md",
+      "language": "Markdown",
+      "importance": 5,
+      "complexity": "moderate",
+      "layerName": "Presentation"
+    },
+    {
+      "id": "concept:concept-configurable-threshold",
+      "label": "ConfigurableThreshold",
+      "type": "concept",
+      "layer": "domain",
+      "description": "Design decision to represent detection threshold as a percentage in the UI while normalizing to float for detector functions.",
+      "filePath": "openspec/changes/modernize-ui-scan-workflow/design.md",
+      "language": "Markdown",
+      "importance": 7,
+      "complexity": "moderate",
+      "layerName": "Domain"
+    },
+    {
+      "id": "file:scripts/AppRun",
+      "label": "AppRun",
+      "type": "file",
+      "layer": "infrastructure",
+      "description": "AppImage entry point script that sets up GTK4, GLib, typelib, schema and theme environment variables before delegating to the PyInstaller binary.",
+      "filePath": "scripts/AppRun",
+      "language": "Shell",
+      "importance": 6,
+      "complexity": "moderate",
+      "layerName": "Infrastructure"
+    },
+    {
+      "id": "file:scripts/build_linux.sh",
+      "label": "build_linux.sh",
+      "type": "file",
+      "layer": "infrastructure",
+      "description": "Orchestrates the full Linux distributable build pipeline: venv setup, PyInstaller bundle, GTK4 typelib copying, AppDir assembly, linuxdeploy GTK plugin, and final AppImage creation.",
+      "filePath": "scripts/build_linux.sh",
+      "language": "Shell",
+      "importance": 8,
+      "complexity": "moderate",
+      "layerName": "Infrastructure"
+    },
+    {
+      "id": "config:scripts/nudity-detector.desktop",
+      "label": "nudity-detector.desktop",
+      "type": "config",
+      "layer": "infrastructure",
+      "description": "XDG desktop entry file that registers Nudity Detector as a GUI application in Linux application menus with icon and category metadata.",
+      "filePath": "scripts/nudity-detector.desktop",
+      "language": "INI",
+      "importance": 4,
+      "complexity": "moderate",
+      "layerName": "Infrastructure"
+    },
+    {
+      "id": "config:scripts/nudity-detector.spec",
+      "label": "nudity-detector.spec",
+      "type": "config",
+      "layer": "infrastructure",
+      "description": "PyInstaller spec file that defines the one-dir bundle configuration, collecting all app modules, GTK/gi binaries, nudenet/vnudenet data, and hidden imports for the nudity-detector executable.",
+      "filePath": "scripts/nudity-detector.spec",
+      "language": "Python",
+      "importance": 7,
+      "complexity": "moderate",
+      "layerName": "Infrastructure"
+    },
+    {
+      "id": "module:src/core/__init__.py",
+      "label": "core.__init__",
+      "type": "module",
+      "layer": "domain",
+      "description": "Empty package initializer that marks src/core as a Python package.",
+      "filePath": "src/core/__init__.py",
+      "language": "Python",
+      "importance": 2,
+      "complexity": "moderate",
+      "layerName": "Domain"
+    },
+    {
+      "id": "file:src/core/constants.py",
+      "label": "constants",
+      "type": "file",
+      "layer": "domain",
+      "description": "Centralized constants module providing single source of truth for media types, nudity classes, thresholds, GUI config, threading, report headers, and API endpoint values.",
+      "filePath": "src/core/constants.py",
+      "language": "Python",
+      "importance": 10,
+      "complexity": "moderate",
+      "layerName": "Domain"
+    },
+    {
+      "id": "file:src/core/models.py",
+      "label": "models",
+      "type": "file",
+      "layer": "domain",
+      "description": "Data model module defining type-safe dataclasses for scan configuration, report entries, session state, and raw detection results.",
+      "filePath": "src/core/models.py",
+      "language": "Python",
+      "importance": 9,
+      "complexity": "moderate",
+      "layerName": "Domain"
+    },
+    {
+      "id": "class:src/core/models.py:class-ScanConfig",
+      "label": "ScanConfig",
+      "type": "class",
+      "layer": "domain",
+      "description": "Dataclass holding scan session configuration: source folder, model name, threshold percent, and theme mode.",
+      "filePath": "src/core/models.py",
+      "language": "Python",
+      "importance": 7,
+      "complexity": "moderate",
+      "layerName": "Domain"
+    },
+    {
+      "id": "class:src/core/models.py:class-ReportEntry",
+      "label": "ReportEntry",
+      "type": "class",
+      "layer": "domain",
+      "description": "Dataclass representing a single detection result entry with file path, media type, confidence, nudity flag, classes, thumbnail, and date.",
+      "filePath": "src/core/models.py",
+      "language": "Python",
+      "importance": 8,
+      "complexity": "moderate",
+      "layerName": "Domain"
+    },
+    {
+      "id": "class:src/core/models.py:class-SessionState",
+      "label": "SessionState",
+      "type": "class",
+      "layer": "domain",
+      "description": "Dataclass capturing the complete scan session state including version, save timestamp, ScanConfig, and list of ReportEntry results.",
+      "filePath": "src/core/models.py",
+      "language": "Python",
+      "importance": 7,
+      "complexity": "moderate",
+      "layerName": "Domain"
+    },
+    {
+      "id": "class:src/core/models.py:class-DetectionResult",
+      "label": "DetectionResult",
+      "type": "class",
+      "layer": "domain",
+      "description": "Dataclass for raw detection output from a model, convertible to a ReportEntry via to_report_entry().",
+      "filePath": "src/core/models.py",
+      "language": "Python",
+      "importance": 7,
+      "complexity": "moderate",
+      "layerName": "Domain"
+    },
+    {
+      "id": "file:src/core/utils.py",
+      "label": "utils",
+      "type": "file",
+      "layer": "application",
+      "description": "High-level detection orchestration module providing thread-safe batch processing, file operations, report delegation, thumbnail generation, and the classify_files_in_folder worker-pool pipeline.",
+      "filePath": "src/core/utils.py",
+      "language": "Python",
+      "importance": 10,
+      "complexity": "moderate",
+      "layerName": "Application"
+    },
+    {
+      "id": "function:src/core/utils.py:fn-normalize_threshold",
+      "label": "normalize_threshold",
+      "type": "function",
+      "layer": "application",
+      "description": "Normalizes a threshold value from percentage or decimal form to the [0, 1] range.",
+      "filePath": "src/core/utils.py",
+      "language": "Python",
+      "importance": 6,
+      "complexity": "moderate",
+      "layerName": "Application"
+    },
+    {
+      "id": "function:src/core/utils.py:fn-classify_files_in_folder",
+      "label": "classify_files_in_folder",
+      "type": "function",
+      "layer": "application",
+      "description": "Walks a folder tree and dispatches image/video files to classifier callables using a configurable worker thread pool.",
+      "filePath": "src/core/utils.py",
+      "language": "Python",
+      "importance": 9,
+      "complexity": "moderate",
+      "layerName": "Application"
+    },
+    {
+      "id": "function:src/core/utils.py:fn-handle_results",
+      "label": "handle_results",
+      "type": "function",
+      "layer": "application",
+      "description": "Processes a detection result by generating a thumbnail, building a report entry dict, appending it to the global nudity_report, and periodically persisting to disk.",
+      "filePath": "src/core/utils.py",
+      "language": "Python",
+      "importance": 9,
+      "complexity": "moderate",
+      "layerName": "Application"
+    },
+    {
+      "id": "function:src/core/utils.py:fn-save_nudity_report",
+      "label": "save_nudity_report",
+      "type": "function",
+      "layer": "application",
+      "description": "Saves detection results to an Excel report and serializes the session state JSON alongside it via ReportManager.",
+      "filePath": "src/core/utils.py",
+      "language": "Python",
+      "importance": 7,
+      "complexity": "moderate",
+      "layerName": "Application"
+    },
+    {
+      "id": "function:src/core/utils.py:fn-detect_with_timeout",
+      "label": "detect_with_timeout",
+      "type": "function",
+      "layer": "application",
+      "description": "Wraps a detector's detect() call in a daemon thread with an explicit timeout, raising TimeoutError if the detection stalls.",
+      "filePath": "src/core/utils.py",
+      "language": "Python",
+      "importance": 7,
+      "complexity": "moderate",
+      "layerName": "Application"
+    },
+    {
+      "id": "module:src/detectors/__init__.py",
+      "label": "detectors.__init__",
+      "type": "module",
+      "layer": "domain",
+      "description": "Empty package initializer that marks src/detectors as a Python package.",
+      "filePath": "src/detectors/__init__.py",
+      "language": "Python",
+      "importance": 2,
+      "complexity": "moderate",
+      "layerName": "Domain"
+    },
+    {
+      "id": "file:src/detectors/helloz_nsfw.py",
+      "label": "helloz_nsfw",
+      "type": "file",
+      "layer": "application",
+      "description": "CLI detector module that classifies images and videos for nudity by calling the Helloz NSFW HTTP API, using worker-pool batch processing and report persistence.",
+      "filePath": "src/detectors/helloz_nsfw.py",
+      "language": "Python",
+      "importance": 8,
+      "complexity": "moderate",
+      "layerName": "Application"
+    },
+    {
+      "id": "function:src/detectors/helloz_nsfw.py:fn-helloz-prompt_threshold_percent",
+      "label": "prompt_threshold_percent (helloz)",
+      "type": "function",
+      "layer": "application",
+      "description": "Prompts the user for a detection threshold percentage with validation and fallback to the default constant.",
+      "filePath": "src/detectors/helloz_nsfw.py",
+      "language": "Python",
+      "importance": 4,
+      "complexity": "moderate",
+      "layerName": "Application"
+    },
+    {
+      "id": "function:src/detectors/helloz_nsfw.py:fn-helloz-extract_frames",
+      "label": "extract_frames (helloz)",
+      "type": "function",
+      "layer": "application",
+      "description": "Legacy wrapper around FrameExtractor to extract video frames using the CLI Helloz temp directory prefix.",
+      "filePath": "src/detectors/helloz_nsfw.py",
+      "language": "Python",
+      "importance": 4,
+      "complexity": "moderate",
+      "layerName": "Application"
+    },
+    {
+      "id": "function:src/detectors/helloz_nsfw.py:fn-helloz-main",
+      "label": "main (helloz)",
+      "type": "function",
+      "layer": "application",
+      "description": "CLI entry point for the Helloz NSFW detector: loads existing report, prompts user for folder and threshold, runs batch classification, and saves results.",
+      "filePath": "src/detectors/helloz_nsfw.py",
+      "language": "Python",
+      "importance": 7,
+      "complexity": "moderate",
+      "layerName": "Application"
+    },
+    {
+      "id": "file:src/detectors/nudenet.py",
+      "label": "nudenet",
+      "type": "file",
+      "layer": "application",
+      "description": "CLI detector module that classifies images and videos for nudity using the NudeNet ONNX model, with worker-pool batch processing and report persistence.",
+      "filePath": "src/detectors/nudenet.py",
+      "language": "Python",
+      "importance": 8,
+      "complexity": "moderate",
+      "layerName": "Application"
+    },
+    {
+      "id": "function:src/detectors/nudenet.py:fn-nudenet-simplify_nudenet_results",
+      "label": "simplify_nudenet_results",
+      "type": "function",
+      "layer": "application",
+      "description": "Converts raw NudeNet detection records to simplified dicts with class and score keys.",
+      "filePath": "src/detectors/nudenet.py",
+      "language": "Python",
+      "importance": 5,
+      "complexity": "moderate",
+      "layerName": "Application"
+    },
+    {
+      "id": "function:src/detectors/nudenet.py:fn-nudenet-get_nudenet_confidence",
+      "label": "get_nudenet_confidence",
+      "type": "function",
+      "layer": "application",
+      "description": "Extracts the maximum confidence score across nudity-relevant class labels from a NudeNet detection result.",
+      "filePath": "src/detectors/nudenet.py",
+      "language": "Python",
+      "importance": 6,
+      "complexity": "moderate",
+      "layerName": "Application"
+    },
+    {
+      "id": "function:src/detectors/nudenet.py:fn-nudenet-main",
+      "label": "main (nudenet)",
+      "type": "function",
+      "layer": "application",
+      "description": "CLI entry point for the NudeNet detector: initializes NudeDetector, prompts user for folder and threshold, runs batch classification, and saves results.",
+      "filePath": "src/detectors/nudenet.py",
+      "language": "Python",
+      "importance": 7,
+      "complexity": "moderate",
+      "layerName": "Application"
+    },
+    {
+      "id": "file:src/gui/__init__.py",
+      "label": "gui.__init__",
+      "type": "file",
+      "layer": "presentation",
+      "description": "Empty package init file for the src/gui module.",
+      "filePath": "src/gui/__init__.py",
+      "language": "Python",
+      "importance": 1,
+      "complexity": "moderate",
+      "layerName": "Presentation"
+    },
+    {
+      "id": "file:src/gui/app.py",
+      "label": "app.py",
+      "type": "file",
+      "layer": "presentation",
+      "description": "Main GTK4/libadwaita application window file that wires all GUI mixin classes together.",
+      "filePath": "src/gui/app.py",
+      "language": "Python",
+      "importance": 10,
+      "complexity": "moderate",
+      "layerName": "Presentation"
+    },
+    {
+      "id": "class:src/gui/app.py:class/NudityDetectorWindow",
+      "label": "NudityDetectorWindow",
+      "type": "class",
+      "layer": "presentation",
+      "description": "Primary Adw.ApplicationWindow subclass that composes all GUI mixins and builds the multi-tab UI.",
+      "filePath": "src/gui/app.py",
+      "language": "Python",
+      "importance": 10,
+      "complexity": "moderate",
+      "layerName": "Presentation"
+    },
+    {
+      "id": "function:src/gui/app.py:func/NudityDetectorWindow.__init__",
+      "label": "__init__",
+      "type": "function",
+      "layer": "presentation",
+      "description": "Initialises window geometry, loads app config, sets all state fields, builds UI and loads the last session.",
+      "filePath": "src/gui/app.py",
+      "language": "Python",
+      "importance": 9,
+      "complexity": "moderate",
+      "layerName": "Presentation"
+    },
+    {
+      "id": "function:src/gui/app.py:func/NudityDetectorWindow._build_ui",
+      "label": "_build_ui",
+      "type": "function",
+      "layer": "presentation",
+      "description": "Constructs the toolbar view, header bar, and three-tab ViewStack (Scan, All Scans, Settings).",
+      "filePath": "src/gui/app.py",
+      "language": "Python",
+      "importance": 8,
+      "complexity": "moderate",
+      "layerName": "Presentation"
+    },
+    {
+      "id": "function:src/gui/app.py:func/NudityDetectorWindow._build_settings_tab",
+      "label": "_build_settings_tab",
+      "type": "function",
+      "layer": "presentation",
+      "description": "Builds the Settings tab widget with controls for appearance, detection, processing, and Helloz NSFW configuration.",
+      "filePath": "src/gui/app.py",
+      "language": "Python",
+      "importance": 7,
+      "complexity": "moderate",
+      "layerName": "Presentation"
+    },
+    {
+      "id": "function:src/gui/app.py:func/NudityDetectorWindow._build_scan_page",
+      "label": "_build_scan_page",
+      "type": "function",
+      "layer": "presentation",
+      "description": "Builds the Scan tab widget including the scan settings grid, folder picker, and results area.",
+      "filePath": "src/gui/app.py",
+      "language": "Python",
+      "importance": 8,
+      "complexity": "moderate",
+      "layerName": "Presentation"
+    },
+    {
+      "id": "file:src/gui/dialogs.py",
+      "label": "dialogs.py",
+      "type": "file",
+      "layer": "presentation",
+      "description": "Provides DialogsMixin with alert/error/warning/confirm dialog helpers using Adw.AlertDialog.",
+      "filePath": "src/gui/dialogs.py",
+      "language": "Python",
+      "importance": 5,
+      "complexity": "moderate",
+      "layerName": "Presentation"
+    },
+    {
+      "id": "class:src/gui/dialogs.py:class/DialogsMixin",
+      "label": "DialogsMixin",
+      "type": "class",
+      "layer": "presentation",
+      "description": "Mixin class offering _show_error, _show_warning, and _ask_yes_no convenience dialog methods.",
+      "filePath": "src/gui/dialogs.py",
+      "language": "Python",
+      "importance": 5,
+      "complexity": "moderate",
+      "layerName": "Presentation"
+    },
+    {
+      "id": "file:src/gui/preview.py",
+      "label": "preview.py",
+      "type": "file",
+      "layer": "presentation",
+      "description": "PreviewMixin handling thumbnail loading and preview panel updates for selected scan results.",
+      "filePath": "src/gui/preview.py",
+      "language": "Python",
+      "importance": 6,
+      "complexity": "moderate",
+      "layerName": "Presentation"
+    },
+    {
+      "id": "class:src/gui/preview.py:class/PreviewMixin",
+      "label": "PreviewMixin",
+      "type": "class",
+      "layer": "presentation",
+      "description": "Mixin that loads full-quality or fallback thumbnail images and renders them into a Gtk.Picture widget.",
+      "filePath": "src/gui/preview.py",
+      "language": "Python",
+      "importance": 6,
+      "complexity": "moderate",
+      "layerName": "Presentation"
+    },
+    {
+      "id": "function:src/gui/preview.py:func/PreviewMixin.update_thumbnail_preview",
+      "label": "update_thumbnail_preview",
+      "type": "function",
+      "layer": "presentation",
+      "description": "Loads and displays the preview image for the currently selected result entry.",
+      "filePath": "src/gui/preview.py",
+      "language": "Python",
+      "importance": 6,
+      "complexity": "moderate",
+      "layerName": "Presentation"
+    },
+    {
+      "id": "function:src/gui/preview.py:func/PreviewMixin._load_preview_from_file",
+      "label": "_load_preview_from_file",
+      "type": "function",
+      "layer": "presentation",
+      "description": "Loads a full-quality PIL image from the original image or video file for display.",
+      "filePath": "src/gui/preview.py",
+      "language": "Python",
+      "importance": 5,
+      "complexity": "moderate",
+      "layerName": "Presentation"
+    },
+    {
+      "id": "function:src/gui/preview.py:func/PreviewMixin._pil_to_pixbuf",
+      "label": "_pil_to_pixbuf",
+      "type": "function",
+      "layer": "presentation",
+      "description": "Converts a PIL Image to a GdkPixbuf.Pixbuf via PNG encoding for GTK display.",
+      "filePath": "src/gui/preview.py",
+      "language": "Python",
+      "importance": 5,
+      "complexity": "moderate",
+      "layerName": "Presentation"
+    },
+    {
+      "id": "file:src/gui/result_item.py",
+      "label": "result_item.py",
+      "type": "file",
+      "layer": "presentation",
+      "description": "Defines the ResultItem GObject model used as rows in the ColumnView results table.",
+      "filePath": "src/gui/result_item.py",
+      "language": "Python",
+      "importance": 5,
+      "complexity": "moderate",
+      "layerName": "Presentation"
+    },
+    {
+      "id": "class:src/gui/result_item.py:class/ResultItem",
+      "label": "ResultItem",
+      "type": "class",
+      "layer": "presentation",
+      "description": "GObject.Object subclass holding index, name, media_type, confidence, model_name, and path for a result row.",
+      "filePath": "src/gui/result_item.py",
+      "language": "Python",
+      "importance": 5,
+      "complexity": "moderate",
+      "layerName": "Presentation"
+    },
+    {
+      "id": "file:src/gui/results.py",
+      "label": "results.py",
+      "type": "file",
+      "layer": "presentation",
+      "description": "ResultsMixin for results table population, row selection, and row actions (open, open location, delete).",
+      "filePath": "src/gui/results.py",
+      "language": "Python",
+      "importance": 7,
+      "complexity": "moderate",
+      "layerName": "Presentation"
+    },
+    {
+      "id": "class:src/gui/results.py:class/ResultsMixin",
+      "label": "ResultsMixin",
+      "type": "class",
+      "layer": "presentation",
+      "description": "Mixin providing populate_results, append_results, row selection state, and file action handlers.",
+      "filePath": "src/gui/results.py",
+      "language": "Python",
+      "importance": 7,
+      "complexity": "moderate",
+      "layerName": "Presentation"
+    },
+    {
+      "id": "function:src/gui/results.py:func/ResultsMixin.populate_results",
+      "label": "populate_results",
+      "type": "function",
+      "layer": "presentation",
+      "description": "Rebuilds the list store from scratch with the full set of detected results.",
+      "filePath": "src/gui/results.py",
+      "language": "Python",
+      "importance": 7,
+      "complexity": "moderate",
+      "layerName": "Presentation"
+    },
+    {
+      "id": "function:src/gui/results.py:func/ResultsMixin.append_results",
+      "label": "append_results",
+      "type": "function",
+      "layer": "presentation",
+      "description": "Incrementally appends only new result entries to the list store during an active scan.",
+      "filePath": "src/gui/results.py",
+      "language": "Python",
+      "importance": 6,
+      "complexity": "moderate",
+      "layerName": "Presentation"
+    },
+    {
+      "id": "function:src/gui/results.py:func/ResultsMixin.delete_selected_result",
+      "label": "delete_selected_result",
+      "type": "function",
+      "layer": "presentation",
+      "description": "Prompts for confirmation then deletes the selected file, removes it from report and list store.",
+      "filePath": "src/gui/results.py",
+      "language": "Python",
+      "importance": 6,
+      "complexity": "moderate",
+      "layerName": "Presentation"
+    },
+    {
+      "id": "file:src/gui/scan_history.py",
+      "label": "scan_history.py",
+      "type": "file",
+      "layer": "presentation",
+      "description": "ScanHistoryMixin for the All Scans tab showing previous scan runs with load, export, and delete actions.",
+      "filePath": "src/gui/scan_history.py",
+      "language": "Python",
+      "importance": 7,
+      "complexity": "moderate",
+      "layerName": "Presentation"
+    },
+    {
+      "id": "class:src/gui/scan_history.py:class/ScanRunItem",
+      "label": "ScanRunItem",
+      "type": "class",
+      "layer": "presentation",
+      "description": "GObject model for a single row in the scan history ColumnView, holding date, model, result count, etc.",
+      "filePath": "src/gui/scan_history.py",
+      "language": "Python",
+      "importance": 5,
+      "complexity": "moderate",
+      "layerName": "Presentation"
+    },
+    {
+      "id": "class:src/gui/scan_history.py:class/ScanHistoryMixin",
+      "label": "ScanHistoryMixin",
+      "type": "class",
+      "layer": "presentation",
+      "description": "Mixin building the All Scans tab and managing scan history list refresh, selection, and row actions.",
+      "filePath": "src/gui/scan_history.py",
+      "language": "Python",
+      "importance": 7,
+      "complexity": "moderate",
+      "layerName": "Presentation"
+    },
+    {
+      "id": "function:src/gui/scan_history.py:func/ScanHistoryMixin.refresh_scan_history",
+      "label": "refresh_scan_history",
+      "type": "function",
+      "layer": "presentation",
+      "description": "Re-reads the reports directory and rebuilds the history list store from dated scan subdirectories.",
+      "filePath": "src/gui/scan_history.py",
+      "language": "Python",
+      "importance": 6,
+      "complexity": "moderate",
+      "layerName": "Presentation"
+    },
+    {
+      "id": "function:src/gui/scan_history.py:func/ScanHistoryMixin._export_from_session_json",
+      "label": "_export_from_session_json",
+      "type": "function",
+      "layer": "presentation",
+      "description": "Regenerates an xlsx report from a session JSON file when the original xlsx is absent.",
+      "filePath": "src/gui/scan_history.py",
+      "language": "Python",
+      "importance": 5,
+      "complexity": "moderate",
+      "layerName": "Presentation"
+    },
+    {
+      "id": "file:src/gui/scanning.py",
+      "label": "scanning.py",
+      "type": "file",
+      "layer": "presentation",
+      "description": "ScanningMixin managing the full scan lifecycle including threading, classifier creation, and progress pulsing.",
+      "filePath": "src/gui/scanning.py",
+      "language": "Python",
+      "importance": 9,
+      "complexity": "moderate",
+      "layerName": "Presentation"
+    },
+    {
+      "id": "class:src/gui/scanning.py:class/ScanningMixin",
+      "label": "ScanningMixin",
+      "type": "class",
+      "layer": "presentation",
+      "description": "Mixin encapsulating scan start/stop, NudeNet and Helloz NSFW classifier factories, and worker thread orchestration.",
+      "filePath": "src/gui/scanning.py",
+      "language": "Python",
+      "importance": 9,
+      "complexity": "moderate",
+      "layerName": "Presentation"
+    },
+    {
+      "id": "function:src/gui/scanning.py:func/ScanningMixin.start_scanning",
+      "label": "start_scanning",
+      "type": "function",
+      "layer": "presentation",
+      "description": "Validates inputs, resets state, creates the initial scan run directory, and launches the processing thread.",
+      "filePath": "src/gui/scanning.py",
+      "language": "Python",
+      "importance": 9,
+      "complexity": "moderate",
+      "layerName": "Presentation"
+    },
+    {
+      "id": "function:src/gui/scanning.py:func/ScanningMixin.process_files",
+      "label": "process_files",
+      "type": "function",
+      "layer": "presentation",
+      "description": "Main worker-thread entry: counts files, creates classifiers, dispatches them via thread pool, and flushes intermediate results.",
+      "filePath": "src/gui/scanning.py",
+      "language": "Python",
+      "importance": 9,
+      "complexity": "moderate",
+      "layerName": "Presentation"
+    },
+    {
+      "id": "function:src/gui/scanning.py:func/ScanningMixin.create_nudenet_classifiers",
+      "label": "create_nudenet_classifiers",
+      "type": "function",
+      "layer": "presentation",
+      "description": "Creates image and video classifier closures that use NudeDetector with timeout handling.",
+      "filePath": "src/gui/scanning.py",
+      "language": "Python",
+      "importance": 7,
+      "complexity": "moderate",
+      "layerName": "Presentation"
+    },
+    {
+      "id": "function:src/gui/scanning.py:func/ScanningMixin.create_helloz_nsfw_classifiers",
+      "label": "create_helloz_nsfw_classifiers",
+      "type": "function",
+      "layer": "presentation",
+      "description": "Creates image and video classifier partials that POST to the Helloz NSFW HTTP API.",
+      "filePath": "src/gui/scanning.py",
+      "language": "Python",
+      "importance": 7,
+      "complexity": "moderate",
+      "layerName": "Presentation"
+    },
+    {
+      "id": "function:src/gui/scanning.py:func/ScanningMixin.extract_video_frames",
+      "label": "extract_video_frames",
+      "type": "function",
+      "layer": "presentation",
+      "description": "Extracts every Nth video frame to a temp directory using OpenCV for later classification.",
+      "filePath": "src/gui/scanning.py",
+      "language": "Python",
+      "importance": 6,
+      "complexity": "moderate",
+      "layerName": "Presentation"
+    },
+    {
+      "id": "file:src/gui/session.py",
+      "label": "session.py",
+      "type": "file",
+      "layer": "presentation",
+      "description": "SessionMixin handling session persistence, report file dialogs, and scan config helper methods.",
+      "filePath": "src/gui/session.py",
+      "language": "Python",
+      "importance": 7,
+      "complexity": "moderate",
+      "layerName": "Presentation"
+    },
+    {
+      "id": "class:src/gui/session.py:class/SessionMixin",
+      "label": "SessionMixin",
+      "type": "class",
+      "layer": "presentation",
+      "description": "Mixin providing session save/load dialogs, auto-load on startup, and report open/browse actions.",
+      "filePath": "src/gui/session.py",
+      "language": "Python",
+      "importance": 7,
+      "complexity": "moderate",
+      "layerName": "Presentation"
+    },
+    {
+      "id": "function:src/gui/session.py:func/SessionMixin.load_session_from_path",
+      "label": "load_session_from_path",
+      "type": "function",
+      "layer": "presentation",
+      "description": "Loads a session from an xlsx or JSON file, restores scan config fields and populates the results table.",
+      "filePath": "src/gui/session.py",
+      "language": "Python",
+      "importance": 7,
+      "complexity": "moderate",
+      "layerName": "Presentation"
+    },
+    {
+      "id": "function:src/gui/session.py:func/SessionMixin.load_initial_session",
+      "label": "load_initial_session",
+      "type": "function",
+      "layer": "presentation",
+      "description": "Auto-loads the most recent session on application startup.",
+      "filePath": "src/gui/session.py",
+      "language": "Python",
+      "importance": 6,
+      "complexity": "moderate",
+      "layerName": "Presentation"
+    },
+    {
+      "id": "config:config/app_config.json",
+      "label": "app_config.json",
+      "type": "config",
+      "layer": "infrastructure",
+      "description": "User-specific runtime configuration file storing theme, model, threshold, worker, and Helloz NSFW connection settings.",
+      "filePath": "config/app_config.json",
+      "language": "JSON",
+      "importance": 7,
+      "complexity": "moderate",
+      "layerName": "Infrastructure"
+    },
+    {
+      "id": "file:docs/ARCHITECTURE.md",
+      "label": "ARCHITECTURE.md",
+      "type": "doc",
+      "layer": "unknown",
+      "description": "Architecture overview document describing folder structure, module dependency graph, data flow, and build/distribution pipeline.",
+      "filePath": "docs/ARCHITECTURE.md",
+      "language": "Markdown",
+      "importance": 8,
+      "complexity": "moderate",
+      "layerName": "Documentation"
+    },
+    {
+      "id": "file:openspec/changes/modernize-ui-scan-workflow/specs/detected-media-review-and-actions/spec.md",
+      "label": "detected-media-review-spec.md",
+      "type": "doc",
+      "layer": "unknown",
+      "description": "Specification requiring that detected explicit media be displayed with confidence and support open-location and delete actions.",
+      "filePath": "openspec/changes/modernize-ui-scan-workflow/specs/detected-media-review-and-actions/spec.md",
+      "language": "Markdown",
+      "importance": 5,
+      "complexity": "moderate",
+      "layerName": "Documentation"
+    },
+    {
+      "id": "file:openspec/changes/modernize-ui-scan-workflow/specs/scan-ui-settings-and-theme/spec.md",
+      "label": "scan-ui-settings-spec.md",
+      "type": "doc",
+      "layer": "unknown",
+      "description": "Specification requiring configurable scan settings (folder, model, threshold) and persistent system/light/dark theme selection.",
+      "filePath": "openspec/changes/modernize-ui-scan-workflow/specs/scan-ui-settings-and-theme/spec.md",
+      "language": "Markdown",
+      "importance": 5,
+      "complexity": "moderate",
+      "layerName": "Documentation"
+    },
+    {
+      "id": "config:openspec/config.yaml",
+      "label": "openspec config.yaml",
+      "type": "config",
+      "layer": "infrastructure",
+      "description": "OpenSpec schema configuration file for the spec-driven change management process.",
+      "filePath": "openspec/config.yaml",
+      "language": "YAML",
+      "importance": 3,
+      "complexity": "moderate",
+      "layerName": "Infrastructure"
+    },
+    {
+      "id": "file:src/__init__.py",
+      "label": "src.__init__",
+      "type": "file",
+      "layer": "unknown",
+      "description": "Empty package init file for the top-level src package.",
+      "filePath": "src/__init__.py",
+      "language": "Python",
+      "importance": 1,
+      "complexity": "moderate",
+      "layerName": "Domain"
+    },
+    {
+      "id": "file:src/processing/__init__.py",
+      "label": "processing.__init__",
+      "type": "file",
+      "layer": "domain",
+      "description": "Empty package init file for the src/processing module.",
+      "filePath": "src/processing/__init__.py",
+      "language": "Python",
+      "importance": 1,
+      "complexity": "moderate",
+      "layerName": "Domain"
+    },
+    {
+      "id": "file:src/processing/media_processor.py",
+      "label": "media_processor.py",
+      "type": "file",
+      "layer": "domain",
+      "description": "Media processing utilities providing frame extraction, thumbnail generation, and media type detection.",
+      "filePath": "src/processing/media_processor.py",
+      "language": "Python",
+      "importance": 8,
+      "complexity": "moderate",
+      "layerName": "Domain"
+    },
+    {
+      "id": "function:src/processing/media_processor.py:func/detect_media_type",
+      "label": "detect_media_type",
+      "type": "function",
+      "layer": "domain",
+      "description": "Detects whether a file is an image, video, or unknown type based on its extension.",
+      "filePath": "src/processing/media_processor.py",
+      "language": "Python",
+      "importance": 6,
+      "complexity": "moderate",
+      "layerName": "Domain"
+    },
+    {
+      "id": "function:src/processing/media_processor.py:func/is_supported_file",
+      "label": "is_supported_file",
+      "type": "function",
+      "layer": "domain",
+      "description": "Returns True when detect_media_type identifies the file as a supported image or video.",
+      "filePath": "src/processing/media_processor.py",
+      "language": "Python",
+      "importance": 5,
+      "complexity": "moderate",
+      "layerName": "Domain"
+    },
+    {
+      "id": "class:src/processing/media_processor.py:class/FrameExtractor",
+      "label": "FrameExtractor",
+      "type": "class",
+      "layer": "domain",
+      "description": "Extracts every Nth frame from a video file into a temporary directory using OpenCV.",
+      "filePath": "src/processing/media_processor.py",
+      "language": "Python",
+      "importance": 7,
+      "complexity": "moderate",
+      "layerName": "Domain"
+    },
+    {
+      "id": "function:src/processing/media_processor.py:func/FrameExtractor.extract",
+      "label": "FrameExtractor.extract",
+      "type": "function",
+      "layer": "domain",
+      "description": "Opens a video with OpenCV and writes sampled frames to a temp directory, returning (temp_dir, frame_paths).",
+      "filePath": "src/processing/media_processor.py",
+      "language": "Python",
+      "importance": 7,
+      "complexity": "moderate",
+      "layerName": "Domain"
+    },
+    {
+      "id": "function:src/processing/media_processor.py:func/FrameExtractor.cleanup",
+      "label": "FrameExtractor.cleanup",
+      "type": "function",
+      "layer": "domain",
+      "description": "Removes the temporary frame directory created during extraction.",
+      "filePath": "src/processing/media_processor.py",
+      "language": "Python",
+      "importance": 4,
+      "complexity": "moderate",
+      "layerName": "Domain"
+    },
+    {
+      "id": "class:src/processing/media_processor.py:class/ThumbnailGenerator",
+      "label": "ThumbnailGenerator",
+      "type": "class",
+      "layer": "domain",
+      "description": "Generates base64-encoded PNG thumbnails from image or video files using PIL and OpenCV.",
+      "filePath": "src/processing/media_processor.py",
+      "language": "Python",
+      "importance": 7,
+      "complexity": "moderate",
+      "layerName": "Domain"
+    },
+    {
+      "id": "function:src/processing/media_processor.py:func/ThumbnailGenerator.generate_from_image",
+      "label": "generate_from_image",
+      "type": "function",
+      "layer": "domain",
+      "description": "Opens an image with PIL, resizes it to thumbnail dimensions, and returns a base64-encoded PNG string.",
+      "filePath": "src/processing/media_processor.py",
+      "language": "Python",
+      "importance": 6,
+      "complexity": "moderate",
+      "layerName": "Domain"
+    },
+    {
+      "id": "function:src/processing/media_processor.py:func/ThumbnailGenerator.generate_from_video",
+      "label": "generate_from_video",
+      "type": "function",
+      "layer": "domain",
+      "description": "Extracts a representative frame from a video at a configured progress index and returns a base64 thumbnail.",
+      "filePath": "src/processing/media_processor.py",
+      "language": "Python",
+      "importance": 6,
+      "complexity": "moderate",
+      "layerName": "Domain"
+    },
+    {
+      "id": "function:src/processing/media_processor.py:func/ThumbnailGenerator.generate",
+      "label": "ThumbnailGenerator.generate",
+      "type": "function",
+      "layer": "domain",
+      "description": "Auto-detects media type and delegates to generate_from_image or generate_from_video.",
+      "filePath": "src/processing/media_processor.py",
+      "language": "Python",
+      "importance": 6,
+      "complexity": "moderate",
+      "layerName": "Domain"
+    },
+    {
+      "id": "file:src/reporting/__init__.py",
+      "label": "reporting.__init__",
+      "type": "file",
+      "layer": "infrastructure",
+      "description": "Empty package init file for the src/reporting module.",
+      "filePath": "src/reporting/__init__.py",
+      "language": "Python",
+      "importance": 1,
+      "complexity": "moderate",
+      "layerName": "Infrastructure"
+    },
+    {
+      "id": "file:src/reporting/report_manager.py",
+      "label": "report_manager.py",
+      "type": "file",
+      "layer": "infrastructure",
+      "description": "ReportManager class handling Excel report and JSON session file I/O including read, write, and embed-thumbnail logic.",
+      "filePath": "src/reporting/report_manager.py",
+      "language": "Python",
+      "importance": 9,
+      "complexity": "moderate",
+      "layerName": "Infrastructure"
+    },
+    {
+      "id": "class:src/reporting/report_manager.py:class/ReportManager",
+      "label": "ReportManager",
+      "type": "class",
+      "layer": "infrastructure",
+      "description": "Static-method class managing Excel report generation, session JSON persistence, thumbnail embedding, and directory validation.",
+      "filePath": "src/reporting/report_manager.py",
+      "language": "Python",
+      "importance": 9,
+      "complexity": "moderate",
+      "layerName": "Infrastructure"
+    },
+    {
+      "id": "function:src/reporting/report_manager.py:func/ReportManager.load_entries",
+      "label": "ReportManager.load_entries",
+      "type": "function",
+      "layer": "infrastructure",
+      "description": "Reads an openpyxl workbook and returns a list of ReportEntry objects mapped from header columns.",
+      "filePath": "src/reporting/report_manager.py",
+      "language": "Python",
+      "importance": 8,
+      "complexity": "moderate",
+      "layerName": "Infrastructure"
+    },
+    {
+      "id": "function:src/reporting/report_manager.py:func/ReportManager.save_entries",
+      "label": "ReportManager.save_entries",
+      "type": "function",
+      "layer": "infrastructure",
+      "description": "Writes ReportEntry objects to an Excel workbook, clearing previous data and embedding thumbnails.",
+      "filePath": "src/reporting/report_manager.py",
+      "language": "Python",
+      "importance": 8,
+      "complexity": "moderate",
+      "layerName": "Infrastructure"
+    },
+    {
+      "id": "function:src/reporting/report_manager.py:func/ReportManager._embed_thumbnails",
+      "label": "ReportManager._embed_thumbnails",
+      "type": "function",
+      "layer": "infrastructure",
+      "description": "Decodes base64 thumbnails and embeds them as openpyxl images into the Thumbnail column of the worksheet.",
+      "filePath": "src/reporting/report_manager.py",
+      "language": "Python",
+      "importance": 6,
+      "complexity": "moderate",
+      "layerName": "Infrastructure"
+    },
+    {
+      "id": "function:src/reporting/report_manager.py:func/ReportManager.save_session",
+      "label": "ReportManager.save_session",
+      "type": "function",
+      "layer": "infrastructure",
+      "description": "Serialises a SessionState object to a JSON file alongside the report xlsx.",
+      "filePath": "src/reporting/report_manager.py",
+      "language": "Python",
+      "importance": 7,
+      "complexity": "moderate",
+      "layerName": "Infrastructure"
+    },
+    {
+      "id": "function:src/reporting/report_manager.py:func/ReportManager.load_session",
+      "label": "ReportManager.load_session",
+      "type": "function",
+      "layer": "infrastructure",
+      "description": "Loads a SessionState from a JSON file or falls back to an embedded sheet in the xlsx.",
+      "filePath": "src/reporting/report_manager.py",
+      "language": "Python",
+      "importance": 7,
+      "complexity": "moderate",
+      "layerName": "Infrastructure"
+    },
+    {
+      "id": "function:src/reporting/report_manager.py:func/ReportManager.validate_report_dir",
+      "label": "ReportManager.validate_report_dir",
+      "type": "function",
+      "layer": "infrastructure",
+      "description": "Validates that the report directory is writable and not a system-protected path.",
+      "filePath": "src/reporting/report_manager.py",
+      "language": "Python",
+      "importance": 5,
+      "complexity": "moderate",
+      "layerName": "Infrastructure"
+    }
+  ],
+  "edges": [
+    {
+      "sourceId": "file:file-run-gui",
+      "targetId": "file:src/gui/app.py",
+      "relation": "imports",
+      "description": "run_gui.py imports and calls the main() function from src/gui/app.py to start the GUI application."
+    },
+    {
+      "sourceId": "file:file-run-helloz",
+      "targetId": "file:src/detectors/helloz_nsfw.py",
+      "relation": "imports",
+      "description": "run_helloz_nsfw.py imports and calls the main() function from src/detectors/helloz_nsfw.py."
+    },
+    {
+      "sourceId": "file:file-run-nudenet",
+      "targetId": "file:src/detectors/nudenet.py",
+      "relation": "imports",
+      "description": "run_nudenet.py imports and calls the main() function from src/detectors/nudenet.py."
+    },
+    {
+      "sourceId": "file:file-README",
+      "targetId": "file:file-run-gui",
+      "relation": "documents",
+      "description": "README.md documents how to run the GUI application using run_gui.py."
+    },
+    {
+      "sourceId": "file:file-README",
+      "targetId": "file:file-run-helloz",
+      "relation": "documents",
+      "description": "README.md documents how to run the Helloz NSFW CLI using run_helloz_nsfw.py."
+    },
+    {
+      "sourceId": "file:file-README",
+      "targetId": "file:file-run-nudenet",
+      "relation": "documents",
+      "description": "README.md documents how to run the NudeNet CLI using run_nudenet.py."
+    },
+    {
+      "sourceId": "file:file-README",
+      "targetId": "config:file-docker-compose",
+      "relation": "documents",
+      "description": "README.md instructs users to run docker-compose.yml to start the Helloz NSFW server."
+    },
+    {
+      "sourceId": "config:file-docker-compose",
+      "targetId": "concept:concept-helloz-service",
+      "relation": "configures",
+      "description": "docker-compose.yml configures and launches the helloz/nsfw Docker container service."
+    },
+    {
+      "sourceId": "config:file-requirements",
+      "targetId": "concept:concept-nudenet-detector",
+      "relation": "configures",
+      "description": "requirements.txt declares the nudenet package dependency required by the NudeNet detector."
+    },
+    {
+      "sourceId": "file:file-run-gui",
+      "targetId": "concept:concept-gui-app",
+      "relation": "uses",
+      "description": "run_gui.py is the entry point that initializes and runs the GUI application."
+    },
+    {
+      "sourceId": "config:file-openspec-yaml",
+      "targetId": "file:file-design-md",
+      "relation": "configures",
+      "description": ".openspec.yaml declares the schema context for the design.md document within the change specification directory."
+    },
+    {
+      "sourceId": "config:file-openspec-yaml",
+      "targetId": "file:file-proposal-md",
+      "relation": "configures",
+      "description": ".openspec.yaml declares the schema context for the proposal.md document within the change specification directory."
+    },
+    {
+      "sourceId": "config:file-openspec-yaml",
+      "targetId": "file:file-tasks-md",
+      "relation": "configures",
+      "description": ".openspec.yaml declares the schema context for the tasks.md document within the change specification directory."
+    },
+    {
+      "sourceId": "file:file-proposal-md",
+      "targetId": "file:file-design-md",
+      "relation": "uses",
+      "description": "The proposal outlines the high-level what/why, while design.md provides the detailed architectural decisions and rationale."
+    },
+    {
+      "sourceId": "file:file-tasks-md",
+      "targetId": "file:file-design-md",
+      "relation": "uses",
+      "description": "Tasks in tasks.md implement the decisions and goals described in design.md."
+    },
+    {
+      "sourceId": "file:file-tasks-md",
+      "targetId": "file:file-proposal-md",
+      "relation": "uses",
+      "description": "Tasks in tasks.md realize the capabilities described in the proposal."
+    },
+    {
+      "sourceId": "file:file-design-md",
+      "targetId": "concept:concept-scan-session-persistence",
+      "relation": "defines",
+      "description": "design.md defines the scan-session state model and persistence strategy as a key architectural decision."
+    },
+    {
+      "sourceId": "file:file-design-md",
+      "targetId": "concept:concept-detected-media-review",
+      "relation": "defines",
+      "description": "design.md defines the results table scoped to detected explicit media as a deliberate design decision."
+    },
+    {
+      "sourceId": "file:file-design-md",
+      "targetId": "concept:concept-configurable-threshold",
+      "relation": "defines",
+      "description": "design.md defines the threshold representation strategy: percent in UI, normalized float in detector calls."
+    },
+    {
+      "sourceId": "file:file-proposal-md",
+      "targetId": "concept:concept-theme-preferences",
+      "relation": "defines",
+      "description": "proposal.md introduces theme preferences as a new capability under scan-ui-settings-and-theme."
+    },
+    {
+      "sourceId": "file:scripts/build_linux.sh",
+      "targetId": "config:scripts/nudity-detector.spec",
+      "relation": "uses",
+      "description": "build_linux.sh invokes pyinstaller with nudity-detector.spec as the build specification."
+    },
+    {
+      "sourceId": "file:scripts/build_linux.sh",
+      "targetId": "file:scripts/AppRun",
+      "relation": "uses",
+      "description": "build_linux.sh copies AppRun into the assembled AppDir as the AppImage entry point."
+    },
+    {
+      "sourceId": "file:scripts/build_linux.sh",
+      "targetId": "config:scripts/nudity-detector.desktop",
+      "relation": "uses",
+      "description": "build_linux.sh copies the desktop file into the AppDir for application menu registration."
+    },
+    {
+      "sourceId": "file:scripts/AppRun",
+      "targetId": "config:scripts/nudity-detector.spec",
+      "relation": "uses",
+      "description": "AppRun launches the binary produced by the PyInstaller spec build."
+    },
+    {
+      "sourceId": "file:src/core/models.py",
+      "targetId": "file:src/core/constants.py",
+      "relation": "imports",
+      "description": "models.py imports constants to use default values for model name, threshold, theme, media type, and session version."
+    },
+    {
+      "sourceId": "class:src/core/models.py:class-ScanConfig",
+      "targetId": "file:src/core/models.py",
+      "relation": "defines",
+      "description": "ScanConfig is defined in models.py as a top-level dataclass."
+    },
+    {
+      "sourceId": "class:src/core/models.py:class-ReportEntry",
+      "targetId": "file:src/core/models.py",
+      "relation": "defines",
+      "description": "ReportEntry is defined in models.py as a top-level dataclass."
+    },
+    {
+      "sourceId": "class:src/core/models.py:class-SessionState",
+      "targetId": "file:src/core/models.py",
+      "relation": "defines",
+      "description": "SessionState is defined in models.py as a top-level dataclass."
+    },
+    {
+      "sourceId": "class:src/core/models.py:class-DetectionResult",
+      "targetId": "file:src/core/models.py",
+      "relation": "defines",
+      "description": "DetectionResult is defined in models.py as a top-level dataclass."
+    },
+    {
+      "sourceId": "file:src/core/utils.py",
+      "targetId": "file:src/core/constants.py",
+      "relation": "imports",
+      "description": "utils.py imports constants for thresholds, field names, thumbnail sizes, thread counts, and report directory defaults."
+    },
+    {
+      "sourceId": "file:src/core/utils.py",
+      "targetId": "file:src/core/models.py",
+      "relation": "imports",
+      "description": "utils.py imports ReportEntry, SessionState, and ScanConfig to build and serialize detection data."
+    },
+    {
+      "sourceId": "file:src/core/utils.py",
+      "targetId": "file:src/processing/media_processor.py",
+      "relation": "imports",
+      "description": "utils.py imports detect_media_type, is_supported_file, and ThumbnailGenerator from media_processor."
+    },
+    {
+      "sourceId": "file:src/core/utils.py",
+      "targetId": "file:src/reporting/report_manager.py",
+      "relation": "imports",
+      "description": "utils.py delegates all report read/write operations to ReportManager from report_manager."
+    },
+    {
+      "sourceId": "function:src/core/utils.py:fn-normalize_threshold",
+      "targetId": "file:src/core/utils.py",
+      "relation": "defines",
+      "description": "normalize_threshold is a top-level function defined in utils.py."
+    },
+    {
+      "sourceId": "function:src/core/utils.py:fn-classify_files_in_folder",
+      "targetId": "file:src/core/utils.py",
+      "relation": "defines",
+      "description": "classify_files_in_folder is a top-level function defined in utils.py."
+    },
+    {
+      "sourceId": "function:src/core/utils.py:fn-handle_results",
+      "targetId": "file:src/core/utils.py",
+      "relation": "defines",
+      "description": "handle_results is a top-level function defined in utils.py."
+    },
+    {
+      "sourceId": "function:src/core/utils.py:fn-save_nudity_report",
+      "targetId": "file:src/core/utils.py",
+      "relation": "defines",
+      "description": "save_nudity_report is a top-level function defined in utils.py."
+    },
+    {
+      "sourceId": "function:src/core/utils.py:fn-detect_with_timeout",
+      "targetId": "file:src/core/utils.py",
+      "relation": "defines",
+      "description": "detect_with_timeout is a top-level function defined in utils.py."
+    },
+    {
+      "sourceId": "file:src/detectors/helloz_nsfw.py",
+      "targetId": "file:src/core/constants.py",
+      "relation": "imports",
+      "description": "helloz_nsfw.py imports constants for API URL, timeouts, threshold bounds, model name, media type, and frame config."
+    },
+    {
+      "sourceId": "file:src/detectors/helloz_nsfw.py",
+      "targetId": "file:src/core/utils.py",
+      "relation": "imports",
+      "description": "helloz_nsfw.py imports utility functions: classify_files_in_folder, handle_results, save_nudity_report, normalize_threshold, and others."
+    },
+    {
+      "sourceId": "file:src/detectors/helloz_nsfw.py",
+      "targetId": "file:src/processing/media_processor.py",
+      "relation": "imports",
+      "description": "helloz_nsfw.py imports FrameExtractor from media_processor for video frame extraction."
+    },
+    {
+      "sourceId": "function:src/detectors/helloz_nsfw.py:fn-helloz-prompt_threshold_percent",
+      "targetId": "file:src/detectors/helloz_nsfw.py",
+      "relation": "defines",
+      "description": "prompt_threshold_percent is a top-level function defined in helloz_nsfw.py."
+    },
+    {
+      "sourceId": "function:src/detectors/helloz_nsfw.py:fn-helloz-extract_frames",
+      "targetId": "file:src/detectors/helloz_nsfw.py",
+      "relation": "defines",
+      "description": "extract_frames is a top-level function defined in helloz_nsfw.py."
+    },
+    {
+      "sourceId": "function:src/detectors/helloz_nsfw.py:fn-helloz-main",
+      "targetId": "file:src/detectors/helloz_nsfw.py",
+      "relation": "defines",
+      "description": "main is the CLI entry point function defined in helloz_nsfw.py."
+    },
+    {
+      "sourceId": "file:src/detectors/nudenet.py",
+      "targetId": "file:src/core/constants.py",
+      "relation": "imports",
+      "description": "nudenet.py imports constants for nudity class sets, threshold bounds, model name, media type, and frame config."
+    },
+    {
+      "sourceId": "file:src/detectors/nudenet.py",
+      "targetId": "file:src/core/utils.py",
+      "relation": "imports",
+      "description": "nudenet.py imports utility functions: classify_files_in_folder, handle_results, save_nudity_report, normalize_threshold, and others."
+    },
+    {
+      "sourceId": "file:src/detectors/nudenet.py",
+      "targetId": "file:src/processing/media_processor.py",
+      "relation": "imports",
+      "description": "nudenet.py imports FrameExtractor from media_processor for video frame extraction."
+    },
+    {
+      "sourceId": "function:src/detectors/nudenet.py:fn-nudenet-simplify_nudenet_results",
+      "targetId": "file:src/detectors/nudenet.py",
+      "relation": "defines",
+      "description": "simplify_nudenet_results is a top-level function defined in nudenet.py."
+    },
+    {
+      "sourceId": "function:src/detectors/nudenet.py:fn-nudenet-get_nudenet_confidence",
+      "targetId": "file:src/detectors/nudenet.py",
+      "relation": "defines",
+      "description": "get_nudenet_confidence is a top-level function defined in nudenet.py."
+    },
+    {
+      "sourceId": "function:src/detectors/nudenet.py:fn-nudenet-main",
+      "targetId": "file:src/detectors/nudenet.py",
+      "relation": "defines",
+      "description": "main is the CLI entry point function defined in nudenet.py."
+    },
+    {
+      "sourceId": "file:src/gui/app.py",
+      "targetId": "class:src/gui/app.py:class/NudityDetectorWindow",
+      "relation": "defines",
+      "description": "app.py defines the NudityDetectorWindow class."
+    },
+    {
+      "sourceId": "class:src/gui/app.py:class/NudityDetectorWindow",
+      "targetId": "class:src/gui/scan_history.py:class/ScanHistoryMixin",
+      "relation": "extends",
+      "description": "NudityDetectorWindow inherits from ScanHistoryMixin."
+    },
+    {
+      "sourceId": "class:src/gui/app.py:class/NudityDetectorWindow",
+      "targetId": "class:src/gui/scanning.py:class/ScanningMixin",
+      "relation": "extends",
+      "description": "NudityDetectorWindow inherits from ScanningMixin."
+    },
+    {
+      "sourceId": "class:src/gui/app.py:class/NudityDetectorWindow",
+      "targetId": "class:src/gui/preview.py:class/PreviewMixin",
+      "relation": "extends",
+      "description": "NudityDetectorWindow inherits from PreviewMixin."
+    },
+    {
+      "sourceId": "class:src/gui/app.py:class/NudityDetectorWindow",
+      "targetId": "class:src/gui/session.py:class/SessionMixin",
+      "relation": "extends",
+      "description": "NudityDetectorWindow inherits from SessionMixin."
+    },
+    {
+      "sourceId": "class:src/gui/app.py:class/NudityDetectorWindow",
+      "targetId": "class:src/gui/results.py:class/ResultsMixin",
+      "relation": "extends",
+      "description": "NudityDetectorWindow inherits from ResultsMixin."
+    },
+    {
+      "sourceId": "class:src/gui/app.py:class/NudityDetectorWindow",
+      "targetId": "class:src/gui/dialogs.py:class/DialogsMixin",
+      "relation": "extends",
+      "description": "NudityDetectorWindow inherits from DialogsMixin."
+    },
+    {
+      "sourceId": "file:src/gui/app.py",
+      "targetId": "file:src/core/constants.py",
+      "relation": "imports",
+      "description": "app.py imports constants for window geometry, model names, theme settings, and defaults."
+    },
+    {
+      "sourceId": "file:src/gui/app.py",
+      "targetId": "file:src/core/utils.py",
+      "relation": "imports",
+      "description": "app.py imports get_report_path utility from core utils."
+    },
+    {
+      "sourceId": "file:src/gui/dialogs.py",
+      "targetId": "class:src/gui/dialogs.py:class/DialogsMixin",
+      "relation": "defines",
+      "description": "dialogs.py defines the DialogsMixin class."
+    },
+    {
+      "sourceId": "file:src/gui/preview.py",
+      "targetId": "class:src/gui/preview.py:class/PreviewMixin",
+      "relation": "defines",
+      "description": "preview.py defines the PreviewMixin class."
+    },
+    {
+      "sourceId": "file:src/gui/preview.py",
+      "targetId": "file:src/core/constants.py",
+      "relation": "imports",
+      "description": "preview.py imports constants for media type names and thumbnail sizes."
+    },
+    {
+      "sourceId": "file:src/gui/preview.py",
+      "targetId": "file:src/processing/media_processor.py",
+      "relation": "imports",
+      "description": "preview.py imports ThumbnailGenerator for video preview generation."
+    },
+    {
+      "sourceId": "file:src/gui/result_item.py",
+      "targetId": "class:src/gui/result_item.py:class/ResultItem",
+      "relation": "defines",
+      "description": "result_item.py defines the ResultItem GObject class."
+    },
+    {
+      "sourceId": "file:src/gui/results.py",
+      "targetId": "class:src/gui/results.py:class/ResultsMixin",
+      "relation": "defines",
+      "description": "results.py defines the ResultsMixin class."
+    },
+    {
+      "sourceId": "file:src/gui/results.py",
+      "targetId": "file:src/core/constants.py",
+      "relation": "imports",
+      "description": "results.py imports constants for list position sentinel values."
+    },
+    {
+      "sourceId": "file:src/gui/results.py",
+      "targetId": "file:src/core/utils.py",
+      "relation": "imports",
+      "description": "results.py imports file operation utilities and nudity_report globals."
+    },
+    {
+      "sourceId": "file:src/gui/results.py",
+      "targetId": "class:src/gui/result_item.py:class/ResultItem",
+      "relation": "uses",
+      "description": "ResultsMixin creates ResultItem instances when populating the list store."
+    },
+    {
+      "sourceId": "file:src/gui/scan_history.py",
+      "targetId": "class:src/gui/scan_history.py:class/ScanHistoryMixin",
+      "relation": "defines",
+      "description": "scan_history.py defines the ScanHistoryMixin class."
+    },
+    {
+      "sourceId": "file:src/gui/scan_history.py",
+      "targetId": "class:src/gui/scan_history.py:class/ScanRunItem",
+      "relation": "defines",
+      "description": "scan_history.py defines the ScanRunItem GObject model class."
+    },
+    {
+      "sourceId": "file:src/gui/scan_history.py",
+      "targetId": "file:src/core/constants.py",
+      "relation": "imports",
+      "description": "scan_history.py imports the SCAN_RUN_DATE_FORMAT constant."
+    },
+    {
+      "sourceId": "file:src/gui/scan_history.py",
+      "targetId": "file:src/core/utils.py",
+      "relation": "imports",
+      "description": "scan_history.py imports DEFAULT_REPORT_DIR, get_report_path, and load_scan_session utilities."
+    },
+    {
+      "sourceId": "file:src/gui/scanning.py",
+      "targetId": "class:src/gui/scanning.py:class/ScanningMixin",
+      "relation": "defines",
+      "description": "scanning.py defines the ScanningMixin class."
+    },
+    {
+      "sourceId": "file:src/gui/scanning.py",
+      "targetId": "file:src/core/constants.py",
+      "relation": "imports",
+      "description": "scanning.py imports model name constants, class lists, frame patterns, and other config values."
+    },
+    {
+      "sourceId": "file:src/gui/scanning.py",
+      "targetId": "file:src/core/utils.py",
+      "relation": "imports",
+      "description": "scanning.py imports threading utilities, report helpers, and file classification functions."
+    },
+    {
+      "sourceId": "file:src/gui/session.py",
+      "targetId": "class:src/gui/session.py:class/SessionMixin",
+      "relation": "defines",
+      "description": "session.py defines the SessionMixin class."
+    },
+    {
+      "sourceId": "file:src/gui/session.py",
+      "targetId": "file:src/core/constants.py",
+      "relation": "imports",
+      "description": "session.py imports XLSX_EXTENSION and model name constants."
+    },
+    {
+      "sourceId": "file:src/gui/session.py",
+      "targetId": "file:src/core/utils.py",
+      "relation": "imports",
+      "description": "session.py imports session state helpers, report loaders, and path utilities."
+    },
+    {
+      "sourceId": "function:src/gui/scanning.py:func/ScanningMixin.process_files",
+      "targetId": "function:src/gui/scanning.py:func/ScanningMixin.create_nudenet_classifiers",
+      "relation": "uses",
+      "description": "process_files calls create_nudenet_classifiers when the NudeNet model is selected."
+    },
+    {
+      "sourceId": "function:src/gui/scanning.py:func/ScanningMixin.process_files",
+      "targetId": "function:src/gui/scanning.py:func/ScanningMixin.create_helloz_nsfw_classifiers",
+      "relation": "uses",
+      "description": "process_files calls create_helloz_nsfw_classifiers when the Helloz NSFW model is selected."
+    },
+    {
+      "sourceId": "file:src/processing/media_processor.py",
+      "targetId": "class:src/processing/media_processor.py:class/FrameExtractor",
+      "relation": "defines",
+      "description": "media_processor.py defines the FrameExtractor class."
+    },
+    {
+      "sourceId": "file:src/processing/media_processor.py",
+      "targetId": "class:src/processing/media_processor.py:class/ThumbnailGenerator",
+      "relation": "defines",
+      "description": "media_processor.py defines the ThumbnailGenerator class."
+    },
+    {
+      "sourceId": "file:src/processing/media_processor.py",
+      "targetId": "function:src/processing/media_processor.py:func/detect_media_type",
+      "relation": "defines",
+      "description": "media_processor.py defines the detect_media_type function."
+    },
+    {
+      "sourceId": "file:src/processing/media_processor.py",
+      "targetId": "function:src/processing/media_processor.py:func/is_supported_file",
+      "relation": "defines",
+      "description": "media_processor.py defines the is_supported_file function."
+    },
+    {
+      "sourceId": "file:src/processing/media_processor.py",
+      "targetId": "file:src/core/constants.py",
+      "relation": "imports",
+      "description": "media_processor.py imports extension sets, media type constants, thumbnail sizes, and frame patterns."
+    },
+    {
+      "sourceId": "file:src/reporting/report_manager.py",
+      "targetId": "class:src/reporting/report_manager.py:class/ReportManager",
+      "relation": "defines",
+      "description": "report_manager.py defines the ReportManager class."
+    },
+    {
+      "sourceId": "file:src/reporting/report_manager.py",
+      "targetId": "file:src/core/constants.py",
+      "relation": "imports",
+      "description": "report_manager.py imports report headers, field names, file name constants, and system protected dirs."
+    },
+    {
+      "sourceId": "file:src/reporting/report_manager.py",
+      "targetId": "file:src/core/models.py",
+      "relation": "imports",
+      "description": "report_manager.py imports ReportEntry, SessionState, and ScanConfig dataclasses."
+    },
+    {
+      "sourceId": "function:src/processing/media_processor.py:func/ThumbnailGenerator.generate",
+      "targetId": "function:src/processing/media_processor.py:func/detect_media_type",
+      "relation": "uses",
+      "description": "ThumbnailGenerator.generate calls detect_media_type to auto-detect file type when not provided."
+    },
+    {
+      "sourceId": "function:src/processing/media_processor.py:func/ThumbnailGenerator.generate",
+      "targetId": "function:src/processing/media_processor.py:func/ThumbnailGenerator.generate_from_image",
+      "relation": "uses",
+      "description": "ThumbnailGenerator.generate delegates to generate_from_image for image files."
+    },
+    {
+      "sourceId": "function:src/processing/media_processor.py:func/ThumbnailGenerator.generate",
+      "targetId": "function:src/processing/media_processor.py:func/ThumbnailGenerator.generate_from_video",
+      "relation": "uses",
+      "description": "ThumbnailGenerator.generate delegates to generate_from_video for video files."
+    },
+    {
+      "sourceId": "function:src/reporting/report_manager.py:func/ReportManager.save_entries",
+      "targetId": "function:src/reporting/report_manager.py:func/ReportManager._embed_thumbnails",
+      "relation": "uses",
+      "description": "save_entries calls _embed_thumbnails after writing row data to embed images into the worksheet."
+    },
+    {
+      "sourceId": "file:docs/ARCHITECTURE.md",
+      "targetId": "file:src/processing/media_processor.py",
+      "relation": "documents",
+      "description": "ARCHITECTURE.md describes media_processor.py as responsible for frames and thumbnails."
+    },
+    {
+      "sourceId": "file:docs/ARCHITECTURE.md",
+      "targetId": "file:src/reporting/report_manager.py",
+      "relation": "documents",
+      "description": "ARCHITECTURE.md describes report_manager.py as responsible for Excel and session I/O."
+    },
+    {
+      "sourceId": "config:config/app_config.json",
+      "targetId": "file:src/gui/app.py",
+      "relation": "configures",
+      "description": "app_config.json is loaded by the GUI on startup to configure theme, model, threshold, and connection settings."
+    },
+    {
+      "sourceId": "file:openspec/changes/modernize-ui-scan-workflow/specs/detected-media-review-and-actions/spec.md",
+      "targetId": "file:src/gui/results.py",
+      "relation": "documents",
+      "description": "The detected-media-review spec documents requirements implemented by ResultsMixin in results.py."
+    },
+    {
+      "sourceId": "file:openspec/changes/modernize-ui-scan-workflow/specs/scan-ui-settings-and-theme/spec.md",
+      "targetId": "file:src/gui/app.py",
+      "relation": "documents",
+      "description": "The scan-ui-settings spec documents the scan configuration and theme selection requirements fulfilled in app.py."
+    }
+  ],
+  "layers": [
+    {
+      "name": "Presentation",
+      "description": "GTK4/libadwaita GUI components, entry point, and UI concepts",
+      "nodeIds": [
+        "file:file-run-gui",
+        "concept:concept-gui-app",
+        "concept:concept-detected-media-review",
+        "concept:concept-theme-preferences",
+        "file:src/gui/__init__.py",
+        "file:src/gui/app.py",
+        "class:src/gui/app.py:class/NudityDetectorWindow",
+        "function:src/gui/app.py:func/NudityDetectorWindow.__init__",
+        "function:src/gui/app.py:func/NudityDetectorWindow._build_ui",
+        "function:src/gui/app.py:func/NudityDetectorWindow._build_settings_tab",
+        "function:src/gui/app.py:func/NudityDetectorWindow._build_scan_page",
+        "file:src/gui/dialogs.py",
+        "class:src/gui/dialogs.py:class/DialogsMixin",
+        "file:src/gui/preview.py",
+        "class:src/gui/preview.py:class/PreviewMixin",
+        "function:src/gui/preview.py:func/PreviewMixin.update_thumbnail_preview",
+        "function:src/gui/preview.py:func/PreviewMixin._load_preview_from_file",
+        "function:src/gui/preview.py:func/PreviewMixin._pil_to_pixbuf",
+        "file:src/gui/result_item.py",
+        "class:src/gui/result_item.py:class/ResultItem",
+        "file:src/gui/results.py",
+        "class:src/gui/results.py:class/ResultsMixin",
+        "function:src/gui/results.py:func/ResultsMixin.populate_results",
+        "function:src/gui/results.py:func/ResultsMixin.append_results",
+        "function:src/gui/results.py:func/ResultsMixin.delete_selected_result",
+        "file:src/gui/scan_history.py",
+        "class:src/gui/scan_history.py:class/ScanRunItem",
+        "class:src/gui/scan_history.py:class/ScanHistoryMixin",
+        "function:src/gui/scan_history.py:func/ScanHistoryMixin.refresh_scan_history",
+        "function:src/gui/scan_history.py:func/ScanHistoryMixin._export_from_session_json",
+        "file:src/gui/scanning.py",
+        "class:src/gui/scanning.py:class/ScanningMixin",
+        "function:src/gui/scanning.py:func/ScanningMixin.start_scanning",
+        "function:src/gui/scanning.py:func/ScanningMixin.process_files",
+        "function:src/gui/scanning.py:func/ScanningMixin.create_nudenet_classifiers",
+        "function:src/gui/scanning.py:func/ScanningMixin.create_helloz_nsfw_classifiers",
+        "function:src/gui/scanning.py:func/ScanningMixin.extract_video_frames",
+        "file:src/gui/session.py",
+        "class:src/gui/session.py:class/SessionMixin",
+        "function:src/gui/session.py:func/SessionMixin.load_session_from_path",
+        "function:src/gui/session.py:func/SessionMixin.load_initial_session"
+      ]
+    },
+    {
+      "name": "Application",
+      "description": "Orchestration, batch processing workflow, CLI detector entry points, and session persistence concepts",
+      "nodeIds": [
+        "file:file-run-helloz",
+        "file:file-run-nudenet",
+        "concept:concept-scan-session-persistence",
+        "file:src/core/utils.py",
+        "function:src/core/utils.py:fn-normalize_threshold",
+        "function:src/core/utils.py:fn-classify_files_in_folder",
+        "function:src/core/utils.py:fn-handle_results",
+        "function:src/core/utils.py:fn-save_nudity_report",
+        "function:src/core/utils.py:fn-detect_with_timeout",
+        "file:src/detectors/helloz_nsfw.py",
+        "function:src/detectors/helloz_nsfw.py:fn-helloz-prompt_threshold_percent",
+        "function:src/detectors/helloz_nsfw.py:fn-helloz-extract_frames",
+        "function:src/detectors/helloz_nsfw.py:fn-helloz-main",
+        "file:src/detectors/nudenet.py",
+        "function:src/detectors/nudenet.py:fn-nudenet-simplify_nudenet_results",
+        "function:src/detectors/nudenet.py:fn-nudenet-get_nudenet_confidence",
+        "function:src/detectors/nudenet.py:fn-nudenet-main"
+      ]
+    },
+    {
+      "name": "Domain",
+      "description": "Core models, constants, domain logic, and media processing primitives",
+      "nodeIds": [
+        "concept:concept-nudenet-detector",
+        "concept:concept-configurable-threshold",
+        "module:src/core/__init__.py",
+        "file:src/core/constants.py",
+        "file:src/core/models.py",
+        "class:src/core/models.py:class-ScanConfig",
+        "class:src/core/models.py:class-ReportEntry",
+        "class:src/core/models.py:class-SessionState",
+        "class:src/core/models.py:class-DetectionResult",
+        "module:src/detectors/__init__.py",
+        "file:src/__init__.py",
+        "file:src/processing/__init__.py",
+        "file:src/processing/media_processor.py",
+        "function:src/processing/media_processor.py:func/detect_media_type",
+        "function:src/processing/media_processor.py:func/is_supported_file",
+        "class:src/processing/media_processor.py:class/FrameExtractor",
+        "function:src/processing/media_processor.py:func/FrameExtractor.extract",
+        "function:src/processing/media_processor.py:func/FrameExtractor.cleanup",
+        "class:src/processing/media_processor.py:class/ThumbnailGenerator",
+        "function:src/processing/media_processor.py:func/ThumbnailGenerator.generate_from_image",
+        "function:src/processing/media_processor.py:func/ThumbnailGenerator.generate_from_video",
+        "function:src/processing/media_processor.py:func/ThumbnailGenerator.generate"
+      ]
+    },
+    {
+      "name": "Infrastructure",
+      "description": "Reporting I/O, build scripts, AppImage packaging, runtime config, and Docker service definition",
+      "nodeIds": [
+        "config:file-docker-compose",
+        "config:file-requirements",
+        "concept:concept-helloz-service",
+        "file:scripts/AppRun",
+        "file:scripts/build_linux.sh",
+        "config:scripts/nudity-detector.desktop",
+        "config:scripts/nudity-detector.spec",
+        "config:config/app_config.json",
+        "config:openspec/config.yaml",
+        "config:file-openspec-yaml",
+        "file:src/reporting/__init__.py",
+        "file:src/reporting/report_manager.py",
+        "class:src/reporting/report_manager.py:class/ReportManager",
+        "function:src/reporting/report_manager.py:func/ReportManager.load_entries",
+        "function:src/reporting/report_manager.py:func/ReportManager.save_entries",
+        "function:src/reporting/report_manager.py:func/ReportManager._embed_thumbnails",
+        "function:src/reporting/report_manager.py:func/ReportManager.save_session",
+        "function:src/reporting/report_manager.py:func/ReportManager.load_session",
+        "function:src/reporting/report_manager.py:func/ReportManager.validate_report_dir"
+      ]
+    },
+    {
+      "name": "Documentation",
+      "description": "Docs, specs, README, license, and change-management documents",
+      "nodeIds": [
+        "file:file-LICENSE",
+        "file:file-README",
+        "file:file-design-md",
+        "file:file-proposal-md",
+        "file:file-tasks-md",
+        "file:docs/ARCHITECTURE.md",
+        "file:openspec/changes/modernize-ui-scan-workflow/specs/detected-media-review-and-actions/spec.md",
+        "file:openspec/changes/modernize-ui-scan-workflow/specs/scan-ui-settings-and-theme/spec.md"
+      ]
+    }
+  ],
+  "tour": {
+    "title": "Guided Tour: nudity-detector",
+    "description": "A Python application for detecting nudity/NSFW content in images and videos. It supports two detection backends \u2014 a local NudeNet ONNX model and a Docker-hosted Helloz NSFW HTTP API \u2014 and exposes both a GTK4 GUI and CLI entry points. Walk this tour from project overview down through domain models, detection pipeline, and infrastructure.",
+    "stops": [
+      {
+        "order": 1,
+        "nodeId": "file:file-README",
+        "title": "Project Overview",
+        "narrative": "Start here to understand the two detection backends (NudeNet local vs Helloz Docker API), supported media types, CLI vs GUI usage patterns, and output formats. The README also shows how to install dependencies and run each entry point."
+      },
+      {
+        "order": 2,
+        "nodeId": "file:src/core/constants.py",
+        "title": "Core Constants",
+        "narrative": "All shared magic values live here: nudity class labels, default confidence thresholds, GUI config, threading settings, Excel report column headers, and the Helloz API endpoint. Changing behaviour project-wide almost always starts here."
+      },
+      {
+        "order": 3,
+        "nodeId": "file:src/core/models.py",
+        "title": "Domain Data Models",
+        "narrative": "Four typed dataclasses define the data contract for the whole app: ScanConfig (user inputs), DetectionResult (raw model output), ReportEntry (normalised result row), and SessionState (full scan snapshot for persistence). Understand these before reading any detector or GUI code."
+      },
+      {
+        "order": 4,
+        "nodeId": "file:src/core/utils.py",
+        "title": "Detection Orchestration Pipeline",
+        "narrative": "This is the engine: classify_files_in_folder walks a folder tree and fans out to a configurable thread-pool of detector callables; handle_results normalises each hit into a ReportEntry and periodically flushes to disk; detect_with_timeout guards against stalled detector calls. All detector backends and the GUI thread both drive this pipeline."
+      },
+      {
+        "order": 5,
+        "nodeId": "file:run_nudenet.py",
+        "title": "NudeNet CLI Entry Point",
+        "narrative": "The simplest way to run the app: calls main() in src/detectors/nudenet.py, which initialises the local NudeDetector ONNX model, prompts for a folder and threshold, and feeds files through the shared worker-pool pipeline. Good starting point for tracing a full detection flow end-to-end."
+      },
+      {
+        "order": 6,
+        "nodeId": "file:src/detectors/nudenet.py",
+        "title": "NudeNet Detector Backend",
+        "narrative": "Wraps the nudenet Python library into the shared classify_files_in_folder contract. Key helpers: simplify_nudenet_results flattens raw bounding-box records, and get_nudenet_confidence extracts the highest score across nudity-relevant classes to decide whether the threshold is crossed."
+      },
+      {
+        "order": 7,
+        "nodeId": "file:src/detectors/helloz_nsfw.py",
+        "title": "Helloz NSFW Detector Backend",
+        "narrative": "Alternative backend that POSTs images to the Docker-hosted Helloz HTTP API instead of running inference locally. Shares the same worker-pool pipeline as the NudeNet backend, making the two backends interchangeable. Requires the Docker service (see docker-compose.yml) to be running first."
+      },
+      {
+        "order": 8,
+        "nodeId": "file:src/gui/app.py",
+        "title": "GTK4 GUI Application Window",
+        "narrative": "NudityDetectorWindow composes every GUI mixin (dialogs, preview, scan controls, results table, settings) into a three-tab Adw.ApplicationWindow. __init__ bootstraps config and restores the last session; _build_ui wires the toolbar and ViewStack. This is the integration point for all GUI-layer behaviour."
+      },
+      {
+        "order": 9,
+        "nodeId": "file:run_gui.py",
+        "title": "GUI Entry Point",
+        "narrative": "One-liner that calls main() from src/gui/app.py to launch the GTK4 application. Used directly during development and also referenced by the PyInstaller spec and AppImage runner for distribution builds."
+      },
+      {
+        "order": 10,
+        "nodeId": "config:file-docker-compose",
+        "title": "Helloz Service Infrastructure",
+        "narrative": "Defines the helloz/nsfw Docker container that powers the remote detection backend: exposes port 6086 with 10 workers. Spin this up before using the Helloz detector CLI or enabling the Helloz model in the GUI. The API endpoint URL is kept in src/core/constants.py."
+      }
+    ]
+  }
+}

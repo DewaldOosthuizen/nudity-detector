@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "projectName": "nudity-detector",
+  "analyzedAt": "2026-05-28T15:58:12.417950+00:00",
+  "gitCommitHash": "200b0911b8307de6476f1862144eb4ec41246960",
+  "languages": [
+    "Python",
+    "YAML",
+    "JSON",
+    "Shell",
+    "Markdown"
+  ],
+  "frameworks": [
+    "GTK4",
+    "Libadwaita",
+    "NudeNet",
+    "OpenCV",
+    "PyInstaller",
+    "openpyxl",
+    "Pillow"
+  ],
+  "totalFiles": 41,
+  "complexityEstimate": "medium"
+}

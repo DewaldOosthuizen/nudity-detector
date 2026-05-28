@@ -1,0 +1,1920 @@
+{
+  "version": "1.0.0",
+  "gitCommitHash": "200b0911b8307de6476f1862144eb4ec41246960",
+  "generatedAt": "2026-05-28T15:58:03.743Z",
+  "files": {
+    "README.md": {
+      "filePath": "README.md",
+      "contentHash": "127e44b726eaa96d66d979921e1f5d80f5f67a589f22f6e2f8d3929ff40973e1",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 305,
+      "hasStructuralAnalysis": true
+    },
+    "requirements.txt": {
+      "filePath": "requirements.txt",
+      "contentHash": "301b01869d407a8f3d394acdf0c8aae5fded3de410f700c26e24fb1489a5e1f8",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 12,
+      "hasStructuralAnalysis": false
+    },
+    "docker-compose.yml": {
+      "filePath": "docker-compose.yml",
+      "contentHash": "5b85043bd4553aeef14dda0a64231c95bb7c200242e1a301c327cba4fbd4e2f1",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 12,
+      "hasStructuralAnalysis": true
+    },
+    "LICENSE": {
+      "filePath": "LICENSE",
+      "contentHash": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 675,
+      "hasStructuralAnalysis": false
+    },
+    "run_gui.py": {
+      "filePath": "run_gui.py",
+      "contentHash": "e59ecb2c433ec0c5730f66ee32b3c3bed4e8a6b8ee1e557cc6ac1f7252004888",
+      "functions": [],
+      "classes": [],
+      "imports": [
+        {
+          "source": "src.gui.app",
+          "specifiers": [
+            "main"
+          ]
+        }
+      ],
+      "exports": [],
+      "totalLines": 7,
+      "hasStructuralAnalysis": true
+    },
+    "run_helloz_nsfw.py": {
+      "filePath": "run_helloz_nsfw.py",
+      "contentHash": "edbb48b62a5943ef6cf2cf1e4414048bad898eeb63d7e4898517db2bf236f244",
+      "functions": [],
+      "classes": [],
+      "imports": [
+        {
+          "source": "src.detectors.helloz_nsfw",
+          "specifiers": [
+            "main"
+          ]
+        }
+      ],
+      "exports": [],
+      "totalLines": 7,
+      "hasStructuralAnalysis": true
+    },
+    "run_nudenet.py": {
+      "filePath": "run_nudenet.py",
+      "contentHash": "a0bcc4c74d1924550a7f9394f3b9e3f72451ea8c85ffa6541ac168f8c51d58eb",
+      "functions": [],
+      "classes": [],
+      "imports": [
+        {
+          "source": "src.detectors.nudenet",
+          "specifiers": [
+            "main"
+          ]
+        }
+      ],
+      "exports": [],
+      "totalLines": 7,
+      "hasStructuralAnalysis": true
+    },
+    "config/app_config.json": {
+      "filePath": "config/app_config.json",
+      "contentHash": "3ff1d4c35a325c16f35b5427903b2b8648325b4c0d1df592d18e4ae5d55850b8",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 16,
+      "hasStructuralAnalysis": true
+    },
+    "docs/ARCHITECTURE.md": {
+      "filePath": "docs/ARCHITECTURE.md",
+      "contentHash": "f5650258d5c858212000c41d01d2a0691c9bc4a1cd3daf82f5fbd7b2e97f4ee8",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 211,
+      "hasStructuralAnalysis": true
+    },
+    "scripts/AppRun": {
+      "filePath": "scripts/AppRun",
+      "contentHash": "0f85071a17a836e2a3493194102e0f93d8374c17536472249e8f9134c094445c",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 42,
+      "hasStructuralAnalysis": false
+    },
+    "scripts/build_linux.sh": {
+      "filePath": "scripts/build_linux.sh",
+      "contentHash": "de66c83778c0bed3e00d473828d19fb9e0c04a63513f030787996dda7a1218c0",
+      "functions": [
+        {
+          "name": "info",
+          "params": [],
+          "exported": false,
+          "lineCount": 1
+        },
+        {
+          "name": "success",
+          "params": [],
+          "exported": false,
+          "lineCount": 1
+        },
+        {
+          "name": "warn",
+          "params": [],
+          "exported": false,
+          "lineCount": 1
+        },
+        {
+          "name": "error",
+          "params": [],
+          "exported": false,
+          "lineCount": 1
+        },
+        {
+          "name": "step",
+          "params": [],
+          "exported": false,
+          "lineCount": 1
+        },
+        {
+          "name": "download_tool",
+          "params": [],
+          "exported": false,
+          "lineCount": 11
+        }
+      ],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 304,
+      "hasStructuralAnalysis": true
+    },
+    "scripts/nudity-detector.desktop": {
+      "filePath": "scripts/nudity-detector.desktop",
+      "contentHash": "d7ec8616eb2cf4f1a29cc82c46b8a960ac56415325c63cefa40a9cd8bf20033a",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 12,
+      "hasStructuralAnalysis": false
+    },
+    "scripts/nudity-detector.spec": {
+      "filePath": "scripts/nudity-detector.spec",
+      "contentHash": "d9632d0093ba1491e2736e0d95f025a37d3a90840bc9140e1174ed4062851e06",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 139,
+      "hasStructuralAnalysis": false
+    },
+    "src/__init__.py": {
+      "filePath": "src/__init__.py",
+      "contentHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 1,
+      "hasStructuralAnalysis": true
+    },
+    "src/core/__init__.py": {
+      "filePath": "src/core/__init__.py",
+      "contentHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 1,
+      "hasStructuralAnalysis": true
+    },
+    "src/core/constants.py": {
+      "filePath": "src/core/constants.py",
+      "contentHash": "65085e6f647f34bedb03fc8eb883e726204a9f71837bf22b4dd7c1ab02c3a028",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 192,
+      "hasStructuralAnalysis": true
+    },
+    "src/core/models.py": {
+      "filePath": "src/core/models.py",
+      "contentHash": "e1ade1de6e45401ccff0647666cd11b6dfd11b852e0dfe9cc7071b9072fae97e",
+      "functions": [],
+      "classes": [
+        {
+          "name": "ScanConfig",
+          "methods": [
+            "to_dict",
+            "from_dict"
+          ],
+          "properties": [
+            "source_folder",
+            "model_name",
+            "threshold_percent",
+            "theme_mode"
+          ],
+          "exported": true,
+          "lineCount": 20
+        },
+        {
+          "name": "ReportEntry",
+          "methods": [
+            "to_dict",
+            "to_row",
+            "from_dict"
+          ],
+          "properties": [
+            "file",
+            "media_type",
+            "model_name",
+            "threshold_percent",
+            "confidence_percent",
+            "nudity_detected",
+            "detected_classes",
+            "thumbnail",
+            "date_classified"
+          ],
+          "exported": true,
+          "lineCount": 44
+        },
+        {
+          "name": "SessionState",
+          "methods": [
+            "__post_init__",
+            "to_dict",
+            "from_dict"
+          ],
+          "properties": [
+            "version",
+            "saved_at",
+            "scan_config",
+            "results"
+          ],
+          "exported": true,
+          "lineCount": 34
+        },
+        {
+          "name": "DetectionResult",
+          "methods": [
+            "_serialize_classes",
+            "to_report_entry"
+          ],
+          "properties": [
+            "file_path",
+            "media_type",
+            "model_name",
+            "raw_data",
+            "max_confidence",
+            "nudity_detected",
+            "detected_classes"
+          ],
+          "exported": true,
+          "lineCount": 34
+        }
+      ],
+      "imports": [
+        {
+          "source": "dataclasses",
+          "specifiers": [
+            "dataclass",
+            "field",
+            "asdict"
+          ]
+        },
+        {
+          "source": "datetime",
+          "specifiers": [
+            "datetime"
+          ]
+        },
+        {
+          "source": "json",
+          "specifiers": [
+            "json"
+          ]
+        },
+        {
+          "source": "typing",
+          "specifiers": [
+            "Dict",
+            "Any",
+            "List",
+            "Optional"
+          ]
+        },
+        {
+          "source": ".",
+          "specifiers": [
+            "constants"
+          ]
+        }
+      ],
+      "exports": [
+        "ScanConfig",
+        "ReportEntry",
+        "SessionState",
+        "DetectionResult"
+      ],
+      "totalLines": 156,
+      "hasStructuralAnalysis": true
+    },
+    "src/core/utils.py": {
+      "filePath": "src/core/utils.py",
+      "contentHash": "294b06bee1148caf7f6c2e0c7d4b7113ff737ec212e2fcd52b891f40e5e99670",
+      "functions": [
+        {
+          "name": "normalize_threshold",
+          "params": [
+            "threshold_value"
+          ],
+          "returnType": "float",
+          "exported": true,
+          "lineCount": 16
+        },
+        {
+          "name": "threshold_to_percent",
+          "params": [
+            "threshold_value"
+          ],
+          "returnType": "float",
+          "exported": true,
+          "lineCount": 3
+        },
+        {
+          "name": "make_scan_config",
+          "params": [
+            "source_folder",
+            "model_name",
+            "threshold_percent",
+            "theme_mode"
+          ],
+          "returnType": "dict",
+          "exported": true,
+          "lineCount": 9
+        },
+        {
+          "name": "create_session_state",
+          "params": [
+            "scan_config",
+            "results"
+          ],
+          "returnType": "dict",
+          "exported": true,
+          "lineCount": 6
+        },
+        {
+          "name": "reset_nudity_report",
+          "params": [],
+          "returnType": "None",
+          "exported": true,
+          "lineCount": 4
+        },
+        {
+          "name": "replace_nudity_report",
+          "params": [
+            "entries"
+          ],
+          "returnType": "None",
+          "exported": true,
+          "lineCount": 5
+        },
+        {
+          "name": "get_detected_results",
+          "params": [
+            "report_data"
+          ],
+          "returnType": "list",
+          "exported": true,
+          "lineCount": 4
+        },
+        {
+          "name": "get_report_path",
+          "params": [
+            "report_dir"
+          ],
+          "returnType": "str",
+          "exported": true,
+          "lineCount": 3
+        },
+        {
+          "name": "get_session_path",
+          "params": [
+            "report_file_path"
+          ],
+          "returnType": "str",
+          "exported": true,
+          "lineCount": 3
+        },
+        {
+          "name": "load_report_entries",
+          "params": [
+            "file_path"
+          ],
+          "returnType": "list",
+          "exported": true,
+          "lineCount": 4
+        },
+        {
+          "name": "save_nudity_report",
+          "params": [
+            "report_data",
+            "file_path",
+            "session_state"
+          ],
+          "returnType": "None",
+          "exported": true,
+          "lineCount": 19
+        },
+        {
+          "name": "load_scan_session",
+          "params": [
+            "file_path"
+          ],
+          "returnType": "dict",
+          "exported": true,
+          "lineCount": 4
+        },
+        {
+          "name": "load_existing_report",
+          "params": [
+            "file_path"
+          ],
+          "returnType": "set",
+          "exported": true,
+          "lineCount": 4
+        },
+        {
+          "name": "validate_report_dir",
+          "params": [
+            "report_dir"
+          ],
+          "returnType": "Tuple[bool, str]",
+          "exported": true,
+          "lineCount": 3
+        },
+        {
+          "name": "generate_image_thumbnail",
+          "params": [
+            "file_path",
+            "size"
+          ],
+          "returnType": "Optional[str]",
+          "exported": true,
+          "lineCount": 3
+        },
+        {
+          "name": "generate_video_thumbnail",
+          "params": [
+            "file_path",
+            "size"
+          ],
+          "returnType": "Optional[str]",
+          "exported": true,
+          "lineCount": 3
+        },
+        {
+          "name": "get_thumbnail",
+          "params": [
+            "file_path",
+            "media_type"
+          ],
+          "returnType": "Optional[str]",
+          "exported": true,
+          "lineCount": 3
+        },
+        {
+          "name": "detect_media_type_utils",
+          "params": [
+            "file_path"
+          ],
+          "returnType": "str",
+          "exported": true,
+          "lineCount": 3
+        },
+        {
+          "name": "detect_with_timeout",
+          "params": [
+            "detector",
+            "file_path",
+            "timeout_seconds"
+          ],
+          "returnType": "Optional[list]",
+          "exported": true,
+          "lineCount": 35
+        },
+        {
+          "name": "open_file",
+          "params": [
+            "file_path"
+          ],
+          "returnType": "Tuple[bool, str]",
+          "exported": true,
+          "lineCount": 26
+        },
+        {
+          "name": "delete_file_safely",
+          "params": [
+            "file_path"
+          ],
+          "returnType": "Tuple[bool, str]",
+          "exported": true,
+          "lineCount": 26
+        },
+        {
+          "name": "open_file_location",
+          "params": [
+            "file_path"
+          ],
+          "returnType": "Tuple[bool, str]",
+          "exported": true,
+          "lineCount": 24
+        },
+        {
+          "name": "process_file",
+          "params": [
+            "file_path",
+            "classify_image",
+            "classify_video"
+          ],
+          "returnType": "None",
+          "exported": true,
+          "lineCount": 11
+        },
+        {
+          "name": "count_supported_files",
+          "params": [
+            "folder_path"
+          ],
+          "returnType": "int",
+          "exported": true,
+          "lineCount": 20
+        },
+        {
+          "name": "classify_files_in_folder",
+          "params": [
+            "folder_path",
+            "classify_image",
+            "classify_video",
+            "worker_count",
+            "worker_timeout"
+          ],
+          "returnType": "None",
+          "exported": true,
+          "lineCount": 85
+        },
+        {
+          "name": "handle_results",
+          "params": [
+            "file_path",
+            "nudity_detected",
+            "raw_result",
+            "confidence_score",
+            "media_type",
+            "model_name",
+            "threshold_percent",
+            "report_dir"
+          ],
+          "returnType": "dict",
+          "exported": true,
+          "lineCount": 56
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "json",
+          "specifiers": [
+            "json"
+          ]
+        },
+        {
+          "source": "logging",
+          "specifiers": [
+            "logging"
+          ]
+        },
+        {
+          "source": "os",
+          "specifiers": [
+            "os"
+          ]
+        },
+        {
+          "source": "subprocess",
+          "specifiers": [
+            "subprocess"
+          ]
+        },
+        {
+          "source": "sys",
+          "specifiers": [
+            "sys"
+          ]
+        },
+        {
+          "source": "datetime",
+          "specifiers": [
+            "datetime"
+          ]
+        },
+        {
+          "source": "queue",
+          "specifiers": [
+            "Queue"
+          ]
+        },
+        {
+          "source": "threading",
+          "specifiers": [
+            "Lock",
+            "Thread"
+          ]
+        },
+        {
+          "source": "typing",
+          "specifiers": [
+            "Optional",
+            "Tuple"
+          ]
+        },
+        {
+          "source": ".",
+          "specifiers": [
+            "constants"
+          ]
+        },
+        {
+          "source": ".models",
+          "specifiers": [
+            "ReportEntry",
+            "SessionState",
+            "ScanConfig"
+          ]
+        },
+        {
+          "source": "..processing.media_processor",
+          "specifiers": [
+            "detect_media_type",
+            "is_supported_file",
+            "ThumbnailGenerator"
+          ]
+        },
+        {
+          "source": "..reporting.report_manager",
+          "specifiers": [
+            "ReportManager"
+          ]
+        }
+      ],
+      "exports": [
+        "normalize_threshold",
+        "threshold_to_percent",
+        "make_scan_config",
+        "create_session_state",
+        "reset_nudity_report",
+        "replace_nudity_report",
+        "get_detected_results",
+        "get_report_path",
+        "get_session_path",
+        "load_report_entries",
+        "save_nudity_report",
+        "load_scan_session",
+        "load_existing_report",
+        "validate_report_dir",
+        "generate_image_thumbnail",
+        "generate_video_thumbnail",
+        "get_thumbnail",
+        "detect_media_type_utils",
+        "detect_with_timeout",
+        "open_file",
+        "delete_file_safely",
+        "open_file_location",
+        "process_file",
+        "count_supported_files",
+        "classify_files_in_folder",
+        "handle_results"
+      ],
+      "totalLines": 493,
+      "hasStructuralAnalysis": true
+    },
+    "src/detectors/__init__.py": {
+      "filePath": "src/detectors/__init__.py",
+      "contentHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 1,
+      "hasStructuralAnalysis": true
+    },
+    "src/detectors/helloz_nsfw.py": {
+      "filePath": "src/detectors/helloz_nsfw.py",
+      "contentHash": "2dc68625d9e2eb7295e57a507afc954ce815616c466cedb838cb24d2857492b3",
+      "functions": [
+        {
+          "name": "prompt_threshold_percent",
+          "params": [
+            "default_percent"
+          ],
+          "exported": true,
+          "lineCount": 10
+        },
+        {
+          "name": "extract_frames",
+          "params": [
+            "file_path",
+            "frame_rate"
+          ],
+          "exported": true,
+          "lineCount": 4
+        },
+        {
+          "name": "main",
+          "params": [],
+          "exported": true,
+          "lineCount": 92
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "logging",
+          "specifiers": [
+            "logging"
+          ]
+        },
+        {
+          "source": "os",
+          "specifiers": [
+            "os"
+          ]
+        },
+        {
+          "source": "requests",
+          "specifiers": [
+            "requests"
+          ]
+        },
+        {
+          "source": "..core",
+          "specifiers": [
+            "constants"
+          ]
+        },
+        {
+          "source": "..core.utils",
+          "specifiers": [
+            "classify_files_in_folder",
+            "create_session_state",
+            "get_detected_results",
+            "get_report_path",
+            "handle_results",
+            "load_existing_report",
+            "make_scan_config",
+            "nudity_report",
+            "normalize_threshold",
+            "reset_nudity_report",
+            "save_nudity_report"
+          ]
+        },
+        {
+          "source": "..processing.media_processor",
+          "specifiers": [
+            "FrameExtractor"
+          ]
+        }
+      ],
+      "exports": [
+        "prompt_threshold_percent",
+        "extract_frames",
+        "main"
+      ],
+      "totalLines": 139,
+      "hasStructuralAnalysis": true
+    },
+    "src/detectors/nudenet.py": {
+      "filePath": "src/detectors/nudenet.py",
+      "contentHash": "4cfc6a7426bf5fdb747e0f9fd89718b1563cc0b7e2dd06a3eaa6658d5fba9540",
+      "functions": [
+        {
+          "name": "prompt_threshold_percent",
+          "params": [
+            "default_percent"
+          ],
+          "exported": true,
+          "lineCount": 10
+        },
+        {
+          "name": "simplify_nudenet_results",
+          "params": [
+            "detection_result"
+          ],
+          "exported": true,
+          "lineCount": 5
+        },
+        {
+          "name": "get_nudenet_confidence",
+          "params": [
+            "detection_result"
+          ],
+          "exported": true,
+          "lineCount": 7
+        },
+        {
+          "name": "main",
+          "params": [],
+          "exported": true,
+          "lineCount": 82
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "json",
+          "specifiers": [
+            "json"
+          ]
+        },
+        {
+          "source": "logging",
+          "specifiers": [
+            "logging"
+          ]
+        },
+        {
+          "source": "os",
+          "specifiers": [
+            "os"
+          ]
+        },
+        {
+          "source": "nudenet",
+          "specifiers": [
+            "NudeDetector"
+          ]
+        },
+        {
+          "source": "..core",
+          "specifiers": [
+            "constants"
+          ]
+        },
+        {
+          "source": "..core.utils",
+          "specifiers": [
+            "classify_files_in_folder",
+            "create_session_state",
+            "get_detected_results",
+            "get_report_path",
+            "handle_results",
+            "load_existing_report",
+            "make_scan_config",
+            "nudity_report",
+            "normalize_threshold",
+            "reset_nudity_report",
+            "save_nudity_report"
+          ]
+        },
+        {
+          "source": "..processing.media_processor",
+          "specifiers": [
+            "FrameExtractor"
+          ]
+        }
+      ],
+      "exports": [
+        "prompt_threshold_percent",
+        "simplify_nudenet_results",
+        "get_nudenet_confidence",
+        "main"
+      ],
+      "totalLines": 140,
+      "hasStructuralAnalysis": true
+    },
+    "src/gui/__init__.py": {
+      "filePath": "src/gui/__init__.py",
+      "contentHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 1,
+      "hasStructuralAnalysis": true
+    },
+    "src/gui/app.py": {
+      "filePath": "src/gui/app.py",
+      "contentHash": "7a9d353109c2f663ad65d36077bfc4b8a65ff89d606c5fee51aa3d0e88139d3f",
+      "functions": [
+        {
+          "name": "main",
+          "params": [],
+          "exported": true,
+          "lineCount": 3
+        }
+      ],
+      "classes": [
+        {
+          "name": "NudityDetectorWindow",
+          "methods": [
+            "__init__",
+            "_build_ui",
+            "_build_settings_tab",
+            "_build_scan_page",
+            "_col_setup",
+            "_col_bind_factory",
+            "_load_config",
+            "_save_config",
+            "_get_model",
+            "_get_theme_mode",
+            "_get_progress_interval",
+            "_get_video_frame_rate",
+            "_get_worker_thread_count",
+            "_get_worker_thread_timeout",
+            "_get_detect_timeout",
+            "_get_helloz_nsfw_host",
+            "_get_helloz_nsfw_port",
+            "_get_helloz_nsfw_api_endpoint",
+            "_get_helloz_nsfw_request_timeout",
+            "_get_helloz_nsfw_health_check_timeout",
+            "_get_helloz_nsfw_url",
+            "_get_helloz_nsfw_check_url",
+            "_apply_theme",
+            "_on_theme_selected",
+            "set_controls_for_processing",
+            "_on_tail_log_toggled",
+            "_on_verbose_log_toggled",
+            "log_message",
+            "_on_browse_clicked",
+            "_on_browse_done"
+          ],
+          "properties": [],
+          "exported": true,
+          "lineCount": 886
+        },
+        {
+          "name": "NudityDetectorApp",
+          "methods": [
+            "__init__",
+            "_on_activate",
+            "_on_close_request",
+            "_handle_quit_response"
+          ],
+          "properties": [],
+          "exported": true,
+          "lineCount": 29
+        }
+      ],
+      "imports": [
+        {
+          "source": "json",
+          "specifiers": [
+            "json"
+          ]
+        },
+        {
+          "source": "os",
+          "specifiers": [
+            "os"
+          ]
+        },
+        {
+          "source": "sys",
+          "specifiers": [
+            "sys"
+          ]
+        },
+        {
+          "source": "datetime",
+          "specifiers": [
+            "datetime"
+          ]
+        },
+        {
+          "source": "gi",
+          "specifiers": [
+            "gi"
+          ]
+        },
+        {
+          "source": "gi.repository",
+          "specifiers": [
+            "Adw",
+            "Gio",
+            "GLib",
+            "Gtk"
+          ]
+        },
+        {
+          "source": "..core",
+          "specifiers": [
+            "constants"
+          ]
+        },
+        {
+          "source": "..core.utils",
+          "specifiers": [
+            "get_report_path"
+          ]
+        },
+        {
+          "source": ".dialogs",
+          "specifiers": [
+            "DialogsMixin"
+          ]
+        },
+        {
+          "source": ".preview",
+          "specifiers": [
+            "PreviewMixin"
+          ]
+        },
+        {
+          "source": ".result_item",
+          "specifiers": [
+            "ResultItem"
+          ]
+        },
+        {
+          "source": ".results",
+          "specifiers": [
+            "ResultsMixin"
+          ]
+        },
+        {
+          "source": ".scan_history",
+          "specifiers": [
+            "ScanHistoryMixin"
+          ]
+        },
+        {
+          "source": ".scanning",
+          "specifiers": [
+            "ScanningMixin"
+          ]
+        },
+        {
+          "source": ".session",
+          "specifiers": [
+            "SessionMixin"
+          ]
+        }
+      ],
+      "exports": [
+        "NudityDetectorWindow",
+        "NudityDetectorApp",
+        "main"
+      ],
+      "totalLines": 960,
+      "hasStructuralAnalysis": true
+    },
+    "src/gui/dialogs.py": {
+      "filePath": "src/gui/dialogs.py",
+      "contentHash": "794e88e2555089647c664f64f69708ea1b81b264dbf9566ad18b737c40ec9de3",
+      "functions": [],
+      "classes": [
+        {
+          "name": "DialogsMixin",
+          "methods": [
+            "_show_error",
+            "_show_warning",
+            "_ask_yes_no"
+          ],
+          "properties": [],
+          "exported": true,
+          "lineCount": 20
+        }
+      ],
+      "imports": [
+        {
+          "source": "gi",
+          "specifiers": [
+            "gi"
+          ]
+        },
+        {
+          "source": "gi.repository",
+          "specifiers": [
+            "Adw"
+          ]
+        }
+      ],
+      "exports": [
+        "DialogsMixin"
+      ],
+      "totalLines": 26,
+      "hasStructuralAnalysis": true
+    },
+    "src/gui/preview.py": {
+      "filePath": "src/gui/preview.py",
+      "contentHash": "22d347645e2956d888a01b4dac7cf8954f6a3cc74542bf95fc1babf741bf0804",
+      "functions": [],
+      "classes": [
+        {
+          "name": "PreviewMixin",
+          "methods": [
+            "clear_thumbnail_preview",
+            "update_thumbnail_preview",
+            "_load_preview_image",
+            "_load_preview_from_file",
+            "_load_preview_from_thumbnail",
+            "_pil_to_pixbuf"
+          ],
+          "properties": [],
+          "exported": true,
+          "lineCount": 97
+        }
+      ],
+      "imports": [
+        {
+          "source": "base64",
+          "specifiers": [
+            "base64"
+          ]
+        },
+        {
+          "source": "io",
+          "specifiers": [
+            "BytesIO"
+          ]
+        },
+        {
+          "source": "gi",
+          "specifiers": [
+            "gi"
+          ]
+        },
+        {
+          "source": "gi.repository",
+          "specifiers": [
+            "Gdk",
+            "GdkPixbuf"
+          ]
+        },
+        {
+          "source": "..core",
+          "specifiers": [
+            "constants"
+          ]
+        },
+        {
+          "source": "..processing.media_processor",
+          "specifiers": [
+            "ThumbnailGenerator"
+          ]
+        }
+      ],
+      "exports": [
+        "PreviewMixin"
+      ],
+      "totalLines": 115,
+      "hasStructuralAnalysis": true
+    },
+    "src/gui/result_item.py": {
+      "filePath": "src/gui/result_item.py",
+      "contentHash": "30a6371597ad331f1d4ddd44d55f9e9c6e8bf6e317277cbc636fd42946714c75",
+      "functions": [],
+      "classes": [
+        {
+          "name": "ResultItem",
+          "methods": [
+            "__init__"
+          ],
+          "properties": [],
+          "exported": true,
+          "lineCount": 12
+        }
+      ],
+      "imports": [
+        {
+          "source": "gi",
+          "specifiers": [
+            "gi"
+          ]
+        },
+        {
+          "source": "gi.repository",
+          "specifiers": [
+            "GObject"
+          ]
+        }
+      ],
+      "exports": [
+        "ResultItem"
+      ],
+      "totalLines": 18,
+      "hasStructuralAnalysis": true
+    },
+    "src/gui/results.py": {
+      "filePath": "src/gui/results.py",
+      "contentHash": "a7fad5f18eeb43783c962b0eceb40591c173be6b2b9c2775ec07df1edea5d7c1",
+      "functions": [],
+      "classes": [
+        {
+          "name": "ResultsMixin",
+          "methods": [
+            "_on_open_file_clicked",
+            "_on_open_location_clicked",
+            "_on_delete_clicked",
+            "populate_results",
+            "append_results",
+            "_on_result_selection_changed",
+            "update_result_action_state",
+            "get_selected_entry",
+            "open_selected_file",
+            "open_selected_location",
+            "delete_selected_result",
+            "_do_delete"
+          ],
+          "properties": [],
+          "exported": true,
+          "lineCount": 148
+        }
+      ],
+      "imports": [
+        {
+          "source": "os",
+          "specifiers": [
+            "os"
+          ]
+        },
+        {
+          "source": "gi",
+          "specifiers": [
+            "gi"
+          ]
+        },
+        {
+          "source": "gi.repository",
+          "specifiers": [
+            "Gio",
+            "Gtk"
+          ]
+        },
+        {
+          "source": "..core",
+          "specifiers": [
+            "constants"
+          ]
+        },
+        {
+          "source": "..core.utils",
+          "specifiers": [
+            "delete_file_safely",
+            "nudity_report",
+            "open_file",
+            "open_file_location",
+            "replace_nudity_report",
+            "save_nudity_report"
+          ]
+        },
+        {
+          "source": ".result_item",
+          "specifiers": [
+            "ResultItem"
+          ]
+        }
+      ],
+      "exports": [
+        "ResultsMixin"
+      ],
+      "totalLines": 167,
+      "hasStructuralAnalysis": true
+    },
+    "src/gui/scan_history.py": {
+      "filePath": "src/gui/scan_history.py",
+      "contentHash": "67ef3e07ee1c25e714bb31ece4e1ca7fd2ac44f791520859b6fdd56aabf745f1",
+      "functions": [],
+      "classes": [
+        {
+          "name": "ScanRunItem",
+          "methods": [
+            "__init__"
+          ],
+          "properties": [],
+          "exported": true,
+          "lineCount": 14
+        },
+        {
+          "name": "ScanHistoryMixin",
+          "methods": [
+            "_build_scan_history_tab",
+            "_hist_col_setup",
+            "_hist_col_bind_factory",
+            "refresh_scan_history",
+            "_on_history_selection_changed",
+            "_update_history_action_state",
+            "_get_selected_history_item",
+            "_on_history_load_clicked",
+            "_on_history_export_clicked",
+            "_on_history_export_done",
+            "_on_history_delete_clicked",
+            "_on_history_delete_response",
+            "_on_history_clear_all_clicked",
+            "_on_history_clear_all_response",
+            "_export_from_session_json"
+          ],
+          "properties": [],
+          "exported": true,
+          "lineCount": 359
+        }
+      ],
+      "imports": [
+        {
+          "source": "json",
+          "specifiers": [
+            "json"
+          ]
+        },
+        {
+          "source": "os",
+          "specifiers": [
+            "os"
+          ]
+        },
+        {
+          "source": "shutil",
+          "specifiers": [
+            "shutil"
+          ]
+        },
+        {
+          "source": "threading",
+          "specifiers": [
+            "threading"
+          ]
+        },
+        {
+          "source": "datetime",
+          "specifiers": [
+            "datetime"
+          ]
+        },
+        {
+          "source": "gi",
+          "specifiers": [
+            "gi"
+          ]
+        },
+        {
+          "source": "gi.repository",
+          "specifiers": [
+            "Adw",
+            "GLib",
+            "GObject",
+            "Gio",
+            "Gtk"
+          ]
+        },
+        {
+          "source": "..core",
+          "specifiers": [
+            "constants"
+          ]
+        },
+        {
+          "source": "..core.utils",
+          "specifiers": [
+            "DEFAULT_REPORT_DIR",
+            "get_report_path",
+            "load_scan_session"
+          ]
+        }
+      ],
+      "exports": [
+        "ScanRunItem",
+        "ScanHistoryMixin"
+      ],
+      "totalLines": 391,
+      "hasStructuralAnalysis": true
+    },
+    "src/gui/scanning.py": {
+      "filePath": "src/gui/scanning.py",
+      "contentHash": "fc1fa539bd0fa1ff413d6dd6cd8b63555adf2fb703ac784ef96827416f2dfd84",
+      "functions": [],
+      "classes": [
+        {
+          "name": "ScanningMixin",
+          "methods": [
+            "_on_start_clicked",
+            "_on_stop_clicked",
+            "check_helloz_nsfw_server",
+            "start_scanning",
+            "stop_scanning",
+            "_frame_temp_dir_base",
+            "extract_video_frames",
+            "cleanup_frame_dir",
+            "create_nudenet_classifiers",
+            "request_helloz_nsfw_score",
+            "run_helloz_nsfw_image",
+            "run_helloz_nsfw_video",
+            "create_helloz_nsfw_classifiers",
+            "process_files",
+            "_start_progress_pulse",
+            "_set_scan_total",
+            "_pulse_tick",
+            "_apply_intermediate_results",
+            "finish_processing"
+          ],
+          "properties": [],
+          "exported": true,
+          "lineCount": 579
+        }
+      ],
+      "imports": [
+        {
+          "source": "logging",
+          "specifiers": [
+            "logging"
+          ]
+        },
+        {
+          "source": "os",
+          "specifiers": [
+            "os"
+          ]
+        },
+        {
+          "source": "shutil",
+          "specifiers": [
+            "shutil"
+          ]
+        },
+        {
+          "source": "sys",
+          "specifiers": [
+            "sys"
+          ]
+        },
+        {
+          "source": "tempfile",
+          "specifiers": [
+            "tempfile"
+          ]
+        },
+        {
+          "source": "threading",
+          "specifiers": [
+            "threading"
+          ]
+        },
+        {
+          "source": "datetime",
+          "specifiers": [
+            "datetime"
+          ]
+        },
+        {
+          "source": "functools",
+          "specifiers": [
+            "partial"
+          ]
+        },
+        {
+          "source": "cv2",
+          "specifiers": [
+            "cv2"
+          ]
+        },
+        {
+          "source": "gi",
+          "specifiers": [
+            "gi"
+          ]
+        },
+        {
+          "source": "gi.repository",
+          "specifiers": [
+            "GLib"
+          ]
+        },
+        {
+          "source": "..core",
+          "specifiers": [
+            "constants"
+          ]
+        },
+        {
+          "source": "..core.utils",
+          "specifiers": [
+            "DEFAULT_REPORT_DIR",
+            "classify_files_in_folder",
+            "count_supported_files",
+            "create_session_state",
+            "detect_with_timeout",
+            "get_detected_results",
+            "get_report_path",
+            "handle_results",
+            "make_scan_config",
+            "nudity_report",
+            "normalize_threshold",
+            "report_lock",
+            "reset_nudity_report",
+            "save_nudity_report"
+          ]
+        }
+      ],
+      "exports": [
+        "ScanningMixin"
+      ],
+      "totalLines": 614,
+      "hasStructuralAnalysis": true
+    },
+    "src/gui/session.py": {
+      "filePath": "src/gui/session.py",
+      "contentHash": "201685794da12b769ab2c4e5dae77393e6bf2197f12d445f828a4a08aca4fe8e",
+      "functions": [],
+      "classes": [
+        {
+          "name": "SessionMixin",
+          "methods": [
+            "_on_save_session_clicked",
+            "_on_load_session_clicked",
+            "_on_open_report_clicked",
+            "_on_open_reports_clicked",
+            "build_scan_config",
+            "build_session_state",
+            "_find_latest_report_path",
+            "load_initial_session",
+            "save_session_dialog",
+            "_on_save_session_done",
+            "load_session_dialog",
+            "_on_load_session_done",
+            "load_session_from_path",
+            "open_reports_folder",
+            "open_report"
+          ],
+          "properties": [],
+          "exported": true,
+          "lineCount": 180
+        }
+      ],
+      "imports": [
+        {
+          "source": "json",
+          "specifiers": [
+            "json"
+          ]
+        },
+        {
+          "source": "os",
+          "specifiers": [
+            "os"
+          ]
+        },
+        {
+          "source": "gi",
+          "specifiers": [
+            "gi"
+          ]
+        },
+        {
+          "source": "gi.repository",
+          "specifiers": [
+            "Gio",
+            "GLib",
+            "Gtk"
+          ]
+        },
+        {
+          "source": "..core",
+          "specifiers": [
+            "constants"
+          ]
+        },
+        {
+          "source": "..core.utils",
+          "specifiers": [
+            "DEFAULT_REPORT_DIR",
+            "create_session_state",
+            "get_detected_results",
+            "get_report_path",
+            "load_report_entries",
+            "load_scan_session",
+            "make_scan_config",
+            "nudity_report",
+            "replace_nudity_report",
+            "save_nudity_report"
+          ]
+        }
+      ],
+      "exports": [
+        "SessionMixin"
+      ],
+      "totalLines": 204,
+      "hasStructuralAnalysis": true
+    },
+    "src/processing/__init__.py": {
+      "filePath": "src/processing/__init__.py",
+      "contentHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 1,
+      "hasStructuralAnalysis": true
+    },
+    "src/processing/media_processor.py": {
+      "filePath": "src/processing/media_processor.py",
+      "contentHash": "7de9abfe35fa6144ae811a28a395e3620ce101be26a045b98a805cd12a6f4f72",
+      "functions": [
+        {
+          "name": "detect_media_type",
+          "params": [
+            "file_path"
+          ],
+          "returnType": "str",
+          "exported": true,
+          "lineCount": 18
+        },
+        {
+          "name": "is_supported_file",
+          "params": [
+            "file_path"
+          ],
+          "returnType": "bool",
+          "exported": true,
+          "lineCount": 3
+        }
+      ],
+      "classes": [
+        {
+          "name": "FrameExtractor",
+          "methods": [
+            "__init__",
+            "extract",
+            "cleanup"
+          ],
+          "properties": [],
+          "exported": true,
+          "lineCount": 67
+        },
+        {
+          "name": "ThumbnailGenerator",
+          "methods": [
+            "generate_from_image",
+            "generate_from_video",
+            "generate"
+          ],
+          "properties": [],
+          "exported": true,
+          "lineCount": 116
+        }
+      ],
+      "imports": [
+        {
+          "source": "base64",
+          "specifiers": [
+            "base64"
+          ]
+        },
+        {
+          "source": "logging",
+          "specifiers": [
+            "logging"
+          ]
+        },
+        {
+          "source": "os",
+          "specifiers": [
+            "os"
+          ]
+        },
+        {
+          "source": "shutil",
+          "specifiers": [
+            "shutil"
+          ]
+        },
+        {
+          "source": "tempfile",
+          "specifiers": [
+            "tempfile"
+          ]
+        },
+        {
+          "source": "io",
+          "specifiers": [
+            "BytesIO"
+          ]
+        },
+        {
+          "source": "typing",
+          "specifiers": [
+            "Optional",
+            "Tuple",
+            "List"
+          ]
+        },
+        {
+          "source": "..core",
+          "specifiers": [
+            "constants"
+          ]
+        }
+      ],
+      "exports": [
+        "detect_media_type",
+        "is_supported_file",
+        "FrameExtractor",
+        "ThumbnailGenerator"
+      ],
+      "totalLines": 238,
+      "hasStructuralAnalysis": true
+    },
+    "src/reporting/__init__.py": {
+      "filePath": "src/reporting/__init__.py",
+      "contentHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 1,
+      "hasStructuralAnalysis": true
+    },
+    "src/reporting/report_manager.py": {
+      "filePath": "src/reporting/report_manager.py",
+      "contentHash": "483caec41de43f5aca4f177fabcf8270f08242743ca5ca042662cc3ae0f78d47",
+      "functions": [],
+      "classes": [
+        {
+          "name": "ReportManager",
+          "methods": [
+            "get_report_path",
+            "get_session_path",
+            "validate_report_dir",
+            "load_entries",
+            "save_entries",
+            "_embed_thumbnails",
+            "save_session",
+            "load_session",
+            "create_demo_session"
+          ],
+          "properties": [],
+          "exported": true,
+          "lineCount": 291
+        }
+      ],
+      "imports": [
+        {
+          "source": "base64",
+          "specifiers": [
+            "base64"
+          ]
+        },
+        {
+          "source": "json",
+          "specifiers": [
+            "json"
+          ]
+        },
+        {
+          "source": "logging",
+          "specifiers": [
+            "logging"
+          ]
+        },
+        {
+          "source": "os",
+          "specifiers": [
+            "os"
+          ]
+        },
+        {
+          "source": "io",
+          "specifiers": [
+            "BytesIO"
+          ]
+        },
+        {
+          "source": "typing",
+          "specifiers": [
+            "List",
+            "Dict",
+            "Any",
+            "Optional"
+          ]
+        },
+        {
+          "source": "openpyxl",
+          "specifiers": [
+            "openpyxl"
+          ]
+        },
+        {
+          "source": "..core",
+          "specifiers": [
+            "constants"
+          ]
+        },
+        {
+          "source": "..core.models",
+          "specifiers": [
+            "ReportEntry",
+            "SessionState",
+            "ScanConfig"
+          ]
+        }
+      ],
+      "exports": [
+        "ReportManager"
+      ],
+      "totalLines": 321,
+      "hasStructuralAnalysis": true
+    },
+    "openspec/config.yaml": {
+      "filePath": "openspec/config.yaml",
+      "contentHash": "7f64d2448e1c83ffa6f2f3398b742fb5f2d4d3ea47b2c540a9076484977026b4",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 21,
+      "hasStructuralAnalysis": true
+    },
+    "openspec/changes/modernize-ui-scan-workflow/.openspec.yaml": {
+      "filePath": "openspec/changes/modernize-ui-scan-workflow/.openspec.yaml",
+      "contentHash": "4f93d662fb80ca232c2d1cbc25d0188443029046f768184ab596cba2252e8d5b",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 3,
+      "hasStructuralAnalysis": true
+    },
+    "openspec/changes/modernize-ui-scan-workflow/design.md": {
+      "filePath": "openspec/changes/modernize-ui-scan-workflow/design.md",
+      "contentHash": "60297787febddea547a87ababf98eb7c59bc1d786f6b76252e822e419eed04d7",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 50,
+      "hasStructuralAnalysis": true
+    },
+    "openspec/changes/modernize-ui-scan-workflow/proposal.md": {
+      "filePath": "openspec/changes/modernize-ui-scan-workflow/proposal.md",
+      "contentHash": "ef6e3408766817180004337915be4e6cb42583f6bfe1a3d69b464cbd83ce8e05",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 31,
+      "hasStructuralAnalysis": true
+    },
+    "openspec/changes/modernize-ui-scan-workflow/tasks.md": {
+      "filePath": "openspec/changes/modernize-ui-scan-workflow/tasks.md",
+      "contentHash": "10b9634bf123a03db2c37aa779508f187515185abb74da578f88de5cc6fdf5a8",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 25,
+      "hasStructuralAnalysis": true
+    },
+    "openspec/changes/modernize-ui-scan-workflow/specs/detected-media-review-and-actions/spec.md": {
+      "filePath": "openspec/changes/modernize-ui-scan-workflow/specs/detected-media-review-and-actions/spec.md",
+      "contentHash": "057e57fae745372344d32da5706f37fed71e4e370e6afcc0af1918ac2f41feb1",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 30,
+      "hasStructuralAnalysis": true
+    },
+    "openspec/changes/modernize-ui-scan-workflow/specs/scan-ui-settings-and-theme/spec.md": {
+      "filePath": "openspec/changes/modernize-ui-scan-workflow/specs/scan-ui-settings-and-theme/spec.md",
+      "contentHash": "a88ed7d837da8d385fba755574c46badec84462da4526b7f42121b7138a484ba",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 30,
+      "hasStructuralAnalysis": true
+    }
+  }
+}
