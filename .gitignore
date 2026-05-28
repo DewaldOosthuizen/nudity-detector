@@ -134,3 +134,7 @@ config/
 # AI
 .codegraph/
 openspec/
+
+# understand-anything
+.understand-anything/intermediate/
+.understand-anything/diff-overlay.json
