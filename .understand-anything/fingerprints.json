@@ -1,48 +1,8 @@
 {
   "version": "1.0.0",
-  "gitCommitHash": "200b0911b8307de6476f1862144eb4ec41246960",
-  "generatedAt": "2026-05-28T15:58:03.743Z",
+  "gitCommitHash": "9f2dab6cb7e82fd5fa1bd9b6dfa4943a2d61b91b",
+  "generatedAt": "2026-05-29T16:00:23.728Z",
   "files": {
-    "README.md": {
-      "filePath": "README.md",
-      "contentHash": "127e44b726eaa96d66d979921e1f5d80f5f67a589f22f6e2f8d3929ff40973e1",
-      "functions": [],
-      "classes": [],
-      "imports": [],
-      "exports": [],
-      "totalLines": 305,
-      "hasStructuralAnalysis": true
-    },
-    "requirements.txt": {
-      "filePath": "requirements.txt",
-      "contentHash": "301b01869d407a8f3d394acdf0c8aae5fded3de410f700c26e24fb1489a5e1f8",
-      "functions": [],
-      "classes": [],
-      "imports": [],
-      "exports": [],
-      "totalLines": 12,
-      "hasStructuralAnalysis": false
-    },
-    "docker-compose.yml": {
-      "filePath": "docker-compose.yml",
-      "contentHash": "5b85043bd4553aeef14dda0a64231c95bb7c200242e1a301c327cba4fbd4e2f1",
-      "functions": [],
-      "classes": [],
-      "imports": [],
-      "exports": [],
-      "totalLines": 12,
-      "hasStructuralAnalysis": true
-    },
-    "LICENSE": {
-      "filePath": "LICENSE",
-      "contentHash": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
-      "functions": [],
-      "classes": [],
-      "imports": [],
-      "exports": [],
-      "totalLines": 675,
-      "hasStructuralAnalysis": false
-    },
     "run_gui.py": {
       "filePath": "run_gui.py",
       "contentHash": "e59ecb2c433ec0c5730f66ee32b3c3bed4e8a6b8ee1e557cc6ac1f7252004888",
@@ -93,103 +53,6 @@
       "exports": [],
       "totalLines": 7,
       "hasStructuralAnalysis": true
-    },
-    "config/app_config.json": {
-      "filePath": "config/app_config.json",
-      "contentHash": "3ff1d4c35a325c16f35b5427903b2b8648325b4c0d1df592d18e4ae5d55850b8",
-      "functions": [],
-      "classes": [],
-      "imports": [],
-      "exports": [],
-      "totalLines": 16,
-      "hasStructuralAnalysis": true
-    },
-    "docs/ARCHITECTURE.md": {
-      "filePath": "docs/ARCHITECTURE.md",
-      "contentHash": "f5650258d5c858212000c41d01d2a0691c9bc4a1cd3daf82f5fbd7b2e97f4ee8",
-      "functions": [],
-      "classes": [],
-      "imports": [],
-      "exports": [],
-      "totalLines": 211,
-      "hasStructuralAnalysis": true
-    },
-    "scripts/AppRun": {
-      "filePath": "scripts/AppRun",
-      "contentHash": "0f85071a17a836e2a3493194102e0f93d8374c17536472249e8f9134c094445c",
-      "functions": [],
-      "classes": [],
-      "imports": [],
-      "exports": [],
-      "totalLines": 42,
-      "hasStructuralAnalysis": false
-    },
-    "scripts/build_linux.sh": {
-      "filePath": "scripts/build_linux.sh",
-      "contentHash": "de66c83778c0bed3e00d473828d19fb9e0c04a63513f030787996dda7a1218c0",
-      "functions": [
-        {
-          "name": "info",
-          "params": [],
-          "exported": false,
-          "lineCount": 1
-        },
-        {
-          "name": "success",
-          "params": [],
-          "exported": false,
-          "lineCount": 1
-        },
-        {
-          "name": "warn",
-          "params": [],
-          "exported": false,
-          "lineCount": 1
-        },
-        {
-          "name": "error",
-          "params": [],
-          "exported": false,
-          "lineCount": 1
-        },
-        {
-          "name": "step",
-          "params": [],
-          "exported": false,
-          "lineCount": 1
-        },
-        {
-          "name": "download_tool",
-          "params": [],
-          "exported": false,
-          "lineCount": 11
-        }
-      ],
-      "classes": [],
-      "imports": [],
-      "exports": [],
-      "totalLines": 304,
-      "hasStructuralAnalysis": true
-    },
-    "scripts/nudity-detector.desktop": {
-      "filePath": "scripts/nudity-detector.desktop",
-      "contentHash": "d7ec8616eb2cf4f1a29cc82c46b8a960ac56415325c63cefa40a9cd8bf20033a",
-      "functions": [],
-      "classes": [],
-      "imports": [],
-      "exports": [],
-      "totalLines": 12,
-      "hasStructuralAnalysis": false
-    },
-    "scripts/nudity-detector.spec": {
-      "filePath": "scripts/nudity-detector.spec",
-      "contentHash": "d9632d0093ba1491e2736e0d95f025a37d3a90840bc9140e1174ed4062851e06",
-      "functions": [],
-      "classes": [],
-      "imports": [],
-      "exports": [],
-      "totalLines": 139,
-      "hasStructuralAnalysis": false
     },
     "src/__init__.py": {
       "filePath": "src/__init__.py",
@@ -1846,74 +1709,24 @@
       "totalLines": 321,
       "hasStructuralAnalysis": true
     },
-    "openspec/config.yaml": {
-      "filePath": "openspec/config.yaml",
-      "contentHash": "7f64d2448e1c83ffa6f2f3398b742fb5f2d4d3ea47b2c540a9076484977026b4",
+    "requirements.txt": {
+      "filePath": "requirements.txt",
+      "contentHash": "301b01869d407a8f3d394acdf0c8aae5fded3de410f700c26e24fb1489a5e1f8",
       "functions": [],
       "classes": [],
       "imports": [],
       "exports": [],
-      "totalLines": 21,
-      "hasStructuralAnalysis": true
+      "totalLines": 12,
+      "hasStructuralAnalysis": false
     },
-    "openspec/changes/modernize-ui-scan-workflow/.openspec.yaml": {
-      "filePath": "openspec/changes/modernize-ui-scan-workflow/.openspec.yaml",
-      "contentHash": "4f93d662fb80ca232c2d1cbc25d0188443029046f768184ab596cba2252e8d5b",
+    "docker-compose.yml": {
+      "filePath": "docker-compose.yml",
+      "contentHash": "5b85043bd4553aeef14dda0a64231c95bb7c200242e1a301c327cba4fbd4e2f1",
       "functions": [],
       "classes": [],
       "imports": [],
       "exports": [],
-      "totalLines": 3,
-      "hasStructuralAnalysis": true
-    },
-    "openspec/changes/modernize-ui-scan-workflow/design.md": {
-      "filePath": "openspec/changes/modernize-ui-scan-workflow/design.md",
-      "contentHash": "60297787febddea547a87ababf98eb7c59bc1d786f6b76252e822e419eed04d7",
-      "functions": [],
-      "classes": [],
-      "imports": [],
-      "exports": [],
-      "totalLines": 50,
-      "hasStructuralAnalysis": true
-    },
-    "openspec/changes/modernize-ui-scan-workflow/proposal.md": {
-      "filePath": "openspec/changes/modernize-ui-scan-workflow/proposal.md",
-      "contentHash": "ef6e3408766817180004337915be4e6cb42583f6bfe1a3d69b464cbd83ce8e05",
-      "functions": [],
-      "classes": [],
-      "imports": [],
-      "exports": [],
-      "totalLines": 31,
-      "hasStructuralAnalysis": true
-    },
-    "openspec/changes/modernize-ui-scan-workflow/tasks.md": {
-      "filePath": "openspec/changes/modernize-ui-scan-workflow/tasks.md",
-      "contentHash": "10b9634bf123a03db2c37aa779508f187515185abb74da578f88de5cc6fdf5a8",
-      "functions": [],
-      "classes": [],
-      "imports": [],
-      "exports": [],
-      "totalLines": 25,
-      "hasStructuralAnalysis": true
-    },
-    "openspec/changes/modernize-ui-scan-workflow/specs/detected-media-review-and-actions/spec.md": {
-      "filePath": "openspec/changes/modernize-ui-scan-workflow/specs/detected-media-review-and-actions/spec.md",
-      "contentHash": "057e57fae745372344d32da5706f37fed71e4e370e6afcc0af1918ac2f41feb1",
-      "functions": [],
-      "classes": [],
-      "imports": [],
-      "exports": [],
-      "totalLines": 30,
-      "hasStructuralAnalysis": true
-    },
-    "openspec/changes/modernize-ui-scan-workflow/specs/scan-ui-settings-and-theme/spec.md": {
-      "filePath": "openspec/changes/modernize-ui-scan-workflow/specs/scan-ui-settings-and-theme/spec.md",
-      "contentHash": "a88ed7d837da8d385fba755574c46badec84462da4526b7f42121b7138a484ba",
-      "functions": [],
-      "classes": [],
-      "imports": [],
-      "exports": [],
-      "totalLines": 30,
+      "totalLines": 12,
       "hasStructuralAnalysis": true
     }
   }

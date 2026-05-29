@@ -1,24 +1,25 @@
 {
   "schemaVersion": 1,
+  "analyzedAt": "2026-05-29T16:00:37.364305Z",
+  "gitCommitHash": "9f2dab6cb7e82fd5fa1bd9b6dfa4943a2d61b91b",
   "projectName": "nudity-detector",
-  "analyzedAt": "2026-05-28T15:58:12.417950+00:00",
-  "gitCommitHash": "200b0911b8307de6476f1862144eb4ec41246960",
   "languages": [
-    "Python",
-    "YAML",
-    "JSON",
-    "Shell",
-    "Markdown"
+    "Python"
   ],
   "frameworks": [
     "GTK4",
-    "Libadwaita",
+    "libadwaita",
     "NudeNet",
     "OpenCV",
-    "PyInstaller",
-    "openpyxl",
     "Pillow"
   ],
-  "totalFiles": 41,
-  "complexityEstimate": "medium"
+  "totalFiles": 26,
+  "complexityEstimate": "medium",
+  "pipeline": "understand-anything-hermes",
+  "graphStats": {
+    "nodes": 58,
+    "edges": 75,
+    "layers": 7,
+    "tourStops": 10
+  }
 }
