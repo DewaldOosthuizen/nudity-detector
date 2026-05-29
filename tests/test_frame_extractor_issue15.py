@@ -71,6 +71,7 @@ def test_iter_frames_reuse_does_not_accumulate_stale_paths(tmp_path):
 
     assert len(extractor.frame_paths) == 3, f'Expected 3, got {len(extractor.frame_paths)}'
     assert second_temp_dir != first_temp_dir, 'Expected a new temp_dir on second call'
+    assert not os.path.isdir(first_temp_dir), 'Expected first temp_dir to be cleaned up on reuse'
 
     extractor.cleanup()
 
