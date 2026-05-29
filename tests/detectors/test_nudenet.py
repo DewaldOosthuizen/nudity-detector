@@ -1,5 +1,6 @@
 """Tests for src/detectors/nudenet.py"""
 import sys
+import pytest
 from unittest.mock import MagicMock
 
 # MUST stub nudenet before any import of src.detectors.nudenet
@@ -36,5 +37,3 @@ def test_get_nudenet_confidence_picks_nudity_class_only():
 def test_get_nudenet_confidence_empty():
     assert get_nudenet_confidence([]) == 0.0
 
-
-import pytest
