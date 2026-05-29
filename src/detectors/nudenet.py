@@ -93,17 +93,15 @@ def main():
             logging.info('Skipping already scanned file: %s', file_path)
             return
 
-        temp_dir = None
+        extractor = FrameExtractor(
+            frame_rate=constants.VIDEO_FRAME_RATE,
+            temp_prefix=constants.FRAME_TEMP_DIR_PREFIX_CLI_NUDENET,
+        )
         try:
-            extractor = FrameExtractor(
-                frame_rate=constants.VIDEO_FRAME_RATE,
-                temp_prefix=constants.FRAME_TEMP_DIR_PREFIX_CLI_NUDENET,
-            )
-            temp_dir, frame_paths = extractor.extract(file_path)
             detection_results = []
             max_confidence = 0.0
 
-            for frame_path in frame_paths:
+            for frame_path in extractor.iter_frames(file_path):
                 frame_result = detector.detect(frame_path)
                 simplified_frame = simplify_nudenet_results(frame_result)
                 detection_results.append({'frame': os.path.basename(frame_path), 'detections': simplified_frame})
@@ -123,8 +121,7 @@ def main():
         except Exception as error:
             logging.error('Error classifying video %s: %s', file_path, error)
         finally:
-            if temp_dir:
-                extractor.cleanup()
+            extractor.cleanup()
 
     logging.debug('User input folder: %s', folder_to_classify)
     reset_nudity_report()
