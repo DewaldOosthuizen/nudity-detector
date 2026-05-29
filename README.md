@@ -321,3 +321,23 @@ Ensure sufficient disk space for processing large files or folders.
 This project is licensed under the MIT License.
 
 For contributions or support, feel free to open an issue or a pull request. 😊
+
+## Development
+
+Install runtime and development dependencies:
+
+```bash
+pip install -r requirements.txt -r requirements-dev.txt
+```
+
+Run the test suite:
+
+```bash
+pytest tests/
+```
+
+Run with coverage report:
+
+```bash
+pytest --cov=src --cov-report=term-missing tests/
+```
