@@ -138,3 +138,6 @@ openspec/
 # understand-anything
 .understand-anything/intermediate/
 .understand-anything/diff-overlay.json
+# workspace-orchestrator managed entries
+.hermes_tmp_prompt.txt
+graphify-out/cache/
