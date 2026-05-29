@@ -4,7 +4,7 @@ import pytest
 from unittest.mock import MagicMock
 
 # Stub cv2 if not installed
-sys.modules.setdefault("cv2", MagicMock())
+sys.modules["cv2"] = MagicMock()
 
 from src.processing.media_processor import detect_media_type, is_supported_file, FrameExtractor
 from src.core import constants

@@ -4,7 +4,7 @@ import pytest
 from unittest.mock import MagicMock
 
 # MUST stub nudenet before any import of src.detectors.nudenet
-sys.modules.setdefault("nudenet", MagicMock())
+sys.modules["nudenet"] = MagicMock()
 
 from src.detectors.nudenet import simplify_nudenet_results, get_nudenet_confidence
 

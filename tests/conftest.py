@@ -16,7 +16,7 @@ def fake_report_entry():
     def _factory(
         file="/tmp/test_image.jpg",
         media_type="image",
-        model="nudenet",
+        model_name="nudenet",
         threshold_percent=60.0,
         confidence_percent=85.0,
         nudity_detected=True,
@@ -27,7 +27,7 @@ def fake_report_entry():
         return {
             "file": file,
             "media_type": media_type,
-            "model": model,
+            "model_name": model_name,
             "threshold_percent": threshold_percent,
             "confidence_percent": confidence_percent,
             "nudity_detected": nudity_detected,

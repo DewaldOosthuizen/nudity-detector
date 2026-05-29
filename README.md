@@ -305,10 +305,10 @@ For contributions or support, feel free to open an issue or a pull request. 😊
 
 ## Development
 
-Install development dependencies:
+Install runtime and development dependencies:
 
 ```bash
-pip install -r requirements-dev.txt
+pip install -r requirements.txt -r requirements-dev.txt
 ```
 
 Run the test suite:

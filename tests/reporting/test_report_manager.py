@@ -1,10 +1,4 @@
 """Tests for src/reporting/report_manager.py"""
-import sys
-import pytest
-from unittest.mock import MagicMock
-
-sys.modules.setdefault("nudenet", MagicMock())
-
 from src.reporting.report_manager import ReportManager
 
 

@@ -4,7 +4,7 @@ import pytest
 
 # Stub heavy optional deps before importing source modules
 from unittest.mock import MagicMock
-sys.modules.setdefault("nudenet", MagicMock())
+sys.modules["nudenet"] = MagicMock()
 
 from src.core.utils import (
     normalize_threshold,
