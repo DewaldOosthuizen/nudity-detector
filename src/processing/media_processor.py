@@ -115,7 +115,7 @@ class FrameExtractor:
         if cv2 is None:
             raise RuntimeError('OpenCV (cv2) is required for frame extraction but is not installed')
 
-        # Reset state — mirrors extract() lines 88-89.
+        # Clean up any previous temp directory and reset state for a new extraction run.
         self.cleanup()
         self.temp_dir = tempfile.mkdtemp(prefix=self.temp_prefix)
         self.frame_paths = []
