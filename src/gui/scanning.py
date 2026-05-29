@@ -147,10 +147,6 @@ class ScanningMixin:
         )
         return extractor, extractor.iter_frames(file_path)
 
-    @staticmethod
-    def cleanup_frame_dir(extractor, _frame_paths):
-        extractor.cleanup()
-
     # ------------------------------------------------------------------
     # NudeNet classifiers
     # ------------------------------------------------------------------
@@ -256,7 +252,7 @@ class ScanningMixin:
                     threshold_percent=threshold_percent,
                 )
             finally:
-                self.cleanup_frame_dir(extractor, frame_paths)
+                extractor.cleanup()
 
         return classify_image, classify_video
 
@@ -328,7 +324,7 @@ class ScanningMixin:
                 threshold_percent=threshold_percent,
             )
         finally:
-            self.cleanup_frame_dir(extractor, frame_paths)
+            extractor.cleanup()
 
     def create_helloz_nsfw_classifiers(self, existing_files, threshold_value, threshold_percent):
         import requests
