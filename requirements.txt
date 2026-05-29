@@ -3,7 +3,7 @@ nudenet==3.4.2
 VNudeNet==2.1.0
 openpyxl==3.1.5
 Pillow==12.2.0
-opencv-python-headless==4.13.0.92
+opencv-python==4.9.0.80
 requests==2.33.1
 Send2Trash==2.1.0
 darkdetect==0.8.0
