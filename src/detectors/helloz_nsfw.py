@@ -86,17 +86,15 @@ def main():
             logging.info('Skipping already scanned file: %s', file_path)
             return
 
-        temp_dir = None
+        extractor = FrameExtractor(
+            frame_rate=constants.VIDEO_FRAME_RATE,
+            temp_prefix=constants.FRAME_TEMP_DIR_PREFIX_CLI_HELLOZ_NSFW,
+        )
         try:
-            extractor = FrameExtractor(
-                frame_rate=constants.VIDEO_FRAME_RATE,
-                temp_prefix=constants.FRAME_TEMP_DIR_PREFIX_CLI_HELLOZ_NSFW,
-            )
-            temp_dir, frame_paths = extractor.extract(file_path)
             frame_scores = []
             max_confidence = 0.0
 
-            for frame_path in frame_paths:
+            for frame_path in extractor.iter_frames(file_path):
                 with open(frame_path, 'rb') as image_file:
                     response = requests.post(constants.HELLOZ_NSFW_URL, files={'file': image_file}, timeout=constants.HELLOZ_NSFW_REQUEST_TIMEOUT)
                 if response.status_code != 200:
@@ -122,8 +120,7 @@ def main():
         except Exception as error:
             logging.error('Error classifying video %s: %s', file_path, error)
         finally:
-            if temp_dir:
-                extractor.cleanup()
+            extractor.cleanup()
 
     logging.debug('User input folder: %s', folder_to_classify)
     reset_nudity_report()

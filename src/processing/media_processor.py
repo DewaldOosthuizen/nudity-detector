@@ -10,7 +10,7 @@ import os
 import shutil
 import tempfile
 from io import BytesIO
-from typing import Optional, Tuple, List
+from typing import Generator, Optional, Tuple, List
 
 try:
     import cv2
@@ -51,7 +51,12 @@ def is_supported_file(file_path: str) -> bool:
 
 
 class FrameExtractor:
-    """Extracts video frames with configurable sampling rate."""
+    """Extracts video frames with configurable sampling rate.
+
+    Supports both eager extraction via extract() and lazy/streaming
+    extraction via iter_frames(). Use iter_frames() for large videos
+    to enable early-exit and avoid writing unneeded frames to disk.
+    """
 
     def __init__(self, frame_rate: int = constants.VIDEO_FRAME_RATE, temp_prefix: str = ''):
         """Initialize frame extractor.
@@ -71,20 +76,46 @@ class FrameExtractor:
         self.frame_paths: List[str] = []
 
     def extract(self, file_path: str) -> Tuple[str, List[str]]:
-        """Extract frames from video file.
+        """Extract all frames from a video file (eager, backward-compatible shim).
 
-        Args:
-            file_path: Path to video file
+        Delegates to iter_frames(). Prefer iter_frames() for large videos
+        to enable early-exit and avoid writing unneeded frames.
 
         Returns:
             Tuple of (temp_dir, frame_paths)
+        """
+        # Consume the generator fully — iter_frames() resets state internally.
+        for _ in self.iter_frames(file_path):
+            pass
+        return self.temp_dir, self.frame_paths
+
+    # Benchmark note: For a 60-min video at 30fps with VIDEO_FRAME_RATE=10,
+    # early exit at frame N saves writing approximately (10800 - N) JPEG frames to disk.
+    def iter_frames(self, file_path: str) -> Generator[str, None, None]:
+        """Yield one frame path at a time for lazy/streaming processing.
+
+        Writes each sampled frame to a temporary directory on demand and
+        yields its path. The caller can break early to avoid writing
+        unneeded frames.
+
+        The temporary directory is owned by self.temp_dir. Callers MUST
+        call self.cleanup() unconditionally after iteration (even after
+        an early break), because the temp_dir is created before the first
+        yield.
+
+        Args:
+            file_path: Path to the video file.
+
+        Yields:
+            Absolute path to each written frame JPEG.
 
         Raises:
-            RuntimeError: If OpenCV is not available or video cannot be opened
+            RuntimeError: If OpenCV is unavailable or the video cannot be opened.
         """
         if cv2 is None:
             raise RuntimeError('OpenCV (cv2) is required for frame extraction but is not installed')
 
+        # Reset state — mirrors extract() lines 88-89.
         self.temp_dir = tempfile.mkdtemp(prefix=self.temp_prefix)
         self.frame_paths = []
 
@@ -99,17 +130,17 @@ class FrameExtractor:
                 ret, frame = cap.read()
                 if not ret:
                     break
-
                 if frame_count % self.frame_rate == 0:
-                    frame_path = os.path.join(self.temp_dir, constants.FRAME_FILE_NAME_PATTERN.format(frame_count))
+                    frame_path = os.path.join(
+                        self.temp_dir,
+                        constants.FRAME_FILE_NAME_PATTERN.format(frame_count)
+                    )
                     cv2.imwrite(frame_path, frame)
                     self.frame_paths.append(frame_path)
-
+                    yield frame_path
                 frame_count += 1
         finally:
             cap.release()
-
-        return self.temp_dir, self.frame_paths
 
     def cleanup(self) -> None:
         """Clean up temporary frame directory."""
