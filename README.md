@@ -74,14 +74,33 @@ Two detector backends are available:
 
 6. **Install requirements**:
 
+  Two dependency files are provided:
+
+  - `requirements.txt` — pinned runtime dependencies (all versions locked with `==`).
+  - `requirements-dev.txt` — includes `requirements.txt` plus dev/testing tools (`pip-audit`, `pytest`).
+
   Activate the venv environment if you are using one.
 
   ```bash
   source ./.venv/bin/activate
   ```
 
+  For running the application (runtime only):
+
   ```bash
   pip install -r requirements.txt
+  ```
+
+  For development and security auditing:
+
+  ```bash
+  pip install -r requirements-dev.txt
+  ```
+
+  To audit dependencies for known vulnerabilities:
+
+  ```bash
+  pip-audit -r requirements.txt
   ```
 
   or

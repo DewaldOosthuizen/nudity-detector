@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   helloz_nsfw:
-    image: helloz/nsfw
+    image: helloz/nsfw:1.0.0
     container_name: helloz_nsfw
     restart: unless-stopped
     ports:

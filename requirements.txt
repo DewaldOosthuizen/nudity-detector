@@ -1,11 +1,11 @@
 # pip install -r requirements.txt
-nudenet
-vnudenet
-openpyxl
-Pillow
-opencv-python
-requests
-Send2Trash
-darkdetect
+nudenet==3.4.2
+VNudeNet==2.1.0
+openpyxl==3.1.5
+Pillow==12.2.0
+opencv-python-headless==4.13.0.92
+requests==2.33.1
+Send2Trash==2.1.0
+darkdetect==0.8.0
 # GTK4 + libadwaita are system packages, install via:
 #   sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 gir1.2-gdkpixbuf-2.0
