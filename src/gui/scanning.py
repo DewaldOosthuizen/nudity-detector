@@ -1,19 +1,16 @@
 import logging
 import os
-import shutil
 import sys
-import tempfile
 import threading
 from datetime import datetime
 from functools import partial
-
-import cv2
 
 import gi
 gi.require_version('Gtk', '4.0')
 from gi.repository import GLib
 
 from ..core import constants
+from ..processing.media_processor import FrameExtractor
 from ..core.utils import (
     DEFAULT_REPORT_DIR,
     classify_files_in_folder,
@@ -144,27 +141,15 @@ class ScanningMixin:
         return None
 
     def extract_video_frames(self, file_path, temp_prefix):
-        temp_dir = tempfile.mkdtemp(prefix=temp_prefix, dir=self._frame_temp_dir_base())
-        frame_paths = []
-        cap = cv2.VideoCapture(file_path)
-        frame_count = 0
-        video_frame_rate = self._get_video_frame_rate()
-        try:
-            while cap.isOpened() and self.is_processing:
-                ret, frame = cap.read()
-                if not ret:
-                    break
-                if frame_count % video_frame_rate == 0:
-                    frame_path = os.path.join(temp_dir, constants.FRAME_FILE_NAME_PATTERN.format(frame_count))
-                    cv2.imwrite(frame_path, frame)
-                    frame_paths.append(frame_path)
-                frame_count += 1
-        finally:
-            cap.release()
-        return temp_dir, frame_paths
+        extractor = FrameExtractor(
+            frame_rate=self._get_video_frame_rate(),
+            temp_prefix=temp_prefix,
+        )
+        return extractor, extractor.iter_frames(file_path)
 
-    def cleanup_frame_dir(self, temp_dir, _frame_paths):
-        shutil.rmtree(temp_dir, ignore_errors=True)
+    @staticmethod
+    def cleanup_frame_dir(extractor, _frame_paths):
+        extractor.cleanup()
 
     # ------------------------------------------------------------------
     # NudeNet classifiers
@@ -232,7 +217,7 @@ class ScanningMixin:
                 return
             if self._verbose_log:
                 GLib.idle_add(self.log_message, f'Processing video: {os.path.basename(file_path)}')
-            temp_dir, frame_paths = self.extract_video_frames(file_path, constants.FRAME_TEMP_DIR_PREFIX_GUI_NUDENET)
+            extractor, frame_paths = self.extract_video_frames(file_path, constants.FRAME_TEMP_DIR_PREFIX_GUI_NUDENET)
             try:
                 detection_results = []
                 max_confidence = 0.0
@@ -271,7 +256,7 @@ class ScanningMixin:
                     threshold_percent=threshold_percent,
                 )
             finally:
-                self.cleanup_frame_dir(temp_dir, frame_paths)
+                self.cleanup_frame_dir(extractor, frame_paths)
 
         return classify_image, classify_video
 
@@ -318,7 +303,7 @@ class ScanningMixin:
             return
         if self._verbose_log:
             GLib.idle_add(self.log_message, f'Processing video: {os.path.basename(file_path)}')
-        temp_dir, frame_paths = self.extract_video_frames(file_path, constants.FRAME_TEMP_DIR_PREFIX_GUI_HELLOZ_NSFW)
+        extractor, frame_paths = self.extract_video_frames(file_path, constants.FRAME_TEMP_DIR_PREFIX_GUI_HELLOZ_NSFW)
         try:
             frame_scores = []
             max_confidence = 0.0
@@ -343,7 +328,7 @@ class ScanningMixin:
                 threshold_percent=threshold_percent,
             )
         finally:
-            self.cleanup_frame_dir(temp_dir, frame_paths)
+            self.cleanup_frame_dir(extractor, frame_paths)
 
     def create_helloz_nsfw_classifiers(self, existing_files, threshold_value, threshold_percent):
         import requests
