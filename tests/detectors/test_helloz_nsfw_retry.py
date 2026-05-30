@@ -1,13 +1,25 @@
 """Tests for issue #16 — retry logic and structured error reporting in helloz_nsfw."""
 import logging
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 import pytest
 import requests
 
 from src.detectors.helloz_nsfw import _post_with_retry, _record_error
-from src.core.utils import nudity_report, reset_nudity_report
+from src.core.scan_session import ScanSession
 from src.core import constants
+
+
+# ---------------------------------------------------------------------------
+# Helper: capture the ScanSession instance created inside main()
+# ---------------------------------------------------------------------------
+def _capturing_session_factory(captured):
+    """Return a ScanSession subclass that stores itself in *captured[0]*."""
+    class _CapturingScanSession(ScanSession):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            captured[0] = self
+    return _CapturingScanSession
 
 
 # ---------------------------------------------------------------------------
@@ -73,32 +85,28 @@ def test_classify_image_records_error_entry(tmp_path, caplog):
     img = tmp_path / 'test.jpg'
     img.write_bytes(b'fake')
 
-    reset_nudity_report()
+    captured = [None]
+    from src.detectors import helloz_nsfw
 
-    with patch('src.detectors.helloz_nsfw._post_with_retry',
+    with patch('src.detectors.helloz_nsfw.ScanSession', _capturing_session_factory(captured)), \
+         patch('src.detectors.helloz_nsfw._post_with_retry',
                side_effect=RuntimeError('service down')), \
-         patch('builtins.input', side_effect=['', str(tmp_path), '60']):
-        # Import main to get inner classify_image via module execution context
-        import importlib, sys
-        # We need to invoke classify_image directly; use the module-level helper
-        from src.detectors import helloz_nsfw
-        # Patch internals for a standalone call
-        with patch.object(helloz_nsfw, '_post_with_retry',
-                          side_effect=RuntimeError('service down')):
-            # Rebuild classify_image by calling main with mocked input and folder
-            with patch('builtins.input', side_effect=[str(tmp_path), '60']), \
-                 patch('src.detectors.helloz_nsfw.save_nudity_report'), \
-                 patch('src.detectors.helloz_nsfw.classify_files_in_folder') as mock_cff:
-                # Simulate classify_image being called
-                def fake_classify_files(folder, ci, cv, **kw):
-                    ci(str(img))
-                mock_cff.side_effect = fake_classify_files
-                helloz_nsfw.main()
+         patch('builtins.input', side_effect=[str(tmp_path), '60']), \
+         patch('src.detectors.helloz_nsfw.save_nudity_report'), \
+         patch('src.detectors.helloz_nsfw.classify_files_in_folder') as mock_cff:
 
+        def fake_classify_files(folder, ci, cv, **kw):
+            ci(str(img))
+        mock_cff.side_effect = fake_classify_files
+
+        helloz_nsfw.main()
+
+    session = captured[0]
+    assert session is not None
     error_entries = [
-        e for e in nudity_report
-        if isinstance(e.get(constants.RESULT_FIELD_CLASSES, ''), str)
-        and e[constants.RESULT_FIELD_CLASSES].startswith('ERROR:')
+        e for e in session.get_results()
+        if isinstance(e.detected_classes, str)
+        and e.detected_classes.startswith('ERROR:')
     ]
     assert len(error_entries) == 1
 
@@ -110,11 +118,15 @@ def test_classify_video_records_error_when_all_frames_fail(tmp_path):
     vid = tmp_path / 'test.mp4'
     vid.write_bytes(b'fake')
 
-    reset_nudity_report()
+    # Create the frame file so the failure comes from _post_with_retry, not open()
+    frame_file = tmp_path / 'frame_0.jpg'
+    frame_file.write_bytes(b'fake_frame')
 
+    captured = [None]
     from src.detectors import helloz_nsfw
 
-    with patch('src.detectors.helloz_nsfw._post_with_retry',
+    with patch('src.detectors.helloz_nsfw.ScanSession', _capturing_session_factory(captured)), \
+         patch('src.detectors.helloz_nsfw._post_with_retry',
                side_effect=RuntimeError('frame fail')), \
          patch('builtins.input', side_effect=[str(tmp_path), '60']), \
          patch('src.detectors.helloz_nsfw.save_nudity_report'), \
@@ -122,7 +134,7 @@ def test_classify_video_records_error_when_all_frames_fail(tmp_path):
          patch('src.detectors.helloz_nsfw.FrameExtractor') as MockFE:
 
         mock_extractor = MagicMock()
-        mock_extractor.iter_frames.return_value = iter([str(tmp_path / 'frame_0.jpg')])
+        mock_extractor.iter_frames.return_value = iter([str(frame_file)])
         MockFE.return_value = mock_extractor
 
         def fake_classify_files(folder, ci, cv, **kw):
@@ -131,10 +143,12 @@ def test_classify_video_records_error_when_all_frames_fail(tmp_path):
 
         helloz_nsfw.main()
 
+    session = captured[0]
+    assert session is not None
     error_entries = [
-        e for e in nudity_report
-        if isinstance(e.get(constants.RESULT_FIELD_CLASSES, ''), str)
-        and e[constants.RESULT_FIELD_CLASSES].startswith('ERROR:')
+        e for e in session.get_results()
+        if isinstance(e.detected_classes, str)
+        and e.detected_classes.startswith('ERROR:')
     ]
     assert len(error_entries) == 1
 
@@ -145,10 +159,6 @@ def test_classify_video_records_error_when_all_frames_fail(tmp_path):
 def test_classify_video_partial_success_calls_handle_results(tmp_path):
     vid = tmp_path / 'test.mp4'
     vid.write_bytes(b'fake')
-
-    reset_nudity_report()
-
-    from src.detectors import helloz_nsfw
 
     ok_response = MagicMock()
     ok_response.status_code = 200
@@ -161,7 +171,10 @@ def test_classify_video_partial_success_calls_handle_results(tmp_path):
 
     post_side_effects = [RuntimeError('frame fail'), ok_response]
 
-    with patch('src.detectors.helloz_nsfw._post_with_retry',
+    from src.detectors import helloz_nsfw
+
+    with patch('src.detectors.helloz_nsfw.ScanSession', ScanSession), \
+         patch('src.detectors.helloz_nsfw._post_with_retry',
                side_effect=post_side_effects), \
          patch('builtins.input', side_effect=[str(tmp_path), '60']), \
          patch('src.detectors.helloz_nsfw.save_nudity_report'), \
@@ -189,11 +202,10 @@ def test_main_emits_warning_for_error_entries(tmp_path, caplog):
     img = tmp_path / 'test.jpg'
     img.write_bytes(b'fake')
 
-    reset_nudity_report()
-
     from src.detectors import helloz_nsfw
 
     with caplog.at_level(logging.WARNING, logger='root'), \
+         patch('src.detectors.helloz_nsfw.ScanSession', ScanSession), \
          patch('src.detectors.helloz_nsfw._post_with_retry',
                side_effect=RuntimeError('service down')), \
          patch('builtins.input', side_effect=[str(tmp_path), '60']), \

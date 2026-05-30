@@ -5,6 +5,8 @@ import time
 import requests
 
 from ..core import constants
+from ..core.scan_session import ScanSession
+from ..core.models import ReportEntry
 from ..core.utils import (
     classify_files_in_folder,
     create_session_state,
@@ -13,10 +15,7 @@ from ..core.utils import (
     handle_results,
     load_existing_report,
     make_scan_config,
-    nudity_report,
     normalize_threshold,
-    report_lock,
-    reset_nudity_report,
     save_nudity_report,
 )
 from ..processing.media_processor import FrameExtractor, detect_media_type
@@ -31,9 +30,17 @@ def _post_with_retry(url, files, timeout,
 
     Returns the first response whose status code is below 500.
     Retries on 5xx responses and on RequestException (network errors).
+    Rewinds any file-like objects in `files` before each attempt so that
+    repeated tries always send the full body.
     """
     last_exc = None
     for attempt in range(retries):
+        # Rewind file handles before each attempt so retries send the full body.
+        for _key, value in files.items():
+            # Support plain file objects and (filename, fileobj[, content_type]) tuples.
+            obj = value[1] if isinstance(value, tuple) else value
+            if hasattr(obj, 'seek'):
+                obj.seek(0)
         try:
             response = requests.post(url, files=files, timeout=timeout)
             if response.status_code < 500:
@@ -55,21 +62,21 @@ def _post_with_retry(url, files, timeout,
     )
 
 
-def _record_error(file_path, error, model_name, threshold_percent):
-    """Append an ERROR sentinel entry to nudity_report for a failed file."""
+def _record_error(file_path, error, model_name, threshold_percent, session):
+    """Append an ERROR sentinel entry to *session* for a failed file."""
     media_type = detect_media_type(file_path)
-    with report_lock:
-        nudity_report.append({
-            constants.RESULT_FIELD_FILE: file_path,
-            constants.RESULT_FIELD_MEDIA_TYPE: media_type,
-            constants.RESULT_FIELD_MODEL: model_name,
-            constants.RESULT_FIELD_THRESHOLD: threshold_percent,
-            constants.RESULT_FIELD_CONFIDENCE: 0.0,
-            constants.RESULT_FIELD_NUDITY: False,
-            constants.RESULT_FIELD_CLASSES: f'ERROR: {error}',
-            constants.RESULT_FIELD_THUMBNAIL: '',
-            constants.RESULT_FIELD_DATE: '',
-        })
+    entry = ReportEntry(
+        file=file_path,
+        media_type=media_type,
+        model_name=model_name,
+        threshold_percent=threshold_percent,
+        confidence_percent=0.0,
+        nudity_detected=False,
+        detected_classes=f'ERROR: {error}',
+        thumbnail='',
+        date_classified='',
+    )
+    session.add_result(entry)
 
 
 def prompt_threshold_percent(default_percent=constants.DEFAULT_THRESHOLD_PERCENT):
@@ -93,6 +100,7 @@ def extract_frames(file_path, frame_rate=constants.VIDEO_FRAME_RATE):
 def main():
     report_path = get_report_path()
     existing_files = load_existing_report(report_path)
+    session = ScanSession()
 
     folder_to_classify = input('Enter the path to the folder: ').strip()
     threshold_percent = prompt_threshold_percent()
@@ -122,6 +130,7 @@ def main():
                 file_path,
                 confidence_score >= threshold_value,
                 result,
+                session=session,
                 confidence_score=confidence_score,
                 media_type=constants.MEDIA_TYPE_IMAGE,
                 model_name=constants.MODEL_HELLOZ_NSFW,
@@ -129,7 +138,7 @@ def main():
             )
         except Exception as error:
             logging.error('Error classifying image %s: %s', file_path, error)
-            _record_error(file_path, error, constants.MODEL_HELLOZ_NSFW, threshold_percent)
+            _record_error(file_path, error, constants.MODEL_HELLOZ_NSFW, threshold_percent, session)
 
     def classify_video(file_path):
         if file_path in existing_files:
@@ -171,6 +180,7 @@ def main():
                 file_path,
                 max_confidence >= threshold_value,
                 frame_scores,
+                session=session,
                 confidence_score=max_confidence,
                 media_type=constants.MEDIA_TYPE_VIDEO,
                 model_name=constants.MODEL_HELLOZ_NSFW,
@@ -178,18 +188,18 @@ def main():
             )
         except Exception as error:
             logging.error('Error classifying video %s: %s', file_path, error)
-            _record_error(file_path, error, constants.MODEL_HELLOZ_NSFW, threshold_percent)
+            _record_error(file_path, error, constants.MODEL_HELLOZ_NSFW, threshold_percent, session)
         finally:
             extractor.cleanup()
 
     logging.debug('User input folder: %s', folder_to_classify)
-    reset_nudity_report()
     classify_files_in_folder(folder_to_classify, classify_image, classify_video)
 
+    all_results = session.get_results()
     error_count = sum(
-        1 for entry in nudity_report
-        if isinstance(entry.get(constants.RESULT_FIELD_CLASSES, ''), str)
-        and entry[constants.RESULT_FIELD_CLASSES].startswith('ERROR:')
+        1 for entry in all_results
+        if isinstance(entry.detected_classes, str)
+        and entry.detected_classes.startswith('ERROR:')
     )
     if error_count:
         logging.warning(
@@ -198,8 +208,8 @@ def main():
             error_count,
         )
 
-    session_state = create_session_state(scan_config=scan_config, results=get_detected_results(nudity_report))
-    save_nudity_report(nudity_report, report_path, session_state=session_state)
+    session_state = create_session_state(scan_config=scan_config, results=get_detected_results(all_results))
+    save_nudity_report(all_results, report_path, session_state=session_state)
     logging.info('Report saved to %s', report_path)
 
 

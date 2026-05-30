@@ -21,12 +21,10 @@ from ..core.utils import (
     get_report_path,
     handle_results,
     make_scan_config,
-    nudity_report,
     normalize_threshold,
-    report_lock,
-    reset_nudity_report,
     save_nudity_report,
 )
+from ..core.scan_session import ScanSession
 
 
 class ScanningMixin:
@@ -78,7 +76,7 @@ class ScanningMixin:
         self.is_processing = True
         self.detected_results = []
         self.populate_results([])
-        reset_nudity_report()
+        self._scan_session = ScanSession()
         self.log_buffer.set_text('')
         self.set_controls_for_processing(True)
         self._start_progress_pulse()
@@ -151,7 +149,7 @@ class ScanningMixin:
     # NudeNet classifiers
     # ------------------------------------------------------------------
 
-    def create_nudenet_classifiers(self, existing_files, threshold_value, threshold_percent):
+    def create_nudenet_classifiers(self, existing_files, threshold_value, threshold_percent, session):
         from nudenet import NudeDetector
 
         detector = NudeDetector()
@@ -202,6 +200,7 @@ class ScanningMixin:
                 file_path,
                 confidence_score >= threshold_value,
                 simplify_results(detection_result),
+                session=session,
                 confidence_score=confidence_score,
                 media_type='image',
                 model_name='nudenet',
@@ -246,6 +245,7 @@ class ScanningMixin:
                     file_path,
                     max_confidence >= threshold_value,
                     detection_results,
+                    session=session,
                     confidence_score=max_confidence,
                     media_type='video',
                     model_name='nudenet',
@@ -274,7 +274,7 @@ class ScanningMixin:
         confidence_score = float(result.get('data', {}).get('nsfw', 0.0))
         return result, confidence_score
 
-    def run_helloz_nsfw_image(self, file_path, existing_files, threshold_value, threshold_percent, requests_module, helloz_nsfw_url, request_timeout):
+    def run_helloz_nsfw_image(self, file_path, existing_files, threshold_value, threshold_percent, requests_module, helloz_nsfw_url, request_timeout, session):
         if not self.is_processing or file_path in existing_files:
             return
         if self._verbose_log:
@@ -288,13 +288,14 @@ class ScanningMixin:
             file_path,
             confidence_score >= threshold_value,
             result,
+            session=session,
             confidence_score=confidence_score,
             media_type='image',
             model_name='helloz_nsfw',
             threshold_percent=threshold_percent,
         )
 
-    def run_helloz_nsfw_video(self, file_path, existing_files, threshold_value, threshold_percent, requests_module, helloz_nsfw_url, request_timeout):
+    def run_helloz_nsfw_video(self, file_path, existing_files, threshold_value, threshold_percent, requests_module, helloz_nsfw_url, request_timeout, session):
         if not self.is_processing or file_path in existing_files:
             return
         if self._verbose_log:
@@ -318,6 +319,7 @@ class ScanningMixin:
                 file_path,
                 max_confidence >= threshold_value,
                 frame_scores,
+                session=session,
                 confidence_score=max_confidence,
                 media_type='video',
                 model_name='helloz_nsfw',
@@ -326,7 +328,7 @@ class ScanningMixin:
         finally:
             extractor.cleanup()
 
-    def create_helloz_nsfw_classifiers(self, existing_files, threshold_value, threshold_percent):
+    def create_helloz_nsfw_classifiers(self, existing_files, threshold_value, threshold_percent, session):
         import requests
 
         helloz_nsfw_url = self._get_helloz_nsfw_url()
@@ -340,6 +342,7 @@ class ScanningMixin:
                 requests_module=requests,
                 helloz_nsfw_url=helloz_nsfw_url,
                 request_timeout=request_timeout,
+                session=session,
             ),
             partial(
                 self.run_helloz_nsfw_video,
@@ -349,6 +352,7 @@ class ScanningMixin:
                 requests_module=requests,
                 helloz_nsfw_url=helloz_nsfw_url,
                 request_timeout=request_timeout,
+                session=session,
             ),
         )
 
@@ -366,6 +370,9 @@ class ScanningMixin:
         update_interval = self._get_progress_interval()
         files_processed = [0]
         count_lock = threading.Lock()
+        # Capture the session reference once so that a history-tab reload that
+        # replaces self._scan_session cannot affect the in-flight scan.
+        scan_session = self._scan_session
 
         # ------------------------------------------------------------------
         # Step 1 — Count supported files before starting workers.
@@ -409,8 +416,7 @@ class ScanningMixin:
             """Queue a partial report snapshot for async save, then push new results to UI."""
             snapshot = []
             try:
-                with report_lock:
-                    snapshot = list(nudity_report)
+                snapshot = scan_session.get_results()
                 intermediate_session = create_session_state(
                     scan_config=make_scan_config(
                         source_folder=folder_path,
@@ -467,11 +473,11 @@ class ScanningMixin:
         try:
             if model_name == constants.MODEL_NUDENET:
                 classify_image, classify_video = self.create_nudenet_classifiers(
-                    existing_files, threshold_value, threshold_percent,
+                    existing_files, threshold_value, threshold_percent, scan_session,
                 )
             else:
                 classify_image, classify_video = self.create_helloz_nsfw_classifiers(
-                    existing_files, threshold_value, threshold_percent,
+                    existing_files, threshold_value, threshold_percent, scan_session,
                 )
 
             classify_image = _with_progress(classify_image)
@@ -487,12 +493,13 @@ class ScanningMixin:
 
             processed = files_processed[0]
             skipped = total_files - processed
-            self.detected_results = get_detected_results(nudity_report)
+            all_results = scan_session.get_results()
+            self.detected_results = get_detected_results(all_results)
             self.last_report_path = report_path
             session_state = self.build_session_state()
 
             # Write the final definitive report (save thread already drained via finally).
-            save_nudity_report(nudity_report, report_path, session_state=session_state)
+            save_nudity_report(all_results, report_path, session_state=session_state)
             elapsed = datetime.now() - scan_start_time
             total_seconds = int(elapsed.total_seconds())
             minutes, seconds = divmod(total_seconds, 60)
