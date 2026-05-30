@@ -7,3 +7,38 @@ updates:
     open-pull-requests-limit: 5
     # Dependabot targets requirements.in (the abstract constraints file).
     # After merging, run: pip-compile requirements.in -o requirements.txt
+    groups:
+      ml-inference:
+        comment: "ML / inference engines — nudenet, VNudeNet, opencv"
+        patterns:
+          - "nudenet"
+          - "VNudeNet"
+          - "opencv-python"
+
+      image-processing:
+        comment: "Image processing — Pillow"
+        patterns:
+          - "Pillow"
+
+      data-export:
+        comment: "Data / export — openpyxl"
+        patterns:
+          - "openpyxl"
+
+      http:
+        comment: "HTTP client — requests"
+        patterns:
+          - "requests"
+
+      ui-system:
+        comment: "UI / system utilities — Send2Trash, darkdetect"
+        patterns:
+          - "Send2Trash"
+          - "darkdetect"
+
+      dev-testing:
+        comment: "Dev / test tooling — pytest, coverage, audit"
+        patterns:
+          - "pytest"
+          - "pytest-*"
+          - "pip-audit"
