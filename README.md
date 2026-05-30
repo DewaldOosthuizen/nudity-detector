@@ -341,3 +341,24 @@ Run with coverage report:
 ```bash
 pytest --cov=src --cov-report=term-missing tests/
 ```
+
+## Dependency Management
+
+This project uses a pip-tools two-file workflow to keep dependencies fully pinned and reproducible.
+
+- requirements.in  — human-edited abstract file with version ranges (source of truth)
+- requirements.txt — auto-generated lock file produced by pip-compile (do NOT edit by hand)
+
+### Upgrading or adding a dependency
+
+1. Edit requirements.in (add a package or widen/tighten a version range).
+2. Regenerate the lock file:
+   pip-compile requirements.in -o requirements.txt
+3. Install from the lock file:
+   pip install -r requirements.txt
+4. Run the test suite to confirm no regressions:
+   pytest tests/
+5. Commit both files together:
+   git add requirements.in requirements.txt && git commit
+
+Important: never use "pip freeze > requirements.txt". Always regenerate via pip-compile.
