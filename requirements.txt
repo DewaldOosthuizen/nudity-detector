@@ -79,7 +79,7 @@ scikit-image==0.26.0
     # via vnudenet
 scipy==1.17.1
     # via scikit-image
-send2trash==1.8.3
+send2trash==2.1.0
     # via -r requirements.in
 tifffile==2026.5.15
     # via scikit-image
