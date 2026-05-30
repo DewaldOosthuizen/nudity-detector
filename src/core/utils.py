@@ -7,7 +7,6 @@ This module provides:
 - Integration layer between detection models and storage
 
 Thread Safety:
-- nudity_report list is protected by report_lock
 - Worker threads are non-daemon to ensure proper cleanup
 - All thread operations have explicit join() with timeout
 """
@@ -19,7 +18,7 @@ import subprocess
 import sys
 from datetime import datetime
 from queue import Queue
-from threading import Lock, Thread
+from threading import Thread
 from typing import Optional, Tuple
 
 try:
@@ -29,15 +28,9 @@ except ImportError:
 
 from . import constants
 from .models import ReportEntry, SessionState, ScanConfig
+from .scan_session import ScanSession
 from ..processing.media_processor import detect_media_type, is_supported_file, ThumbnailGenerator
 from ..reporting.report_manager import ReportManager
-
-
-# ============================================================================
-# Global State Management
-# ============================================================================
-nudity_report = []
-report_lock = Lock()
 
 
 # ============================================================================
@@ -88,23 +81,9 @@ def create_session_state(scan_config=None, results=None) -> dict:
     return state.to_dict()
 
 
-def reset_nudity_report() -> None:
-    """Clear the global nudity report list."""
-    with report_lock:
-        nudity_report.clear()
-
-
-def replace_nudity_report(entries: list) -> None:
-    """Replace nudity report contents."""
-    with report_lock:
-        nudity_report.clear()
-        nudity_report.extend(entries)
-
-
-def get_detected_results(report_data=None) -> list:
+def get_detected_results(report_data: list) -> list:
     """Get results where nudity was detected."""
-    data = report_data if report_data is not None else nudity_report
-    return [entry for entry in data if (entry.get('nudity_detected') if isinstance(entry, dict) else entry.nudity_detected)]
+    return [entry for entry in report_data if (entry.get('nudity_detected') if isinstance(entry, dict) else entry.nudity_detected)]
 
 
 # ============================================================================
@@ -438,6 +417,7 @@ def handle_results(
     file_path: str,
     nudity_detected: bool,
     raw_result,
+    session: ScanSession,
     confidence_score: float = 0.0,
     media_type: Optional[str] = None,
     model_name: str = '',
@@ -450,6 +430,7 @@ def handle_results(
         file_path: Original file path
         nudity_detected: Whether nudity was detected
         raw_result: Raw detection result
+        session: ScanSession to append the result to
         confidence_score: Confidence score (0-1)
         media_type: Media type (auto-detected if None)
         model_name: Detection model name
@@ -469,24 +450,24 @@ def handle_results(
     if nudity_detected:
         os.makedirs(report_dir, exist_ok=True)
 
-    # Create and cache entry
-    with report_lock:
-        entry_data = {
-            constants.RESULT_FIELD_FILE: file_path,
-            constants.RESULT_FIELD_MEDIA_TYPE: media_type or detect_media_type(file_path),
-            constants.RESULT_FIELD_MODEL: model_name,
-            constants.RESULT_FIELD_THRESHOLD: threshold_to_percent(threshold_percent),
-            constants.RESULT_FIELD_CONFIDENCE: round(max(0.0, min(float(confidence_score), 1.0)) * 100, 2),
-            constants.RESULT_FIELD_NUDITY: bool(nudity_detected),
-            constants.RESULT_FIELD_CLASSES: json.dumps(raw_result, ensure_ascii=False) if not isinstance(raw_result, str) else raw_result,
-            constants.RESULT_FIELD_THUMBNAIL: thumbnail,
-            constants.RESULT_FIELD_DATE: datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-        }
-        nudity_report.append(entry_data)
+    # Create entry
+    entry_data = {
+        constants.RESULT_FIELD_FILE: file_path,
+        constants.RESULT_FIELD_MEDIA_TYPE: media_type or detect_media_type(file_path),
+        constants.RESULT_FIELD_MODEL: model_name,
+        constants.RESULT_FIELD_THRESHOLD: threshold_to_percent(threshold_percent),
+        constants.RESULT_FIELD_CONFIDENCE: round(max(0.0, min(float(confidence_score), 1.0)) * 100, 2),
+        constants.RESULT_FIELD_NUDITY: bool(nudity_detected),
+        constants.RESULT_FIELD_CLASSES: json.dumps(raw_result, ensure_ascii=False) if not isinstance(raw_result, str) else raw_result,
+        constants.RESULT_FIELD_THUMBNAIL: thumbnail,
+        constants.RESULT_FIELD_DATE: datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+    }
+    entry = ReportEntry.from_dict(entry_data)
+    session.add_result(entry)
 
-        # Periodically save report
-        if len(nudity_report) % 500 == 0:
-            entries = [ReportEntry.from_dict(e) for e in nudity_report]
-            ReportManager.save_entries(entries, get_report_path(report_dir))
+    # Periodically save report
+    all_results = session.get_results()
+    if len(all_results) % 500 == 0:
+        ReportManager.save_entries(all_results, get_report_path(report_dir))
 
-        return entry_data
+    return entry_data
