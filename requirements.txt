@@ -71,7 +71,7 @@ pydload==1.0.9
     # via vnudenet
 python-utils==3.9.1
     # via progressbar2
-requests==2.33.1
+requests==2.34.2
     # via
     #   -r requirements.in
     #   pydload
