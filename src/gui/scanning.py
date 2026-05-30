@@ -370,6 +370,9 @@ class ScanningMixin:
         update_interval = self._get_progress_interval()
         files_processed = [0]
         count_lock = threading.Lock()
+        # Capture the session reference once so that a history-tab reload that
+        # replaces self._scan_session cannot affect the in-flight scan.
+        scan_session = self._scan_session
 
         # ------------------------------------------------------------------
         # Step 1 — Count supported files before starting workers.
@@ -413,7 +416,7 @@ class ScanningMixin:
             """Queue a partial report snapshot for async save, then push new results to UI."""
             snapshot = []
             try:
-                snapshot = self._scan_session.get_results()
+                snapshot = scan_session.get_results()
                 intermediate_session = create_session_state(
                     scan_config=make_scan_config(
                         source_folder=folder_path,
@@ -470,11 +473,11 @@ class ScanningMixin:
         try:
             if model_name == constants.MODEL_NUDENET:
                 classify_image, classify_video = self.create_nudenet_classifiers(
-                    existing_files, threshold_value, threshold_percent, self._scan_session,
+                    existing_files, threshold_value, threshold_percent, scan_session,
                 )
             else:
                 classify_image, classify_video = self.create_helloz_nsfw_classifiers(
-                    existing_files, threshold_value, threshold_percent, self._scan_session,
+                    existing_files, threshold_value, threshold_percent, scan_session,
                 )
 
             classify_image = _with_progress(classify_image)
@@ -490,7 +493,7 @@ class ScanningMixin:
 
             processed = files_processed[0]
             skipped = total_files - processed
-            all_results = self._scan_session.get_results()
+            all_results = scan_session.get_results()
             self.detected_results = get_detected_results(all_results)
             self.last_report_path = report_path
             session_state = self.build_session_state()
