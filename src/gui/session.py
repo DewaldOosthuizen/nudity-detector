@@ -15,10 +15,10 @@ from ..core.utils import (
     load_report_entries,
     load_scan_session,
     make_scan_config,
-    nudity_report,
-    replace_nudity_report,
     save_nudity_report,
 )
+from ..core.scan_session import ScanSession
+from ..core.models import ReportEntry
 
 
 class SessionMixin:
@@ -111,7 +111,8 @@ class SessionMixin:
                 if not report_path.endswith(constants.XLSX_EXTENSION):
                     report_path += constants.XLSX_EXTENSION
                 self.last_report_path = report_path
-                save_nudity_report(nudity_report, report_path, session_state=self.build_session_state())
+                results = self._scan_session.get_results() if hasattr(self, '_scan_session') and self._scan_session else []
+                save_nudity_report(results, report_path, session_state=self.build_session_state())
                 self.open_report_button.set_sensitive(True)
                 self.log_message(f'Saved session report to {report_path}', 'success')
         except GLib.Error:
@@ -169,7 +170,10 @@ class SessionMixin:
         self.threshold_spin.set_value(float(scan_config.get('threshold_percent', 60)))
 
         self.detected_results = detected_results
-        replace_nudity_report(report_entries or detected_results)
+        self._scan_session = ScanSession(initial_results=[
+            entry if not isinstance(entry, dict) else ReportEntry.from_dict(entry)
+            for entry in (report_entries or detected_results)
+        ])
         self.populate_results(self.detected_results)
         self.last_report_path = report_path
         self.open_report_button.set_sensitive(os.path.exists(report_path))

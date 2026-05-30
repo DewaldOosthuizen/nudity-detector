@@ -7,10 +7,8 @@ from gi.repository import Gio, Gtk
 from ..core import constants
 from ..core.utils import (
     delete_file_safely,
-    nudity_report,
     open_file,
     open_file_location,
-    replace_nudity_report,
     save_nudity_report,
 )
 from .result_item import ResultItem
@@ -159,8 +157,13 @@ class ResultsMixin:
             self._show_error('Delete failed', message)
             return
         del self.detected_results[index]
-        remaining = [item for item in nudity_report if item.get('file') != entry.get('file')]
-        replace_nudity_report(remaining)
-        save_nudity_report(nudity_report, self.last_report_path, session_state=self.build_session_state())
+        if hasattr(self, '_scan_session') and self._scan_session:
+            remaining = [e for e in self._scan_session.get_results() if e.file != entry.get('file')]
+            self._scan_session.reset()
+            for e in remaining:
+                self._scan_session.add_result(e)
+            save_nudity_report(remaining, self.last_report_path, session_state=self.build_session_state())
+        else:
+            save_nudity_report(self.detected_results, self.last_report_path, session_state=self.build_session_state())
         self.populate_results(self.detected_results)
         self.log_message(f"Deleted {entry.get('file', '')}. {message}", 'success')
