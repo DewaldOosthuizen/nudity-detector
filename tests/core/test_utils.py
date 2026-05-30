@@ -11,8 +11,6 @@ from src.core.utils import (
     threshold_to_percent,
     make_scan_config,
     get_detected_results,
-    reset_nudity_report,
-    nudity_report,
 )
 
 
@@ -59,8 +57,19 @@ def test_get_detected_results_filters_by_nudity_detected():
     assert all(r["nudity_detected"] for r in results)
 
 
-def test_reset_nudity_report_clears_list():
-    nudity_report.append({"nudity_detected": True, "file": "x.jpg"})
-    assert len(nudity_report) > 0
-    reset_nudity_report()
-    assert nudity_report == []
+def test_handle_results_uses_session(tmp_path):
+    """handle_results appends entry to the provided ScanSession."""
+    from src.core.scan_session import ScanSession
+    from src.core.utils import handle_results
+
+    session = ScanSession()
+    entry = handle_results(
+        file_path=str(tmp_path / "test.jpg"),
+        nudity_detected=False,
+        raw_result=[],
+        session=session,
+        report_dir=str(tmp_path),
+    )
+    results = session.get_results()
+    assert len(results) == 1
+    assert results[0].file == str(tmp_path / "test.jpg")
