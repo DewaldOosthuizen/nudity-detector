@@ -2,15 +2,20 @@
 import os
 import sys
 import tempfile
+import types
 from unittest.mock import MagicMock, patch, call
 
 import numpy as np
 import pytest
 
-# We need cv2 for synthetic video creation
+# We need cv2 for synthetic video creation.  Guard against the case where
+# another test module in the same pytest session has installed a MagicMock
+# stub for cv2 (e.g. tests/processing/test_media_processor.py): a MagicMock
+# is not a real module, so isinstance(cv2, types.ModuleType) is False and we
+# skip the cv2-dependent tests rather than running them against a fake.
 try:
     import cv2
-    HAS_CV2 = True
+    HAS_CV2 = isinstance(cv2, types.ModuleType)
 except ImportError:
     HAS_CV2 = False
 
