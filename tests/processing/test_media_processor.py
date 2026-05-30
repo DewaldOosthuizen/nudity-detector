@@ -3,8 +3,17 @@ import sys
 import pytest
 from unittest.mock import MagicMock
 
-# Stub cv2 if not installed
-sys.modules["cv2"] = MagicMock()
+# Stub cv2 only if it is not already available (e.g. imported by an earlier
+# test module in the same pytest session).  Unconditionally replacing a real
+# cv2 import would pollute sys.modules for subsequent test files and cause
+# tests that need the real cv2 (test_frame_extractor_issue15.py) to either
+# run against a mock or incorrectly evaluate HAS_CV2 = True while
+# media_processor.cv2 is still None.
+if "cv2" not in sys.modules:
+    try:
+        import cv2  # noqa: F401 – check whether the real package is present
+    except ImportError:
+        sys.modules["cv2"] = MagicMock()
 
 from src.processing.media_processor import detect_media_type, is_supported_file, FrameExtractor
 from src.core import constants

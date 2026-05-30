@@ -5,6 +5,7 @@ import os
 from nudenet import NudeDetector
 
 from ..core import constants
+from ..core.scan_session import ScanSession
 from ..core.utils import (
     classify_files_in_folder,
     create_session_state,
@@ -13,9 +14,7 @@ from ..core.utils import (
     handle_results,
     load_existing_report,
     make_scan_config,
-    nudity_report,
     normalize_threshold,
-    reset_nudity_report,
     save_nudity_report,
 )
 from ..processing.media_processor import FrameExtractor
@@ -55,6 +54,7 @@ def main():
     report_path = get_report_path()
     existing_files = load_existing_report(report_path)
     detector = NudeDetector()
+    session = ScanSession()
 
     folder_to_classify = input('Enter the path to the folder: ').strip()
     threshold_percent = prompt_threshold_percent()
@@ -80,6 +80,7 @@ def main():
                 file_path,
                 nudity_detected,
                 simplified_results,
+                session=session,
                 confidence_score=confidence_score,
                 media_type=constants.MEDIA_TYPE_IMAGE,
                 model_name=constants.MODEL_NUDENET,
@@ -113,6 +114,7 @@ def main():
                 file_path,
                 max_confidence >= threshold_value,
                 detection_results,
+                session=session,
                 confidence_score=max_confidence,
                 media_type=constants.MEDIA_TYPE_VIDEO,
                 model_name=constants.MODEL_NUDENET,
@@ -124,11 +126,11 @@ def main():
             extractor.cleanup()
 
     logging.debug('User input folder: %s', folder_to_classify)
-    reset_nudity_report()
     classify_files_in_folder(folder_to_classify, classify_image, classify_video)
 
-    session_state = create_session_state(scan_config=scan_config, results=get_detected_results(nudity_report))
-    save_nudity_report(nudity_report, report_path, session_state=session_state)
+    all_results = session.get_results()
+    session_state = create_session_state(scan_config=scan_config, results=get_detected_results(all_results))
+    save_nudity_report(all_results, report_path, session_state=session_state)
     logging.info('Report saved to %s', report_path)
 
 

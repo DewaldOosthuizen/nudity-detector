@@ -4,8 +4,6 @@
 #
 #    pip-compile --output-file=requirements.txt requirements.in
 #
-# GTK4 + libadwaita are system packages, install via:
-#   sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 gir1.2-gdkpixbuf-2.0
 certifi==2026.5.20
     # via requests
 charset-normalizer==3.4.7

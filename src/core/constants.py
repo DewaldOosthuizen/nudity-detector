@@ -107,6 +107,8 @@ HELLOZ_NSFW_API_ENDPOINT = '/api/upload_check'
 HELLOZ_NSFW_URL = f'http://{HELLOZ_NSFW_HOST}:{HELLOZ_NSFW_PORT}{HELLOZ_NSFW_API_ENDPOINT}'
 HELLOZ_NSFW_REQUEST_TIMEOUT = 30  # seconds
 HELLOZ_NSFW_HEALTH_CHECK_TIMEOUT = 5  # seconds
+HELLOZ_NSFW_MAX_RETRIES = 3
+HELLOZ_NSFW_RETRY_BACKOFF = 1.0  # seconds; doubles on each attempt
 HELLOZ_NSFW_CONNECTION_CHECK_URL = f'http://{HELLOZ_NSFW_HOST}:{HELLOZ_NSFW_PORT}'
 
 # ============================================================================
