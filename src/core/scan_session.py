@@ -17,9 +17,11 @@ class ScanSession:
         self._results: List[ReportEntry] = list(initial_results or [])
         self._lock = Lock()
 
-    def add_result(self, entry: ReportEntry) -> None:
+    def add_result(self, entry: ReportEntry) -> int:
+        """Append *entry* and return the new total count, both under the lock."""
         with self._lock:
             self._results.append(entry)
+            return len(self._results)
 
     def get_results(self) -> List[ReportEntry]:
         with self._lock:

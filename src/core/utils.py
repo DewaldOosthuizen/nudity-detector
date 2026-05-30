@@ -463,11 +463,11 @@ def handle_results(
         constants.RESULT_FIELD_DATE: datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
     }
     entry = ReportEntry.from_dict(entry_data)
-    session.add_result(entry)
+    count = session.add_result(entry)
 
-    # Periodically save report
-    all_results = session.get_results()
-    if len(all_results) % 500 == 0:
-        ReportManager.save_entries(all_results, get_report_path(report_dir))
+    # Periodically save report — use the count returned by add_result so the
+    # % 500 boundary check is consistent with the atomic append.
+    if count % 500 == 0:
+        ReportManager.save_entries(session.get_results(), get_report_path(report_dir))
 
     return entry_data

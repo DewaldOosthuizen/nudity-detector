@@ -32,7 +32,8 @@ def test_empty_construction():
 def test_add_result():
     session = ScanSession()
     entry = _make_entry("b.jpg")
-    session.add_result(entry)
+    count = session.add_result(entry)
+    assert count == 1
     results = session.get_results()
     assert len(results) == 1
     assert results[0].file == "b.jpg"
