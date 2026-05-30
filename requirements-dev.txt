@@ -1,4 +1,4 @@
-pytest-cov>=5.0
+pytest-cov>=7.1.0
 -r requirements.txt
 pip-audit>=2.10.0
 pytest>=8.0.0
