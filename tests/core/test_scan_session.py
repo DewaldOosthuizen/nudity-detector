@@ -78,3 +78,47 @@ def test_concurrent_append():
         t.join()
 
     assert len(session.get_results()) == N_THREADS * APPENDS_PER_THREAD
+
+
+# ---------------------------------------------------------------------------
+# session-reload path (mirrors src/gui/session.py load_session_from_path)
+# ---------------------------------------------------------------------------
+
+def test_session_reload_creates_scan_session_with_loaded_entries():
+    entries = [_make_entry("x.jpg"), _make_entry("y.jpg")]
+    session = ScanSession(initial_results=entries)
+    assert len(session.get_results()) == 2
+    assert {e.file for e in session.get_results()} == {"x.jpg", "y.jpg"}
+
+
+def test_session_reload_replaces_previous_session():
+    session = ScanSession(initial_results=[_make_entry("old.jpg")])
+    session = ScanSession(initial_results=[_make_entry("new1.jpg"), _make_entry("new2.jpg")])
+    results = session.get_results()
+    assert len(results) == 2
+    assert all(e.file in {"new1.jpg", "new2.jpg"} for e in results)
+
+
+# ---------------------------------------------------------------------------
+# result-deletion path (mirrors src/gui/results.py _do_delete)
+# ---------------------------------------------------------------------------
+
+def test_result_deletion_removes_entry_from_session():
+    entries = [_make_entry("a.jpg"), _make_entry("b.jpg"), _make_entry("c.jpg")]
+    session = ScanSession(initial_results=entries)
+    target_file = "b.jpg"
+    remaining = [e for e in session.get_results() if e.file != target_file]
+    session.reset()
+    for e in remaining:
+        session.add_result(e)
+    results = session.get_results()
+    assert len(results) == 2
+    assert all(e.file != target_file for e in results)
+
+
+def test_result_deletion_no_global_side_effects():
+    s1 = ScanSession(initial_results=[_make_entry("shared.jpg")])
+    s2 = ScanSession(initial_results=[_make_entry("shared.jpg")])
+    s1.reset()
+    assert len(s1.get_results()) == 0
+    assert len(s2.get_results()) == 1
