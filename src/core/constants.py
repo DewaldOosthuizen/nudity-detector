@@ -2,6 +2,8 @@
 Centralized constants for the Nudity Detector application.
 Provides single source of truth for configuration values, avoiding magic numbers.
 """
+import json
+import os
 
 # ============================================================================
 # Media Type Configuration
@@ -104,12 +106,45 @@ FRAME_FILE_NAME_PATTERN = 'frame_{}.jpg'
 HELLOZ_NSFW_HOST = 'localhost'
 HELLOZ_NSFW_PORT = 6086
 HELLOZ_NSFW_API_ENDPOINT = '/api/upload_check'
-HELLOZ_NSFW_URL = f'http://{HELLOZ_NSFW_HOST}:{HELLOZ_NSFW_PORT}{HELLOZ_NSFW_API_ENDPOINT}'
 HELLOZ_NSFW_REQUEST_TIMEOUT = 30  # seconds
 HELLOZ_NSFW_HEALTH_CHECK_TIMEOUT = 5  # seconds
 HELLOZ_NSFW_MAX_RETRIES = 3
 HELLOZ_NSFW_RETRY_BACKOFF = 1.0  # seconds; doubles on each attempt
-HELLOZ_NSFW_CONNECTION_CHECK_URL = f'http://{HELLOZ_NSFW_HOST}:{HELLOZ_NSFW_PORT}'
+
+
+def _config_path():
+    """Return the path to app_config.json relative to the project root."""
+    return os.path.join(os.path.dirname(__file__), '..', '..', 'config', 'app_config.json')
+
+
+def _load_helloz_config():
+    """Load helloz NSFW config from app_config.json; return defaults on error."""
+    try:
+        with open(_config_path(), 'r') as f:
+            cfg = json.load(f)
+        host = cfg.get('helloz_nsfw_host', HELLOZ_NSFW_HOST)
+        port = cfg.get('helloz_nsfw_port', HELLOZ_NSFW_PORT)
+        endpoint = cfg.get('helloz_nsfw_api_endpoint', HELLOZ_NSFW_API_ENDPOINT)
+        return host, port, endpoint
+    except (OSError, json.JSONDecodeError):
+        return HELLOZ_NSFW_HOST, HELLOZ_NSFW_PORT, HELLOZ_NSFW_API_ENDPOINT
+
+
+def get_helloz_nsfw_url():
+    """Return the full Helloz NSFW API upload URL, read from config each call."""
+    host, port, endpoint = _load_helloz_config()
+    return f'http://{host}:{port}{endpoint}'
+
+
+def get_helloz_nsfw_connection_check_url():
+    """Return the base Helloz NSFW connection-check URL, read from config each call."""
+    host, port, _endpoint = _load_helloz_config()
+    return f'http://{host}:{port}'
+
+
+# Backward-compatible module-level aliases (resolved at import time)
+HELLOZ_NSFW_URL = get_helloz_nsfw_url()
+HELLOZ_NSFW_CONNECTION_CHECK_URL = get_helloz_nsfw_connection_check_url()
 
 # ============================================================================
 # GUI Configuration - UI Constants
