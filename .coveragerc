@@ -1,0 +1,21 @@
+[run]
+omit =
+    src/gui/app.py
+    src/gui/scanning.py
+    src/gui/results.py
+    src/gui/dialogs.py
+    src/gui/preview.py
+    src/gui/result_item.py
+    src/gui/scan_history.py
+    src/gui/session.py
+
+[report]
+omit =
+    src/gui/app.py
+    src/gui/scanning.py
+    src/gui/results.py
+    src/gui/dialogs.py
+    src/gui/preview.py
+    src/gui/result_item.py
+    src/gui/scan_history.py
+    src/gui/session.py
