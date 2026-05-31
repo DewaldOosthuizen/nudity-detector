@@ -1,0 +1,14 @@
+[run]
+source = src
+omit =
+    # GTK ApplicationWindow — requires a live display; not unit-testable
+    src/gui/app.py
+    # nudenet detector — third-party stub, no testable logic without the package
+    src/detectors/nudenet.py
+
+[report]
+exclude_lines =
+    pragma: no cover
+    if __name__ == .__main__.:
+    raise NotImplementedError
+    \.\.\.
