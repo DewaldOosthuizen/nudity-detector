@@ -132,6 +132,10 @@ Two detector backends are available:
     curl -X POST -F file=@test.jpg 'http://localhost:6086/api/upload_check'
     ```
 
+   - The Helloz NSFW endpoint is configurable via `config/app_config.json` using the keys
+     `helloz_nsfw_host`, `helloz_nsfw_port`, and `helloz_nsfw_api_endpoint`.
+     See `.env.example` for the available settings and their default values.
+
 9. **Run the process**:
 
 ### Option 1: GUI Application (Recommended)

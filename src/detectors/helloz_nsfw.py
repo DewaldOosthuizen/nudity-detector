@@ -119,7 +119,7 @@ def main():
 
         try:
             with open(file_path, 'rb') as image_file:
-                response = _post_with_retry(constants.HELLOZ_NSFW_URL, files={'file': image_file}, timeout=constants.HELLOZ_NSFW_REQUEST_TIMEOUT)
+                response = _post_with_retry(constants.get_helloz_nsfw_url(), files={'file': image_file}, timeout=constants.HELLOZ_NSFW_REQUEST_TIMEOUT)
 
             if response.status_code != 200:
                 raise RuntimeError(f'Unexpected HTTP {response.status_code} for {file_path}')
@@ -157,7 +157,7 @@ def main():
             for frame_path in extractor.iter_frames(file_path):
                 try:
                     with open(frame_path, 'rb') as image_file:
-                        response = _post_with_retry(constants.HELLOZ_NSFW_URL, files={'file': image_file}, timeout=constants.HELLOZ_NSFW_REQUEST_TIMEOUT)
+                        response = _post_with_retry(constants.get_helloz_nsfw_url(), files={'file': image_file}, timeout=constants.HELLOZ_NSFW_REQUEST_TIMEOUT)
                     if response.status_code != 200:
                         logging.error('Failed to classify frame %s. HTTP status: %s', frame_path, response.status_code)
                         frame_error_count += 1

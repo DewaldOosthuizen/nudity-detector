@@ -6,6 +6,6 @@ services:
     container_name: helloz_nsfw
     restart: unless-stopped
     ports:
-      - "6086:6086"
+      - "127.0.0.1:6086:6086"
     environment:
       - WORKERS=10
