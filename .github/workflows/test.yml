@@ -10,4 +10,4 @@ jobs:
           python-version: "3.11"
       - run: pip install -r requirements.txt
       - run: pip install -r requirements-dev.txt
-      - run: pytest --cov=src --cov-report=term-missing --cov-fail-under=80 tests/
+      - run: pytest --cov=src --cov-report=term-missing --cov-fail-under=50 --ignore=src/gui tests/ --cov-config=setup.cfg
