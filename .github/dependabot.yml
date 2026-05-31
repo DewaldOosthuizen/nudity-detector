@@ -8,36 +8,36 @@ updates:
     # Dependabot targets requirements.in (the abstract constraints file).
     # After merging, run: pip-compile requirements.in -o requirements.txt
     groups:
+      # ML / inference engines — nudenet, VNudeNet, opencv
       ml-inference:
-        comment: "ML / inference engines — nudenet, VNudeNet, opencv"
         patterns:
           - "nudenet"
           - "VNudeNet"
           - "opencv-python"
 
+      # Image processing — Pillow
       image-processing:
-        comment: "Image processing — Pillow"
         patterns:
           - "Pillow"
 
+      # Data / export — openpyxl
       data-export:
-        comment: "Data / export — openpyxl"
         patterns:
           - "openpyxl"
 
+      # HTTP client — requests
       http:
-        comment: "HTTP client — requests"
         patterns:
           - "requests"
 
+      # UI / system utilities — Send2Trash, darkdetect
       ui-system:
-        comment: "UI / system utilities — Send2Trash, darkdetect"
         patterns:
           - "Send2Trash"
           - "darkdetect"
 
+      # Dev / test tooling — pytest, coverage, audit
       dev-testing:
-        comment: "Dev / test tooling — pytest, coverage, audit"
         patterns:
           - "pytest"
           - "pytest-*"

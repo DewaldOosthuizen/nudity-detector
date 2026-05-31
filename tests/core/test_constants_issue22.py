@@ -16,8 +16,22 @@ class TestGetHellozNsfwUrl:
             url = constants.get_helloz_nsfw_url()
         assert url == 'http://localhost:6086/api/upload_check'
 
-    def test_values_read_from_config(self, tmp_path):
-        """URL is built from values in config/app_config.json."""
+    def test_loopback_host_uses_http_by_default(self, tmp_path):
+        """Loopback host defaults to http scheme when no scheme is configured."""
+        from src.core import constants
+        cfg = {
+            'helloz_nsfw_host': 'localhost',
+            'helloz_nsfw_port': 9000,
+            'helloz_nsfw_api_endpoint': '/v2/check',
+        }
+        config_path = tmp_path / 'app_config.json'
+        config_path.write_text(json.dumps(cfg))
+        with mock.patch('src.core.constants._config_path', return_value=str(config_path)):
+            url = constants.get_helloz_nsfw_url()
+        assert url == 'http://localhost:9000/v2/check'
+
+    def test_remote_host_uses_https_by_default(self, tmp_path):
+        """Non-loopback host defaults to https scheme when no scheme is configured."""
         from src.core import constants
         cfg = {
             'helloz_nsfw_host': 'myserver',
@@ -28,7 +42,37 @@ class TestGetHellozNsfwUrl:
         config_path.write_text(json.dumps(cfg))
         with mock.patch('src.core.constants._config_path', return_value=str(config_path)):
             url = constants.get_helloz_nsfw_url()
-        assert url == 'http://myserver:9000/v2/check'
+        assert url == 'https://myserver:9000/v2/check'
+
+    def test_explicit_https_scheme_accepted_for_remote_host(self, tmp_path):
+        """Explicitly configured https scheme is used for a remote host."""
+        from src.core import constants
+        cfg = {
+            'helloz_nsfw_scheme': 'https',
+            'helloz_nsfw_host': 'myserver',
+            'helloz_nsfw_port': 9000,
+            'helloz_nsfw_api_endpoint': '/v2/check',
+        }
+        config_path = tmp_path / 'app_config.json'
+        config_path.write_text(json.dumps(cfg))
+        with mock.patch('src.core.constants._config_path', return_value=str(config_path)):
+            url = constants.get_helloz_nsfw_url()
+        assert url == 'https://myserver:9000/v2/check'
+
+    def test_http_scheme_rejected_for_remote_host(self, tmp_path):
+        """Explicitly configured http scheme raises ValueError for a non-loopback host."""
+        from src.core import constants
+        cfg = {
+            'helloz_nsfw_scheme': 'http',
+            'helloz_nsfw_host': 'myserver',
+            'helloz_nsfw_port': 9000,
+            'helloz_nsfw_api_endpoint': '/v2/check',
+        }
+        config_path = tmp_path / 'app_config.json'
+        config_path.write_text(json.dumps(cfg))
+        with mock.patch('src.core.constants._config_path', return_value=str(config_path)):
+            with pytest.raises(ValueError, match="'http' is not allowed for non-loopback host"):
+                constants.get_helloz_nsfw_url()
 
     def test_malformed_json_fallback(self, tmp_path):
         """Malformed JSON causes fallback to defaults."""
@@ -48,8 +92,21 @@ class TestGetHellozNsfwConnectionCheckUrl:
             url = constants.get_helloz_nsfw_connection_check_url()
         assert url == 'http://localhost:6086'
 
-    def test_values_read_from_config(self, tmp_path):
-        """Connection check URL uses host/port from config."""
+    def test_loopback_host_uses_http_by_default(self, tmp_path):
+        """Loopback host defaults to http scheme."""
+        from src.core import constants
+        cfg = {
+            'helloz_nsfw_host': '127.0.0.1',
+            'helloz_nsfw_port': 8888,
+        }
+        config_path = tmp_path / 'app_config.json'
+        config_path.write_text(json.dumps(cfg))
+        with mock.patch('src.core.constants._config_path', return_value=str(config_path)):
+            url = constants.get_helloz_nsfw_connection_check_url()
+        assert url == 'http://127.0.0.1:8888'
+
+    def test_remote_host_uses_https_by_default(self, tmp_path):
+        """Connection check URL uses https for a non-loopback host."""
         from src.core import constants
         cfg = {
             'helloz_nsfw_host': 'remotehost',
@@ -59,7 +116,7 @@ class TestGetHellozNsfwConnectionCheckUrl:
         config_path.write_text(json.dumps(cfg))
         with mock.patch('src.core.constants._config_path', return_value=str(config_path)):
             url = constants.get_helloz_nsfw_connection_check_url()
-        assert url == 'http://remotehost:8888'
+        assert url == 'https://remotehost:8888'
 
     def test_malformed_json_fallback(self, tmp_path):
         """Malformed JSON causes fallback to defaults."""

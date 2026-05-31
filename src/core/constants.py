@@ -112,9 +112,12 @@ HELLOZ_NSFW_MAX_RETRIES = 3
 HELLOZ_NSFW_RETRY_BACKOFF = 1.0  # seconds; doubles on each attempt
 
 
+_LOOPBACK_HOSTS = frozenset({'localhost', '127.0.0.1', '::1'})
+
+
 def _config_path():
-    """Return the path to app_config.json relative to the project root."""
-    return os.path.join(os.path.dirname(__file__), '..', '..', 'config', 'app_config.json')
+    """Return the path to app_config.json relative to the current working directory."""
+    return os.path.join(CONFIG_DIR, CONFIG_FILE_NAME)
 
 
 def _load_helloz_config():
@@ -125,21 +128,38 @@ def _load_helloz_config():
         host = cfg.get('helloz_nsfw_host', HELLOZ_NSFW_HOST)
         port = cfg.get('helloz_nsfw_port', HELLOZ_NSFW_PORT)
         endpoint = cfg.get('helloz_nsfw_api_endpoint', HELLOZ_NSFW_API_ENDPOINT)
-        return host, port, endpoint
+        # Use configured scheme when provided; otherwise default to http for loopback
+        # and https for any remote host.
+        if 'helloz_nsfw_scheme' in cfg:
+            scheme = cfg['helloz_nsfw_scheme']
+        else:
+            scheme = 'http' if host in _LOOPBACK_HOSTS else 'https'
+        return host, port, endpoint, scheme
     except (OSError, json.JSONDecodeError):
-        return HELLOZ_NSFW_HOST, HELLOZ_NSFW_PORT, HELLOZ_NSFW_API_ENDPOINT
+        return HELLOZ_NSFW_HOST, HELLOZ_NSFW_PORT, HELLOZ_NSFW_API_ENDPOINT, 'http'
+
+
+def _validate_scheme(scheme, host):
+    """Raise ValueError when HTTP is used with a non-loopback host."""
+    if scheme == 'http' and host not in _LOOPBACK_HOSTS:
+        raise ValueError(
+            f"Insecure scheme 'http' is not allowed for non-loopback host '{host}'. "
+            "Set 'helloz_nsfw_scheme' to 'https' in config/app_config.json."
+        )
 
 
 def get_helloz_nsfw_url():
     """Return the full Helloz NSFW API upload URL, read from config each call."""
-    host, port, endpoint = _load_helloz_config()
-    return f'http://{host}:{port}{endpoint}'
+    host, port, endpoint, scheme = _load_helloz_config()
+    _validate_scheme(scheme, host)
+    return f'{scheme}://{host}:{port}{endpoint}'
 
 
 def get_helloz_nsfw_connection_check_url():
     """Return the base Helloz NSFW connection-check URL, read from config each call."""
-    host, port, _endpoint = _load_helloz_config()
-    return f'http://{host}:{port}'
+    host, port, _endpoint, scheme = _load_helloz_config()
+    _validate_scheme(scheme, host)
+    return f'{scheme}://{host}:{port}'
 
 
 # Backward-compatible module-level aliases (resolved at import time)
