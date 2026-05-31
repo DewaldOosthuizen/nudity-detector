@@ -426,6 +426,11 @@ def handle_results(
 ) -> dict:
     """Handle detection results: create entry, generate thumbnail, and cache.
 
+    Every 500 entries a periodic checkpoint is written to disk. The snapshot of
+    current results is taken inside the session lock (via session.get_results())
+    and the resulting copy is passed to ReportManager.save_entries *outside* the
+    lock so that no lock is held during the potentially slow workbook I/O.
+
     Args:
         file_path: Original file path
         nudity_detected: Whether nudity was detected
@@ -465,9 +470,10 @@ def handle_results(
     entry = ReportEntry.from_dict(entry_data)
     count = session.add_result(entry)
 
-    # Periodically save report — use the count returned by add_result so the
-    # % 500 boundary check is consistent with the atomic append.
+    # Periodically checkpoint — take a snapshot under the session lock, then
+    # perform the I/O outside it so no lock is held during the workbook write.
     if count % 500 == 0:
-        ReportManager.save_entries(session.get_results(), get_report_path(report_dir))
+        snapshot = session.get_results()  # brief lock acquire/copy/release
+        ReportManager.save_entries(snapshot, get_report_path(report_dir))
 
     return entry_data
