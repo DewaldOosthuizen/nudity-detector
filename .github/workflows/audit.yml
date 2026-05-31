@@ -1,9 +1,7 @@
 name: Dependency Audit
 on:
   push:
-    branches: [main]
   pull_request:
-    branches: [main]
 jobs:
   audit:
     runs-on: ubuntu-latest
