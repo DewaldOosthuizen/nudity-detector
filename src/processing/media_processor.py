@@ -146,9 +146,8 @@ class FrameExtractor:
                         )
                 frame_count += 1
             if not self.frame_paths:
-                raise RuntimeError(
-                    f'No frames could be extracted from {file_path}: all cv2.imwrite calls failed'
-                )
+                self.cleanup()
+                raise RuntimeError(f'No frames could be extracted from video file: {file_path}')
         finally:
             cap.release()
 
