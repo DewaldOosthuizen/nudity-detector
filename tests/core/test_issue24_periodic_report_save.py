@@ -8,14 +8,22 @@ Ensures that:
 import sys
 import time
 import threading
-from unittest.mock import MagicMock, patch, call
-import pytest
+from unittest.mock import MagicMock, patch
 
 # Stub heavy optional deps before importing source modules
 sys.modules.setdefault("nudenet", MagicMock())
 
 from src.core.scan_session import ScanSession
 from src.core.utils import handle_results
+
+
+def _wait_until(predicate, timeout=2.0, interval=0.01):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if predicate():
+            return True
+        time.sleep(interval)
+    return predicate()
 
 
 def _make_entry_kwargs(tmp_path, idx=0):
@@ -76,8 +84,10 @@ def test_checkpoint_fires_every_500_entries(tmp_path):
             kwargs["session"] = session
             handle_results(**kwargs)
 
+        assert _wait_until(lambda: len(save_calls) == 3)
+
     # Should have fired at counts 500, 1000, 1500
-    assert len(save_calls) == 3, f"Expected 3 checkpoint saves, got {len(save_calls)}"
+    assert save_calls == [500, 1000, 1500]
 
 
 def test_save_entries_not_called_while_lock_held(tmp_path):
@@ -90,8 +100,10 @@ def test_save_entries_not_called_while_lock_held(tmp_path):
     session._lock = spy  # type: ignore[assignment]
 
     violation_flag = threading.Event()
+    save_called = threading.Event()
 
     def fake_save(entries, path):
+        save_called.set()
         if spy.held:
             violation_flag.set()
 
@@ -104,54 +116,48 @@ def test_save_entries_not_called_while_lock_held(tmp_path):
             kwargs["session"] = session
             handle_results(**kwargs)
 
+        assert save_called.wait(timeout=2)
+
     assert not violation_flag.is_set(), (
         "save_entries was called while ScanSession._lock was held (lock contention bug)"
     )
 
 
 def test_concurrent_throughput_at_500_boundary(tmp_path):
-    """Worker throughput must not degrade at the 500-entry boundary.
-
-    We run N_THREADS threads each adding entries concurrently. The wall-clock
-    time while save_entries is 'slow' should not cause other threads to block
-    (i.e. the I/O is outside the lock).
-    """
+    """A blocked checkpoint save should not block worker progress."""
     N_THREADS = 8
     ENTRIES_PER_THREAD = 100  # total = 800, will hit 500-boundary once
-    FAKE_IO_DELAY = 0.05       # simulate slow disk
+    TOTAL_ENTRIES = N_THREADS * ENTRIES_PER_THREAD
 
     session = ScanSession()
-    latencies = []
-    latencies_lock = threading.Lock()
+    save_started = threading.Event()
+    allow_save_to_finish = threading.Event()
+    save_calls = []
 
     def fake_save(entries, path):
-        time.sleep(FAKE_IO_DELAY)
+        save_calls.append(len(entries))
+        save_started.set()
+        assert allow_save_to_finish.wait(timeout=2), "Timed out waiting to release checkpoint save"
 
     with patch("src.core.utils.ReportManager") as MockRM:
         MockRM.save_entries.side_effect = fake_save
 
         def worker(thread_idx):
             for i in range(ENTRIES_PER_THREAD):
-                t0 = time.perf_counter()
                 kwargs = _make_entry_kwargs(tmp_path, thread_idx * 1000 + i)
                 kwargs["session"] = session
                 handle_results(**kwargs)
-                elapsed = time.perf_counter() - t0
-                with latencies_lock:
-                    latencies.append(elapsed)
 
         threads = [threading.Thread(target=worker, args=(t,)) for t in range(N_THREADS)]
         for th in threads:
             th.start()
-        for th in threads:
-            th.join()
 
-    # If save_entries were called inside the lock, threads would serialise on it.
-    # With the fix, most calls should be well under FAKE_IO_DELAY.
-    fast_calls = sum(1 for l in latencies if l < FAKE_IO_DELAY * 0.9)
-    total_calls = len(latencies)
-    # At least 95 % of calls should complete faster than the fake I/O delay
-    assert fast_calls / total_calls >= 0.95, (
-        f"Too many slow calls ({total_calls - fast_calls}/{total_calls}); "
-        "save_entries may be blocking workers via the session lock"
-    )
+        assert save_started.wait(timeout=2)
+        assert _wait_until(lambda: len(session.get_results()) == TOTAL_ENTRIES)
+
+        allow_save_to_finish.set()
+        for th in threads:
+            th.join(timeout=2)
+
+    assert all(not th.is_alive() for th in threads)
+    assert save_calls == [500]

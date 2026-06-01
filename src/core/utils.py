@@ -18,8 +18,9 @@ import subprocess
 import sys
 from datetime import datetime
 from queue import Queue
-from threading import Thread
+from threading import Lock, Thread
 from typing import Optional, Tuple
+from weakref import WeakKeyDictionary
 
 try:
     from send2trash import send2trash
@@ -37,6 +38,8 @@ from ..reporting.report_manager import ReportManager
 # Public API (maintained for compatibility)
 # ============================================================================
 DEFAULT_REPORT_DIR = constants.DEFAULT_REPORT_DIR
+_checkpoint_writer_registry_lock = Lock()
+_checkpoint_writers = WeakKeyDictionary()
 
 
 def normalize_threshold(threshold_value) -> float:
@@ -413,6 +416,47 @@ def classify_files_in_folder(
 # ============================================================================
 # Detection Result Handling
 # ============================================================================
+def _get_or_create_checkpoint_writer(session: ScanSession) -> dict:
+    with _checkpoint_writer_registry_lock:
+        writer_state = _checkpoint_writers.get(session)
+        if writer_state is not None:
+            return writer_state
+
+        writer_queue = Queue()
+        writer_errors = []
+
+        def _write_checkpoints():
+            while True:
+                checkpoint = writer_queue.get()
+                if checkpoint is None:
+                    break
+                entries, report_path = checkpoint
+                try:
+                    ReportManager.save_entries(entries, report_path)
+                except Exception as exc:
+                    writer_errors.append(exc)
+                    break
+
+        writer_thread = Thread(target=_write_checkpoints, daemon=True, name='checkpoint-writer')
+        writer_thread.start()
+        writer_state = {
+            'queue': writer_queue,
+            'errors': writer_errors,
+            'thread': writer_thread,
+        }
+        _checkpoint_writers[session] = writer_state
+        return writer_state
+
+
+def _raise_checkpoint_writer_error(session: ScanSession) -> None:
+    with _checkpoint_writer_registry_lock:
+        writer_state = _checkpoint_writers.get(session)
+        if writer_state is None or not writer_state['errors']:
+            return
+        error = writer_state['errors'][0]
+    raise error
+
+
 def handle_results(
     file_path: str,
     nudity_detected: bool,
@@ -427,9 +471,9 @@ def handle_results(
     """Handle detection results: create entry, generate thumbnail, and cache.
 
     Every 500 entries a periodic checkpoint is written to disk. The snapshot of
-    current results is taken inside the session lock (via session.get_results())
-    and the resulting copy is passed to ReportManager.save_entries *outside* the
-    lock so that no lock is held during the potentially slow workbook I/O.
+    current results is taken under the session lock (via session.get_results())
+    and queued onto a dedicated checkpoint-writer thread so worker threads never
+    perform workbook I/O inline.
 
     Args:
         file_path: Original file path
@@ -445,6 +489,8 @@ def handle_results(
     Returns:
         Report entry dictionary
     """
+    _raise_checkpoint_writer_error(session)
+
     # Generate thumbnail for detected items
     thumbnail = ''
     if nudity_detected:
@@ -471,9 +517,11 @@ def handle_results(
     count = session.add_result(entry)
 
     # Periodically checkpoint — take a snapshot under the session lock, then
-    # perform the I/O outside it so no lock is held during the workbook write.
+    # queue workbook I/O onto a dedicated checkpoint writer thread.
     if count % 500 == 0:
         snapshot = session.get_results()  # brief lock acquire/copy/release
-        ReportManager.save_entries(snapshot, get_report_path(report_dir))
+        writer_state = _get_or_create_checkpoint_writer(session)
+        writer_state['queue'].put((snapshot, get_report_path(report_dir)))
+        _raise_checkpoint_writer_error(session)
 
     return entry_data
