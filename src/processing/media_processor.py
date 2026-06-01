@@ -136,10 +136,19 @@ class FrameExtractor:
                         self.temp_dir,
                         constants.FRAME_FILE_NAME_PATTERN.format(frame_count)
                     )
-                    cv2.imwrite(frame_path, frame)
-                    self.frame_paths.append(frame_path)
-                    yield frame_path
+                    if cv2.imwrite(frame_path, frame):
+                        self.frame_paths.append(frame_path)
+                        yield frame_path
+                    else:
+                        logging.warning(
+                            'Failed to write frame %d from %s — skipping',
+                            frame_count, file_path
+                        )
                 frame_count += 1
+            if not self.frame_paths:
+                raise RuntimeError(
+                    f'No frames could be extracted from {file_path}: all cv2.imwrite calls failed'
+                )
         finally:
             cap.release()
 
