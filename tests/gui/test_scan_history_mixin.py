@@ -62,9 +62,11 @@ _ensure_gi_stubs()
 # file installed the gi stubs first.
 sys.modules['gi.repository.Gtk'].INVALID_LIST_POSITION = 4294967295
 
-# Ensure GObject.Object is a clean MagicMock so ScanRunItem.__init__ (which
-# calls super().__init__()) never hits a stale side_effect from another test.
-sys.modules['gi.repository.GObject'].Object = mock.MagicMock()
+# Ensure GObject.Object is a plain Python class so that ScanRunItem (which
+# subclasses it) can be defined without a TypeError.
+class _GObjectBase:
+    def __init__(self, *a, **kw): pass
+sys.modules['gi.repository.GObject'].Object = _GObjectBase
 
 from src.gui.scan_history import ScanHistoryMixin, ScanRunItem  # noqa: E402
 from src.core.utils import DEFAULT_REPORT_DIR  # noqa: E402
@@ -80,7 +82,9 @@ _INVALID = 4294967295
 def _reset_gtk_stubs():
     """Re-pin stubs before every test so shared mock state doesn't bleed."""
     sys.modules['gi.repository.Gtk'].INVALID_LIST_POSITION = _INVALID
-    sys.modules['gi.repository.GObject'].Object = mock.MagicMock()
+    class _GObjectBase:
+        def __init__(self, *a, **kw): pass
+    sys.modules['gi.repository.GObject'].Object = _GObjectBase
     yield
 
 
@@ -410,15 +414,17 @@ def test_on_history_delete_response_delete_removes_dir(tmp_path):
     subdir.mkdir()
     (subdir / 'file.txt').write_text('data')
 
-    with mock.patch('src.gui.scan_history.DEFAULT_REPORT_DIR', str(tmp_path)):
+    def _run_sync(target, **kwargs):
+        t = mock.MagicMock()
+        t.start.side_effect = target
+        return t
+
+    with mock.patch('src.gui.scan_history.DEFAULT_REPORT_DIR', str(tmp_path)), \
+         mock.patch('src.gui.scan_history.threading.Thread', side_effect=_run_sync):
         item = mock.MagicMock()
         item.dir_name = subdir.name
 
         ScanHistoryMixin._on_history_delete_response(win, None, 'delete', item)
-
-        # Give the background thread time to finish
-        import time
-        time.sleep(0.3)
 
     assert not subdir.exists()
 
@@ -426,15 +432,18 @@ def test_on_history_delete_response_delete_removes_dir(tmp_path):
 def test_on_history_delete_response_delete_oserror_shows_error(tmp_path):
     win = _make_win()
 
+    def _run_sync(target, **kwargs):
+        t = mock.MagicMock()
+        t.start.side_effect = target
+        return t
+
     with mock.patch('src.gui.scan_history.DEFAULT_REPORT_DIR', str(tmp_path)), \
-         mock.patch('shutil.rmtree', side_effect=OSError('permission denied')):
+         mock.patch('shutil.rmtree', side_effect=OSError('permission denied')), \
+         mock.patch('src.gui.scan_history.threading.Thread', side_effect=_run_sync):
         item = mock.MagicMock()
         item.dir_name = 'nonexistent'
 
         ScanHistoryMixin._on_history_delete_response(win, None, 'delete', item)
-
-        import time
-        time.sleep(0.3)
 
     # GLib.idle_add should have been scheduled with _show_error
     import gi
@@ -460,11 +469,14 @@ def test_on_history_clear_all_response_clears_dirs(tmp_path):
         d.mkdir()
         (d / 'report.xlsx').write_bytes(b'PK')
 
-    with mock.patch('src.gui.scan_history.DEFAULT_REPORT_DIR', str(tmp_path)):
-        ScanHistoryMixin._on_history_clear_all_response(win, None, 'clear')
+    def _run_sync(target, **kwargs):
+        t = mock.MagicMock()
+        t.start.side_effect = target
+        return t
 
-        import time
-        time.sleep(0.3)
+    with mock.patch('src.gui.scan_history.DEFAULT_REPORT_DIR', str(tmp_path)), \
+         mock.patch('src.gui.scan_history.threading.Thread', side_effect=_run_sync):
+        ScanHistoryMixin._on_history_clear_all_response(win, None, 'clear')
 
     remaining = list(tmp_path.iterdir())
     assert remaining == []
@@ -473,14 +485,17 @@ def test_on_history_clear_all_response_clears_dirs(tmp_path):
 def test_on_history_clear_all_response_handles_oserror(tmp_path):
     win = _make_win()
 
+    def _run_sync(target, **kwargs):
+        t = mock.MagicMock()
+        t.start.side_effect = target
+        return t
+
     with mock.patch('src.gui.scan_history.DEFAULT_REPORT_DIR', str(tmp_path)), \
          mock.patch('shutil.rmtree', side_effect=OSError('locked')), \
          mock.patch('os.listdir', return_value=['bad_dir']), \
-         mock.patch('os.path.isdir', return_value=True):
+         mock.patch('os.path.isdir', return_value=True), \
+         mock.patch('src.gui.scan_history.threading.Thread', side_effect=_run_sync):
         ScanHistoryMixin._on_history_clear_all_response(win, None, 'clear')
-
-        import time
-        time.sleep(0.3)
 
     import gi
     GLib = gi.repository.GLib

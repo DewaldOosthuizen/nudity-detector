@@ -79,7 +79,7 @@ class _FakeGtkSingleSelection:
         return self._selected
 
 
-# Patch before importing ResultsMixin so the module-level Gtk.SingleSelection is our class
+# Patch Gtk.SingleSelection after import so runtime isinstance checks use our class
 results_mod.Gtk.SingleSelection = _FakeGtkSingleSelection
 results_mod.Gtk.INVALID_LIST_POSITION = _FakeGtkSingleSelection.INVALID
 

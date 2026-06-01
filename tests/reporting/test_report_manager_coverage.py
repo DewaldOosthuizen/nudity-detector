@@ -36,12 +36,11 @@ def _entry(**kwargs):
 # PIL / XLImage import branches (lines 17-24)
 # ---------------------------------------------------------------------------
 
-def test_image_none_when_pil_unavailable():
-    """If PIL is not importable, Image is set to None."""
-    # We already loaded the module; just check the current state reflects whatever is installed.
-    # This test validates the branch is reachable in principle.
-    # If PIL is installed, Image will be truthy; if not, None. Both are valid.
-    assert rm_mod.Image is not None or rm_mod.Image is None  # tautology — just touch the attribute
+def test_image_attribute_is_pil_or_none():
+    """Module exposes an Image attribute that is either the PIL.Image module or None."""
+    # If PIL is installed, Image is the PIL.Image module (has an 'open' callable).
+    # If PIL is not installed, Image is None.  Both are valid states.
+    assert rm_mod.Image is None or hasattr(rm_mod.Image, 'open')
 
 
 def test_xlimage_none_when_openpyxl_image_unavailable(monkeypatch):
