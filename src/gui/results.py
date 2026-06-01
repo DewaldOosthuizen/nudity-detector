@@ -121,7 +121,7 @@ class ResultsMixin:
             self._show_error('Error', f'File no longer exists: {file_path}')
             self.log_message(f'File not found: {file_path}', 'error')
             return
-        success, error_message = open_file(file_path)
+        success, error_message = open_file(file_path, scan_root=getattr(self, 'scan_folder', ''))
         if not success:
             self._show_error('Error', f'Could not open file: {error_message}')
             self.log_message(f'Could not open file: {error_message}', 'error')
@@ -132,7 +132,7 @@ class ResultsMixin:
         entry = self.get_selected_entry()
         if entry is None:
             return
-        success, error_message = open_file_location(entry.get('file', ''))
+        success, error_message = open_file_location(entry.get('file', ''), scan_root=getattr(self, 'scan_folder', ''))
         if not success:
             self._show_error('Error', f'Could not open location: {error_message}')
             self.log_message(f'Could not open location: {error_message}', 'error')

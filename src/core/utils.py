@@ -14,6 +14,7 @@ Thread Safety:
 import json
 import logging
 import os
+import pathlib
 import subprocess
 import sys
 from datetime import datetime
@@ -144,6 +145,29 @@ def load_existing_report(file_path: str) -> set:
 # ============================================================================
 # File Operations
 # ============================================================================
+def _validate_path_within_root(file_path: str, scan_root: str) -> pathlib.Path:
+    """Resolve file_path and verify it resides within scan_root.
+
+    Args:
+        file_path: Absolute or relative path to validate.
+        scan_root: Root directory that file_path must be contained within.
+
+    Returns:
+        Resolved pathlib.Path for file_path.
+
+    Raises:
+        ValueError: If file_path resolves outside of scan_root (path traversal
+            attempt, symlink escape, etc.).
+    """
+    resolved = pathlib.Path(file_path).resolve()
+    root = pathlib.Path(scan_root).resolve()
+    if not str(resolved).startswith(str(root) + os.sep) and resolved != root:
+        raise ValueError(
+            f"Path '{resolved}' is outside the allowed scan root '{root}'"
+        )
+    return resolved
+
+
 def validate_report_dir(report_dir: str) -> Tuple[bool, str]:
     """Validate report directory is writable."""
     return ReportManager.validate_report_dir(report_dir)
@@ -206,15 +230,25 @@ def detect_with_timeout(detector, file_path: str, timeout_seconds: int = constan
     return result_container[0]
 
 
-def open_file(file_path: str) -> Tuple[bool, str]:
+def open_file(file_path: str, scan_root: str = '') -> Tuple[bool, str]:
     """Open file directly (not parent directory).
 
     Args:
-        file_path: Path to file to open
+        file_path: Path to file to open.
+        scan_root: When non-empty, file_path must reside within this directory.
+            If the path escapes the root a warning is logged and (False, msg)
+            is returned without invoking any subprocess.
 
     Returns:
         Tuple of (success: bool, error_message: str)
     """
+    if scan_root:
+        try:
+            _validate_path_within_root(file_path, scan_root)
+        except ValueError as exc:
+            logging.warning('open_file blocked - path traversal attempt: %s', exc)
+            return False, str(exc)
+
     if not os.path.exists(file_path):
         error_msg = f'File does not exist: {file_path}'
         logging.warning(error_msg)
@@ -262,15 +296,25 @@ def delete_file_safely(file_path: str) -> Tuple[bool, str]:
         return False, str(error)
 
 
-def open_file_location(file_path: str) -> Tuple[bool, str]:
+def open_file_location(file_path: str, scan_root: str = '') -> Tuple[bool, str]:
     """Open file location (parent folder).
 
     Args:
-        file_path: Path to file or folder
+        file_path: Path to file or folder.
+        scan_root: When non-empty, file_path must reside within this directory.
+            If the path escapes the root a warning is logged and (False, msg)
+            is returned without invoking any subprocess.
 
     Returns:
         Tuple of (success: bool, error_message: str)
     """
+    if scan_root:
+        try:
+            _validate_path_within_root(file_path, scan_root)
+        except ValueError as exc:
+            logging.warning('open_file_location blocked - path traversal attempt: %s', exc)
+            return False, str(exc)
+
     target_path = file_path if os.path.isdir(file_path) else os.path.dirname(file_path)
     if not target_path:
         target_path = '.'
