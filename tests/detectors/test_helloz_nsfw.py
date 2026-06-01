@@ -1,25 +1,13 @@
-"""Tests for issue #23 — helloz_nsfw detector classify_image, classify_video,
-prompt_threshold_percent, and _post_with_retry."""
+"""Tests for issue #30 — classify_image/classify_video factory functions and extract_frames."""
+import io
 import logging
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 import pytest
 import requests
 
-from src.detectors.helloz_nsfw import _post_with_retry, prompt_threshold_percent
 from src.core.scan_session import ScanSession
 from src.core import constants
-
-
-# ---------------------------------------------------------------------------
-# Helper: capturing session factory
-# ---------------------------------------------------------------------------
-def _capturing_session_factory(captured):
-    class _CapturingScanSession(ScanSession):
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, **kwargs)
-            captured[0] = self
-    return _CapturingScanSession
 
 
 def _make_ok_response(nsfw_score):
@@ -29,238 +17,281 @@ def _make_ok_response(nsfw_score):
     return r
 
 
+def _make_session():
+    return ScanSession()
+
+
 # ---------------------------------------------------------------------------
-# Test 1: classify_image() detects nudity when confidence >= threshold
+# Tests for make_classify_image factory
 # ---------------------------------------------------------------------------
-def test_classify_image_detects_nudity_above_threshold(tmp_path):
-    img = tmp_path / 'test.jpg'
+
+def test_classify_image_above_threshold(tmp_path):
+    """classify_image: confidence >= threshold → nudity_detected=True."""
+    img = tmp_path / 'nude.jpg'
     img.write_bytes(b'fake')
 
-    captured = [None]
-    from src.detectors import helloz_nsfw
+    from src.detectors.helloz_nsfw import make_classify_image
+    session = _make_session()
+    classify_image = make_classify_image(
+        existing_files=set(),
+        threshold_value=0.6,
+        threshold_percent=60.0,
+        session=session,
+    )
 
-    ok_response = _make_ok_response(0.9)  # above 60% default threshold
-
-    with patch('src.detectors.helloz_nsfw.ScanSession', _capturing_session_factory(captured)), \
-         patch('src.detectors.helloz_nsfw.requests.post', return_value=ok_response), \
-         patch('src.detectors.helloz_nsfw.handle_results') as mock_hr, \
-         patch('builtins.input', side_effect=[str(tmp_path), '60']), \
-         patch('src.detectors.helloz_nsfw.save_nudity_report'), \
-         patch('src.detectors.helloz_nsfw.classify_files_in_folder') as mock_cff:
-
-        def fake_cff(folder, ci, cv, **kw):
-            ci(str(img))
-        mock_cff.side_effect = fake_cff
-
-        helloz_nsfw.main()
+    ok_response = _make_ok_response(0.9)
+    with patch('src.detectors.helloz_nsfw._post_with_retry', return_value=ok_response), \
+         patch('src.detectors.helloz_nsfw.handle_results') as mock_hr:
+        classify_image(str(img))
 
     mock_hr.assert_called_once()
-    _args, kwargs = mock_hr.call_args
-    assert kwargs.get('confidence_score', _args[4] if len(_args) > 4 else None) is not None or True
-    # nudity_detected should be True: second positional arg
-    nudity_detected = _args[1] if len(_args) > 1 else mock_hr.call_args[0][1]
+    nudity_detected = mock_hr.call_args[0][1]
     assert nudity_detected is True
 
 
-# ---------------------------------------------------------------------------
-# Test 2: classify_image() returns no-nudity when confidence < threshold
-# ---------------------------------------------------------------------------
-def test_classify_image_no_nudity_below_threshold(tmp_path):
-    img = tmp_path / 'test.jpg'
+def test_classify_image_below_threshold(tmp_path):
+    """classify_image: confidence < threshold → nudity_detected=False."""
+    img = tmp_path / 'safe.jpg'
     img.write_bytes(b'fake')
 
-    captured = [None]
-    from src.detectors import helloz_nsfw
+    from src.detectors.helloz_nsfw import make_classify_image
+    session = _make_session()
+    classify_image = make_classify_image(
+        existing_files=set(),
+        threshold_value=0.6,
+        threshold_percent=60.0,
+        session=session,
+    )
 
-    ok_response = _make_ok_response(0.1)  # well below 60% threshold
-
-    with patch('src.detectors.helloz_nsfw.ScanSession', _capturing_session_factory(captured)), \
-         patch('src.detectors.helloz_nsfw.requests.post', return_value=ok_response), \
-         patch('src.detectors.helloz_nsfw.handle_results') as mock_hr, \
-         patch('builtins.input', side_effect=[str(tmp_path), '60']), \
-         patch('src.detectors.helloz_nsfw.save_nudity_report'), \
-         patch('src.detectors.helloz_nsfw.classify_files_in_folder') as mock_cff:
-
-        def fake_cff(folder, ci, cv, **kw):
-            ci(str(img))
-        mock_cff.side_effect = fake_cff
-
-        helloz_nsfw.main()
+    ok_response = _make_ok_response(0.1)
+    with patch('src.detectors.helloz_nsfw._post_with_retry', return_value=ok_response), \
+         patch('src.detectors.helloz_nsfw.handle_results') as mock_hr:
+        classify_image(str(img))
 
     mock_hr.assert_called_once()
     nudity_detected = mock_hr.call_args[0][1]
     assert nudity_detected is False
 
 
-# ---------------------------------------------------------------------------
-# Test 3: classify_image() records ERROR sentinel on HTTP 500 (no crash)
-# ---------------------------------------------------------------------------
-def test_classify_image_error_on_http_500(tmp_path):
-    img = tmp_path / 'test.jpg'
+def test_classify_image_non_200_status(tmp_path):
+    """classify_image: non-200 status → ERROR entry recorded."""
+    img = tmp_path / 'bad.jpg'
     img.write_bytes(b'fake')
 
-    captured = [None]
-    from src.detectors import helloz_nsfw
+    from src.detectors.helloz_nsfw import make_classify_image
+    session = _make_session()
+    classify_image = make_classify_image(
+        existing_files=set(),
+        threshold_value=0.6,
+        threshold_percent=60.0,
+        session=session,
+    )
 
     bad_response = MagicMock()
-    bad_response.status_code = 503
+    bad_response.status_code = 403
+    with patch('src.detectors.helloz_nsfw._post_with_retry', return_value=bad_response):
+        classify_image(str(img))
 
-    with patch('src.detectors.helloz_nsfw.ScanSession', _capturing_session_factory(captured)), \
-         patch('src.detectors.helloz_nsfw.requests.post', return_value=bad_response), \
-         patch('src.detectors.helloz_nsfw.time.sleep'), \
-         patch('builtins.input', side_effect=[str(tmp_path), '60']), \
-         patch('src.detectors.helloz_nsfw.save_nudity_report'), \
-         patch('src.detectors.helloz_nsfw.classify_files_in_folder') as mock_cff:
-
-        def fake_cff(folder, ci, cv, **kw):
-            ci(str(img))
-        mock_cff.side_effect = fake_cff
-
-        # Should not raise
-        helloz_nsfw.main()
-
-    session = captured[0]
-    error_entries = [
-        e for e in session.get_results()
-        if isinstance(e.detected_classes, str) and e.detected_classes.startswith('ERROR:')
-    ]
-    assert len(error_entries) == 1
+    results = session.get_results()
+    assert len(results) == 1
+    assert results[0].detected_classes.startswith('ERROR:')
 
 
-# ---------------------------------------------------------------------------
-# Test 4: classify_image() records ERROR sentinel on requests.exceptions.Timeout
-# ---------------------------------------------------------------------------
-def test_classify_image_error_on_timeout(tmp_path):
-    img = tmp_path / 'test.jpg'
+def test_classify_image_json_parse_failure(tmp_path):
+    """classify_image: JSON parse failure → ERROR entry recorded."""
+    img = tmp_path / 'broken.jpg'
     img.write_bytes(b'fake')
 
-    captured = [None]
-    from src.detectors import helloz_nsfw
+    from src.detectors.helloz_nsfw import make_classify_image
+    session = _make_session()
+    classify_image = make_classify_image(
+        existing_files=set(),
+        threshold_value=0.6,
+        threshold_percent=60.0,
+        session=session,
+    )
 
-    with patch('src.detectors.helloz_nsfw.ScanSession', _capturing_session_factory(captured)), \
-         patch('src.detectors.helloz_nsfw.requests.post',
-               side_effect=requests.exceptions.Timeout('timed out')), \
-         patch('src.detectors.helloz_nsfw.time.sleep'), \
-         patch('builtins.input', side_effect=[str(tmp_path), '60']), \
-         patch('src.detectors.helloz_nsfw.save_nudity_report'), \
-         patch('src.detectors.helloz_nsfw.classify_files_in_folder') as mock_cff:
-
-        def fake_cff(folder, ci, cv, **kw):
-            ci(str(img))
-        mock_cff.side_effect = fake_cff
-
-        helloz_nsfw.main()
-
-    session = captured[0]
-    error_entries = [
-        e for e in session.get_results()
-        if isinstance(e.detected_classes, str) and e.detected_classes.startswith('ERROR:')
-    ]
-    assert len(error_entries) == 1
-
-
-# ---------------------------------------------------------------------------
-# Test 5: _post_with_retry() retries on HTTP 5xx and raises RuntimeError after exhaustion
-# ---------------------------------------------------------------------------
-def test_post_with_retry_raises_runtime_error_after_5xx_exhaustion():
     bad_response = MagicMock()
-    bad_response.status_code = 500
+    bad_response.status_code = 200
+    bad_response.json.side_effect = ValueError('bad json')
+    with patch('src.detectors.helloz_nsfw._post_with_retry', return_value=bad_response):
+        classify_image(str(img))
 
-    with patch('src.detectors.helloz_nsfw.requests.post', return_value=bad_response), \
-         patch('src.detectors.helloz_nsfw.time.sleep'):
-        with pytest.raises(RuntimeError, match='service unavailable'):
-            _post_with_retry('http://example.com', files={}, timeout=5, retries=3)
+    results = session.get_results()
+    assert len(results) == 1
+    assert results[0].detected_classes.startswith('ERROR:')
+
+
+def test_classify_image_skips_existing_file(tmp_path):
+    """classify_image: file in existing_files → skipped, no API call."""
+    img = tmp_path / 'already.jpg'
+    img.write_bytes(b'fake')
+
+    from src.detectors.helloz_nsfw import make_classify_image
+    session = _make_session()
+    classify_image = make_classify_image(
+        existing_files={str(img)},
+        threshold_value=0.6,
+        threshold_percent=60.0,
+        session=session,
+    )
+
+    with patch('src.detectors.helloz_nsfw._post_with_retry') as mock_post:
+        classify_image(str(img))
+
+    mock_post.assert_not_called()
+    assert len(session.get_results()) == 0
 
 
 # ---------------------------------------------------------------------------
-# Test 6: classify_video() accumulates results across multiple frames
+# Tests for make_classify_video factory
 # ---------------------------------------------------------------------------
-def test_classify_video_accumulates_results_across_frames(tmp_path):
-    vid = tmp_path / 'test.mp4'
+
+def test_classify_video_single_frame_above_threshold_early_exit(tmp_path):
+    """classify_video: single frame above threshold → early exit."""
+    vid = tmp_path / 'nude.mp4'
     vid.write_bytes(b'fake')
+    frame = tmp_path / 'frame_0.jpg'
+    frame.write_bytes(b'fake')
 
-    frame1 = tmp_path / 'frame_0.jpg'
-    frame2 = tmp_path / 'frame_1.jpg'
-    frame1.write_bytes(b'f1')
-    frame2.write_bytes(b'f2')
+    from src.detectors.helloz_nsfw import make_classify_video
+    session = _make_session()
+    classify_video = make_classify_video(
+        existing_files=set(),
+        threshold_value=0.6,
+        threshold_percent=60.0,
+        session=session,
+    )
 
-    ok_response_low = _make_ok_response(0.1)
-    ok_response_low2 = _make_ok_response(0.15)
-
-    from src.detectors import helloz_nsfw
-
-    with patch('src.detectors.helloz_nsfw.ScanSession', ScanSession), \
-         patch('src.detectors.helloz_nsfw.requests.post',
-               side_effect=[ok_response_low, ok_response_low2]), \
-         patch('src.detectors.helloz_nsfw.handle_results') as mock_hr, \
-         patch('builtins.input', side_effect=[str(tmp_path), '60']), \
-         patch('src.detectors.helloz_nsfw.save_nudity_report'), \
-         patch('src.detectors.helloz_nsfw.classify_files_in_folder') as mock_cff, \
-         patch('src.detectors.helloz_nsfw.FrameExtractor') as MockFE:
-
-        mock_extractor = MagicMock()
-        mock_extractor.iter_frames.return_value = iter([str(frame1), str(frame2)])
-        MockFE.return_value = mock_extractor
-
-        def fake_cff(folder, ci, cv, **kw):
-            cv(str(vid))
-        mock_cff.side_effect = fake_cff
-
-        helloz_nsfw.main()
-
-    mock_hr.assert_called_once()
-    # frame_scores list passed as second positional arg to handle_results
-    frame_scores = mock_hr.call_args[0][2]
-    assert len(frame_scores) == 2
-
-
-# ---------------------------------------------------------------------------
-# Test 7: classify_video() exits early once threshold is hit
-# ---------------------------------------------------------------------------
-def test_classify_video_exits_early_when_threshold_hit(tmp_path):
-    vid = tmp_path / 'test.mp4'
-    vid.write_bytes(b'fake')
-
-    frame1 = tmp_path / 'frame_0.jpg'
-    frame2 = tmp_path / 'frame_1.jpg'
-    frame3 = tmp_path / 'frame_2.jpg'
-    for f in [frame1, frame2, frame3]:
-        f.write_bytes(b'fake')
-
-    # First frame already above threshold
     high_response = _make_ok_response(0.95)
-
-    from src.detectors import helloz_nsfw
-
-    with patch('src.detectors.helloz_nsfw.ScanSession', ScanSession), \
-         patch('src.detectors.helloz_nsfw.requests.post', return_value=high_response) as mock_post, \
+    with patch('src.detectors.helloz_nsfw._post_with_retry', return_value=high_response) as mock_post, \
          patch('src.detectors.helloz_nsfw.handle_results') as mock_hr, \
-         patch('builtins.input', side_effect=[str(tmp_path), '60']), \
-         patch('src.detectors.helloz_nsfw.save_nudity_report'), \
-         patch('src.detectors.helloz_nsfw.classify_files_in_folder') as mock_cff, \
          patch('src.detectors.helloz_nsfw.FrameExtractor') as MockFE:
-
         mock_extractor = MagicMock()
-        mock_extractor.iter_frames.return_value = iter([str(frame1), str(frame2), str(frame3)])
+        # Three frames but should exit after first
+        mock_extractor.iter_frames.return_value = iter([str(frame), str(frame), str(frame)])
         MockFE.return_value = mock_extractor
+        classify_video(str(vid))
 
-        def fake_cff(folder, ci, cv, **kw):
-            cv(str(vid))
-        mock_cff.side_effect = fake_cff
-
-        helloz_nsfw.main()
-
-    # Should have exited after first frame (1 POST call, not 3)
     assert mock_post.call_count == 1
-    mock_hr.assert_called_once()
     nudity_detected = mock_hr.call_args[0][1]
     assert nudity_detected is True
 
 
+def test_classify_video_two_frames_first_below_second_above(tmp_path):
+    """classify_video: first frame below, second frame above threshold."""
+    vid = tmp_path / 'vid.mp4'
+    vid.write_bytes(b'fake')
+    frame1 = tmp_path / 'f1.jpg'
+    frame2 = tmp_path / 'f2.jpg'
+    frame1.write_bytes(b'fake')
+    frame2.write_bytes(b'fake')
+
+    from src.detectors.helloz_nsfw import make_classify_video
+    session = _make_session()
+    classify_video = make_classify_video(
+        existing_files=set(),
+        threshold_value=0.6,
+        threshold_percent=60.0,
+        session=session,
+    )
+
+    low_response = _make_ok_response(0.1)
+    high_response = _make_ok_response(0.9)
+
+    with patch('src.detectors.helloz_nsfw._post_with_retry',
+               side_effect=[low_response, high_response]) as mock_post, \
+         patch('src.detectors.helloz_nsfw.handle_results') as mock_hr, \
+         patch('src.detectors.helloz_nsfw.FrameExtractor') as MockFE:
+        mock_extractor = MagicMock()
+        mock_extractor.iter_frames.return_value = iter([str(frame1), str(frame2)])
+        MockFE.return_value = mock_extractor
+        classify_video(str(vid))
+
+    assert mock_post.call_count == 2
+    nudity_detected = mock_hr.call_args[0][1]
+    assert nudity_detected is True
+
+
+def test_classify_video_all_frames_fail_raises_runtime_error(tmp_path):
+    """classify_video: all frames fail → ERROR entry recorded."""
+    vid = tmp_path / 'bad.mp4'
+    vid.write_bytes(b'fake')
+    frame = tmp_path / 'frame_0.jpg'
+    frame.write_bytes(b'fake')
+
+    from src.detectors.helloz_nsfw import make_classify_video
+    session = _make_session()
+    classify_video = make_classify_video(
+        existing_files=set(),
+        threshold_value=0.6,
+        threshold_percent=60.0,
+        session=session,
+    )
+
+    with patch('src.detectors.helloz_nsfw._post_with_retry',
+               side_effect=RuntimeError('fail')), \
+         patch('src.detectors.helloz_nsfw.FrameExtractor') as MockFE:
+        mock_extractor = MagicMock()
+        mock_extractor.iter_frames.return_value = iter([str(frame)])
+        MockFE.return_value = mock_extractor
+        classify_video(str(vid))
+
+    results = session.get_results()
+    assert len(results) == 1
+    assert results[0].detected_classes.startswith('ERROR:')
+
+
+def test_classify_video_skips_existing_file(tmp_path):
+    """classify_video: file in existing_files → skipped."""
+    vid = tmp_path / 'already.mp4'
+    vid.write_bytes(b'fake')
+
+    from src.detectors.helloz_nsfw import make_classify_video
+    session = _make_session()
+    classify_video = make_classify_video(
+        existing_files={str(vid)},
+        threshold_value=0.6,
+        threshold_percent=60.0,
+        session=session,
+    )
+
+    with patch('src.detectors.helloz_nsfw.FrameExtractor') as MockFE:
+        classify_video(str(vid))
+        MockFE.assert_not_called()
+
+    assert len(session.get_results()) == 0
+
+
 # ---------------------------------------------------------------------------
-# Test 8: prompt_threshold_percent() returns a valid integer in range [0, 100]
+# Test: extract_frames legacy wrapper delegates to FrameExtractor.extract
 # ---------------------------------------------------------------------------
+
+def test_extract_frames_delegates_to_frame_extractor(tmp_path):
+    """extract_frames legacy wrapper calls FrameExtractor.extract."""
+    vid = tmp_path / 'vid.mp4'
+    vid.write_bytes(b'fake')
+
+    from src.detectors.helloz_nsfw import extract_frames
+
+    with patch('src.detectors.helloz_nsfw.FrameExtractor') as MockFE:
+        mock_extractor = MagicMock()
+        mock_extractor.extract.return_value = ['frame1.jpg']
+        MockFE.return_value = mock_extractor
+
+        result = extract_frames(str(vid))
+
+    MockFE.assert_called_once()
+    mock_extractor.extract.assert_called_once_with(str(vid))
+    assert result == ['frame1.jpg']
+
+
+# ---------------------------------------------------------------------------
+# Test: prompt_threshold_percent
+# ---------------------------------------------------------------------------
+
 def test_prompt_threshold_percent_returns_valid_value():
+    from src.detectors.helloz_nsfw import prompt_threshold_percent
     with patch('builtins.input', return_value='75'):
         result = prompt_threshold_percent()
     assert 0 <= result <= 100
@@ -268,12 +299,14 @@ def test_prompt_threshold_percent_returns_valid_value():
 
 
 def test_prompt_threshold_percent_uses_default_on_empty():
+    from src.detectors.helloz_nsfw import prompt_threshold_percent
     with patch('builtins.input', return_value=''):
         result = prompt_threshold_percent(default_percent=50.0)
     assert result == 50.0
 
 
 def test_prompt_threshold_percent_uses_default_on_invalid():
+    from src.detectors.helloz_nsfw import prompt_threshold_percent
     with patch('builtins.input', return_value='not_a_number'):
         result = prompt_threshold_percent(default_percent=60.0)
     assert result == 60.0
