@@ -1,14 +1,12 @@
 """Tests for issue #16 — retry logic and structured error reporting in helloz_nsfw."""
-import io
 import logging
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 import pytest
 import requests
 
-from src.detectors.helloz_nsfw import _post_with_retry, _record_error
+from src.detectors.helloz_nsfw import _post_with_retry
 from src.core.scan_session import ScanSession
-from src.core import constants
 
 
 # ---------------------------------------------------------------------------

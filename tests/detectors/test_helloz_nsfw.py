@@ -1,13 +1,7 @@
 """Tests for issue #30 — classify_image/classify_video factory functions and extract_frames."""
-import io
-import logging
 from unittest.mock import MagicMock, patch
 
-import pytest
-import requests
-
 from src.core.scan_session import ScanSession
-from src.core import constants
 
 
 def _make_ok_response(nsfw_score):
@@ -213,7 +207,7 @@ def test_classify_video_two_frames_first_below_second_above(tmp_path):
     assert nudity_detected is True
 
 
-def test_classify_video_all_frames_fail_raises_runtime_error(tmp_path):
+def test_classify_video_all_frames_fail_records_error_entry(tmp_path):
     """classify_video: all frames fail → ERROR entry recorded."""
     vid = tmp_path / 'bad.mp4'
     vid.write_bytes(b'fake')
