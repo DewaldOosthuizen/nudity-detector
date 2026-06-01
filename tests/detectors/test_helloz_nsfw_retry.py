@@ -5,9 +5,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 import requests
 
-from src.detectors.helloz_nsfw import _post_with_retry, _record_error
+from src.detectors.helloz_nsfw import _post_with_retry
 from src.core.scan_session import ScanSession
-from src.core import constants
 
 
 # ---------------------------------------------------------------------------
@@ -79,7 +78,61 @@ def test_post_with_retry_returns_immediately_on_200():
 
 
 # ---------------------------------------------------------------------------
-# Test 5: classify_image() records ERROR entry when _post_with_retry raises
+# Test 5: _post_with_retry: 5xx then success
+# ---------------------------------------------------------------------------
+def test_post_with_retry_5xx_then_success():
+    bad_response = MagicMock()
+    bad_response.status_code = 503
+    ok_response = MagicMock()
+    ok_response.status_code = 200
+
+    with patch('src.detectors.helloz_nsfw.requests.post',
+               side_effect=[bad_response, ok_response]) as mock_post, \
+         patch('src.detectors.helloz_nsfw.time.sleep'):
+        result = _post_with_retry('http://example.com', files={}, timeout=5, retries=3)
+
+    assert result.status_code == 200
+    assert mock_post.call_count == 2
+
+
+# ---------------------------------------------------------------------------
+# Test 6: _post_with_retry: all RequestException → re-raise last
+# ---------------------------------------------------------------------------
+def test_post_with_retry_all_request_exception_reraises():
+    exc = requests.exceptions.ConnectionError('network down')
+    with patch('src.detectors.helloz_nsfw.requests.post', side_effect=exc), \
+         patch('src.detectors.helloz_nsfw.time.sleep'):
+        with pytest.raises(requests.exceptions.ConnectionError, match='network down'):
+            _post_with_retry('http://example.com', files={}, timeout=5, retries=2)
+
+
+# ---------------------------------------------------------------------------
+# Test 7: _post_with_retry rewinds file-like seek(0) before each attempt
+# ---------------------------------------------------------------------------
+def test_post_with_retry_rewinds_file_before_each_attempt():
+    ok_response = MagicMock()
+    ok_response.status_code = 200
+    bad_response = MagicMock()
+    bad_response.status_code = 503
+
+    mock_file = MagicMock()
+    mock_file.seek = MagicMock()
+
+    files = {'file': ('test.jpg', mock_file, 'image/jpeg')}
+
+    with patch('src.detectors.helloz_nsfw.requests.post',
+               side_effect=[bad_response, ok_response]), \
+         patch('src.detectors.helloz_nsfw.time.sleep'):
+        result = _post_with_retry('http://example.com', files=files, timeout=5, retries=3)
+
+    assert result.status_code == 200
+    # seek(0) should have been called at least twice (once per attempt)
+    assert mock_file.seek.call_count >= 2
+    mock_file.seek.assert_any_call(0)
+
+
+# ---------------------------------------------------------------------------
+# Test 8: classify_image() records ERROR entry when _post_with_retry raises
 # ---------------------------------------------------------------------------
 def test_classify_image_records_error_entry(tmp_path, caplog):
     img = tmp_path / 'test.jpg'
@@ -112,7 +165,7 @@ def test_classify_image_records_error_entry(tmp_path, caplog):
 
 
 # ---------------------------------------------------------------------------
-# Test 6: classify_video() records ERROR entry when all frames fail
+# Test 9: classify_video() records ERROR entry when all frames fail
 # ---------------------------------------------------------------------------
 def test_classify_video_records_error_when_all_frames_fail(tmp_path):
     vid = tmp_path / 'test.mp4'
@@ -154,7 +207,7 @@ def test_classify_video_records_error_when_all_frames_fail(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# Test 7: classify_video() calls handle_results() when some frames succeed
+# Test 10: classify_video() calls handle_results() when some frames succeed
 # ---------------------------------------------------------------------------
 def test_classify_video_partial_success_calls_handle_results(tmp_path):
     vid = tmp_path / 'test.mp4'
@@ -196,7 +249,7 @@ def test_classify_video_partial_success_calls_handle_results(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# Test 8: main() emits logging.warning when ERROR entries are present
+# Test 11: main() emits logging.warning when ERROR entries are present
 # ---------------------------------------------------------------------------
 def test_main_emits_warning_for_error_entries(tmp_path, caplog):
     img = tmp_path / 'test.jpg'

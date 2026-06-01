@@ -81,7 +81,7 @@ scipy==1.17.1
     # via scikit-image
 send2trash==2.1.0
     # via -r requirements.in
-tifffile==2026.5.15
+tifffile==2026.3.3
     # via scikit-image
 typing-extensions==4.15.0
     # via python-utils
