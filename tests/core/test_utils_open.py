@@ -43,6 +43,14 @@ def test_validate_path_within_root_raises_for_symlink_escape(tmp_path):
     outside.unlink()
 
 
+def test_validate_path_within_root_allows_filesystem_root(tmp_path):
+    child = tmp_path / "photo.jpg"
+    child.touch()
+    root = pathlib.Path(tmp_path.anchor)
+    result = _validate_path_within_root(str(child), str(root))
+    assert result == child.resolve()
+
+
 # ---------------------------------------------------------------------------
 # open_file with scan_root
 # ---------------------------------------------------------------------------
@@ -81,6 +89,19 @@ def test_open_file_empty_scan_root_backward_compat(tmp_path):
     mock_run.assert_called_once()
 
 
+def test_open_file_uses_resolved_validated_path(tmp_path):
+    real_file = tmp_path / "real.jpg"
+    real_file.touch()
+    symlink_path = tmp_path / "link.jpg"
+    symlink_path.symlink_to(real_file)
+    with patch("src.core.utils.subprocess.run") as mock_run, \
+         patch("src.core.utils.sys.platform", "linux"):
+        success, msg = open_file(str(symlink_path), scan_root=str(tmp_path))
+    assert success is True
+    assert msg == ""
+    mock_run.assert_called_once_with(['xdg-open', str(real_file.resolve())], check=False)
+
+
 # ---------------------------------------------------------------------------
 # open_file_location with scan_root
 # ---------------------------------------------------------------------------
@@ -109,3 +130,18 @@ def test_open_file_location_inside_root_calls_subprocess(tmp_path):
         success, msg = open_file_location(str(child), scan_root=str(tmp_path))
     assert success is True
     mock_run.assert_called_once()
+
+
+def test_open_file_location_uses_resolved_validated_path(tmp_path):
+    real_file = tmp_path / "actual" / "photo.jpg"
+    real_file.parent.mkdir()
+    real_file.touch()
+    symlink_path = tmp_path / "links" / "photo-link.jpg"
+    symlink_path.parent.mkdir()
+    symlink_path.symlink_to(real_file)
+    with patch("src.core.utils.subprocess.run") as mock_run, \
+         patch("src.core.utils.sys.platform", "linux"):
+        success, msg = open_file_location(str(symlink_path), scan_root=str(tmp_path))
+    assert success is True
+    assert msg == ""
+    mock_run.assert_called_once_with(['xdg-open', str(real_file.parent.resolve())], check=False)
