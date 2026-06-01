@@ -201,6 +201,84 @@ def test_frame_extractor_raises_without_cv2():
         extractor.cleanup()
 
 
+# ---------------------------------------------------------------------------
+# FrameExtractor.iter_frames — cv2.imwrite failure handling
+# ---------------------------------------------------------------------------
+
+def test_iter_frames_all_imwrite_failures_raises_runtime_error(tmp_path):
+    """When cv2.imwrite always returns False, RuntimeError is raised and
+    frame_paths remains empty."""
+    try:
+        import cv2 as real_cv2
+    except ImportError:
+        pytest.skip("cv2 not installed")
+
+    import logging
+    import src.processing.media_processor as mp
+
+    if mp.cv2 is None:
+        pytest.skip("cv2 not available in media_processor module")
+
+    dummy_frame = MagicMock()
+    mock_cap = MagicMock()
+    mock_cap.isOpened.side_effect = [True, True, False]
+    mock_cap.read.side_effect = [(True, dummy_frame), (True, dummy_frame)]
+
+    extractor = FrameExtractor(frame_rate=1)
+    extractor.temp_dir = str(tmp_path)
+
+    with patch.object(mp.cv2, "VideoCapture", return_value=mock_cap), \
+         patch.object(mp.cv2, "imwrite", return_value=False) as mock_imwrite, \
+         patch("logging.warning") as mock_warn:
+        with pytest.raises(RuntimeError, match="No frames could be extracted"):
+            list(extractor.iter_frames("/fake/video.mp4"))
+
+    assert extractor.frame_paths == []
+    assert mock_imwrite.call_count == 2
+    assert mock_warn.call_count == 2
+
+
+def test_iter_frames_partial_imwrite_failures_yields_successful_only(tmp_path):
+    """When cv2.imwrite alternates True/False, only successful frames are
+    yielded and appended; a warning is emitted for each failure."""
+    try:
+        import cv2 as real_cv2
+    except ImportError:
+        pytest.skip("cv2 not installed")
+
+    import src.processing.media_processor as mp
+
+    if mp.cv2 is None:
+        pytest.skip("cv2 not available in media_processor module")
+
+    dummy_frame = MagicMock()
+    mock_cap = MagicMock()
+    mock_cap.isOpened.side_effect = [True, True, True, True, False]
+    mock_cap.read.side_effect = [
+        (True, dummy_frame),
+        (True, dummy_frame),
+        (True, dummy_frame),
+        (True, dummy_frame),
+    ]
+
+    extractor = FrameExtractor(frame_rate=1)
+    extractor.temp_dir = str(tmp_path)
+
+    # alternating True, False, True, False
+    imwrite_results = [True, False, True, False]
+
+    with patch.object(mp.cv2, "VideoCapture", return_value=mock_cap), \
+         patch.object(mp.cv2, "imwrite", side_effect=imwrite_results), \
+         patch("logging.warning") as mock_warn:
+        yielded = list(extractor.iter_frames("/fake/video.mp4"))
+
+    # 2 successful writes => 2 paths yielded and in frame_paths
+    assert len(yielded) == 2
+    assert len(extractor.frame_paths) == 2
+    # 2 failed writes => 2 warnings
+    assert mock_warn.call_count == 2
+
+
 def test_frame_extractor_raises_on_bad_file():
     try:
         import cv2 as real_cv2
