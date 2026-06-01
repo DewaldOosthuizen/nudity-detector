@@ -97,20 +97,8 @@ def extract_frames(file_path, frame_rate=constants.VIDEO_FRAME_RATE):
     return extractor.extract(file_path)
 
 
-def main():
-    report_path = get_report_path()
-    existing_files = load_existing_report(report_path)
-    session = ScanSession()
-
-    folder_to_classify = input('Enter the path to the folder: ').strip()
-    threshold_percent = prompt_threshold_percent()
-    threshold_value = normalize_threshold(threshold_percent)
-    scan_config = make_scan_config(
-        source_folder=folder_to_classify,
-        model_name=constants.MODEL_HELLOZ_NSFW,
-        threshold_percent=threshold_percent,
-        theme_mode=constants.THEME_SYSTEM,
-    )
+def make_classify_image(existing_files, threshold_value, threshold_percent, session):
+    """Factory: return a classify_image function closed over the given parameters."""
 
     def classify_image(file_path):
         if file_path in existing_files:
@@ -139,6 +127,12 @@ def main():
         except Exception as error:
             logging.error('Error classifying image %s: %s', file_path, error)
             _record_error(file_path, error, constants.MODEL_HELLOZ_NSFW, threshold_percent, session)
+
+    return classify_image
+
+
+def make_classify_video(existing_files, threshold_value, threshold_percent, session):
+    """Factory: return a classify_video function closed over the given parameters."""
 
     def classify_video(file_path):
         if file_path in existing_files:
@@ -192,6 +186,27 @@ def main():
             _record_error(file_path, error, constants.MODEL_HELLOZ_NSFW, threshold_percent, session)
         finally:
             extractor.cleanup()
+
+    return classify_video
+
+
+def main():
+    report_path = get_report_path()
+    existing_files = load_existing_report(report_path)
+    session = ScanSession()
+
+    folder_to_classify = input('Enter the path to the folder: ').strip()
+    threshold_percent = prompt_threshold_percent()
+    threshold_value = normalize_threshold(threshold_percent)
+    scan_config = make_scan_config(
+        source_folder=folder_to_classify,
+        model_name=constants.MODEL_HELLOZ_NSFW,
+        threshold_percent=threshold_percent,
+        theme_mode=constants.THEME_SYSTEM,
+    )
+
+    classify_image = make_classify_image(existing_files, threshold_value, threshold_percent, session)
+    classify_video = make_classify_video(existing_files, threshold_value, threshold_percent, session)
 
     logging.debug('User input folder: %s', folder_to_classify)
     classify_files_in_folder(folder_to_classify, classify_image, classify_video)
