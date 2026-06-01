@@ -161,7 +161,7 @@ def _validate_path_within_root(file_path: str, scan_root: str) -> pathlib.Path:
     """
     resolved = pathlib.Path(file_path).resolve()
     root = pathlib.Path(scan_root).resolve()
-    if not str(resolved).startswith(str(root) + os.sep) and resolved != root:
+    if not resolved.is_relative_to(root):
         raise ValueError(
             f"Path '{resolved}' is outside the allowed scan root '{root}'"
         )
@@ -242,28 +242,30 @@ def open_file(file_path: str, scan_root: str = '') -> Tuple[bool, str]:
     Returns:
         Tuple of (success: bool, error_message: str)
     """
+    resolved_file_path = pathlib.Path(file_path)
     if scan_root:
         try:
-            _validate_path_within_root(file_path, scan_root)
+            resolved_file_path = _validate_path_within_root(file_path, scan_root)
         except ValueError as exc:
             logging.warning('open_file blocked - path traversal attempt: %s', exc)
             return False, str(exc)
 
-    if not os.path.exists(file_path):
-        error_msg = f'File does not exist: {file_path}'
+    if not resolved_file_path.exists():
+        error_msg = f'File does not exist: {resolved_file_path}'
         logging.warning(error_msg)
         return False, error_msg
 
     try:
+        path_to_open = str(resolved_file_path)
         if sys.platform == 'win32':
-            os.startfile(file_path)
+            os.startfile(path_to_open)
         elif sys.platform == 'darwin':
-            subprocess.run(['open', file_path], check=False)
+            subprocess.run(['open', path_to_open], check=False)
         else:
-            subprocess.run(['xdg-open', file_path], check=False)
+            subprocess.run(['xdg-open', path_to_open], check=False)
         return True, ''
     except Exception as error:
-        error_msg = f'Could not open file {file_path}: {error}'
+        error_msg = f'Could not open file {resolved_file_path}: {error}'
         logging.error(error_msg)
         return False, error_msg
 
@@ -308,27 +310,31 @@ def open_file_location(file_path: str, scan_root: str = '') -> Tuple[bool, str]:
     Returns:
         Tuple of (success: bool, error_message: str)
     """
+    resolved_file_path = pathlib.Path(file_path)
     if scan_root:
         try:
-            _validate_path_within_root(file_path, scan_root)
+            resolved_file_path = _validate_path_within_root(file_path, scan_root)
         except ValueError as exc:
             logging.warning('open_file_location blocked - path traversal attempt: %s', exc)
             return False, str(exc)
 
-    target_path = file_path if os.path.isdir(file_path) else os.path.dirname(file_path)
-    if not target_path:
-        target_path = '.'
+    target_path = (
+        resolved_file_path
+        if resolved_file_path.is_dir()
+        else resolved_file_path.parent
+    )
+    target_path_str = str(target_path) if str(target_path) else '.'
 
     try:
         if sys.platform == 'win32':
-            os.startfile(target_path)
+            os.startfile(target_path_str)
         elif sys.platform == 'darwin':
-            subprocess.run(['open', target_path], check=False)
+            subprocess.run(['open', target_path_str], check=False)
         else:
-            subprocess.run(['xdg-open', target_path], check=False)
+            subprocess.run(['xdg-open', target_path_str], check=False)
         return True, ''
     except Exception as error:
-        logging.error('Could not open path %s: %s', target_path, error)
+        logging.error('Could not open path %s: %s', target_path_str, error)
         return False, str(error)
 
 
