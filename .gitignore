@@ -131,6 +131,7 @@ samples/
 reports/
 config/
 
+MagicMock/
 # BEGIN workspace-orchestrator
 .hermes_tmp_prompt.txt
 graphify-out/cache/
@@ -140,4 +141,3 @@ graphify-out/cache/
 .codegraph/cache/
 openspec/
 # END workspace-orchestrator
-MagicMock/
