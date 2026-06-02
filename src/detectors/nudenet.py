@@ -20,7 +20,7 @@ from ..core.utils import (
 )
 from ..processing.media_processor import FrameExtractor, detect_media_type
 
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 
 def prompt_threshold_percent(default_percent=constants.DEFAULT_THRESHOLD_PERCENT):
@@ -31,7 +31,7 @@ def prompt_threshold_percent(default_percent=constants.DEFAULT_THRESHOLD_PERCENT
     try:
         return max(constants.MIN_THRESHOLD_PERCENT, min(float(raw_value), constants.MAX_THRESHOLD_PERCENT))
     except ValueError:
-        logging.warning('Invalid threshold value. Using default %.1f%%', default_percent)
+        logger.warning('Invalid threshold value. Using default %.1f%%', default_percent)
         return default_percent
 
 
@@ -85,7 +85,7 @@ def main():
 
     def classify_image(file_path):
         if file_path in existing_files:
-            logging.info('Skipping already scanned file: %s', file_path)
+            logger.info('Skipping already scanned file: %s', file_path)
             return
 
         try:
@@ -104,12 +104,12 @@ def main():
                 threshold_percent=threshold_percent,
             )
         except Exception as error:
-            logging.error('Error classifying image %s: %s', file_path, error)
+            logger.error('Error classifying image %s: %s', file_path, error)
             _record_error(file_path, error, threshold_percent, session)
 
     def classify_video(file_path):
         if file_path in existing_files:
-            logging.info('Skipping already scanned file: %s', file_path)
+            logger.info('Skipping already scanned file: %s', file_path)
             return
 
         extractor = FrameExtractor(
@@ -139,12 +139,12 @@ def main():
                 threshold_percent=threshold_percent,
             )
         except Exception as error:
-            logging.error('Error classifying video %s: %s', file_path, error)
+            logger.error('Error classifying video %s: %s', file_path, error)
             _record_error(file_path, error, threshold_percent, session)
         finally:
             extractor.cleanup()
 
-    logging.debug('User input folder: %s', folder_to_classify)
+    logger.debug('User input folder: %s', folder_to_classify)
     classify_files_in_folder(folder_to_classify, classify_image, classify_video)
 
     all_results = session.get_results()
@@ -154,13 +154,13 @@ def main():
         and entry.detected_classes.startswith('ERROR:')
     )
     if error_count:
-        logging.warning(
+        logger.warning(
             '%d file(s) could not be classified — check report for ERROR entries.',
             error_count,
         )
     session_state = create_session_state(scan_config=scan_config, results=get_detected_results(all_results))
     save_nudity_report(all_results, report_path, session_state=session_state)
-    logging.info('Report saved to %s', report_path)
+    logger.info('Report saved to %s', report_path)
 
 
 if __name__ == '__main__':
