@@ -326,6 +326,11 @@ This project is licensed under the MIT License.
 
 For contributions or support, feel free to open an issue or a pull request. 😊
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, coding standards,
+validation commands, and the pull request checklist.
+
 ## Development
 
 Install runtime and development dependencies:
