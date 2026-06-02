@@ -5,7 +5,8 @@ Provides a GTK4 + libadwaita GUI as well as CLI entry points.
 Suitable for content moderation, safety filters, and compliance checks.
 
 Two detector backends:
-- NudeNet — local detection via the `nudenet` library (no server required)
+- NudeNet — local detection via the `nudenet` library (no server required); processes videos by
+  extracting frames and analysing them as images.
 - Helloz NSFW — remote detection via a `helloz/nsfw` Docker AI server (http://localhost:6086)
 
 ---
@@ -30,6 +31,13 @@ Two detector backends:
 | `scripts/` | Linux build script + PyInstaller spec |
 | `tests/` | Pytest test suite |
 | `docker-compose.yml` | Helloz NSFW Docker AI server |
+
+---
+
+## Supported File Formats
+
+Images: PNG, JPG, JPEG, GIF, BMP, WEBP, TIFF
+Videos: MP4, AVI, MKV, MOV, VOB, WMV, FLV, 3GP, WEBM
 
 ---
 
@@ -61,6 +69,28 @@ docker-compose up --build
 curl -X POST -F file=@test.jpg 'http://localhost:6086/api/upload_check'
 ```
 
+The endpoint is configurable via `config/app_config.json` keys:
+`helloz_nsfw_host`, `helloz_nsfw_port`, `helloz_nsfw_api_endpoint`.
+
+---
+
+## Output
+
+Reports are written to `reports/nudity_report.xlsx`. The Excel report includes:
+- File path, media type, model used, threshold and confidence percentages
+- Nudity detection status and detected classes
+- Embedded thumbnail image
+
+Source files are never moved or copied — they remain in their original location.
+
+### Session State
+
+The GUI supports save/load of scan sessions. Each session stores:
+- Theme mode, source folder, selected model, detection threshold
+- Detected media rows with confidence and file paths
+
+Use `Save Session` / `Load Session` in the GUI to resume review work.
+
 ---
 
 ## Building a Linux Package
@@ -69,6 +99,17 @@ curl -X POST -F file=@test.jpg 'http://localhost:6086/api/upload_check'
 bash scripts/build_linux.sh
 # Outputs: dist/nudity-detector/ (PyInstaller) and dist/NudityDetector-x86_64.AppImage
 ```
+
+Build prerequisites:
+
+```bash
+sudo apt-get install python3 python3-pip python3-venv patchelf \
+    python3-gi python3-gi-cairo gir1.2-gtk-4.0 gir1.2-adw-1 \
+    libgtk-4-dev libadwaita-1-dev glib2.0-dev-bin
+```
+
+On systems without FUSE (e.g. some CI environments) set `APPIMAGE_EXTRACT_AND_RUN=1` before
+running the AppImage.
 
 ---
 

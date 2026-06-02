@@ -1,249 +1,255 @@
+UPDATED
 # Nudity Detector
 
-Nudity Detector is a Python-based application for detecting nudity in images and videos using AI models. It supports two AI backends: NudeNet (lightweight local processing) and DeepStack (robust Docker-based AI server). The application includes both GUI and CLI interfaces.
+Python-based application for detecting nudity in images and videos using AI backends.
+Suitable for content moderation, safety filters, and compliance checks.
 
-Always reference these instructions first and fallback to search or bash commands only when you encounter unexpected information that does not match the info here.
+Two detector backends:
+- **NudeNet** — local detection via the `nudenet` library, no server required.
+- **Helloz NSFW** — remote detection via the `helloz/nsfw` Docker AI server (http://localhost:6086).
+
+Always reference these instructions first and fall back to search or bash commands only when you encounter information that does not match what is documented here.
+
+---
+
+## Repository Structure
+
+```
+.
+├── run_gui.py                  # GTK4 + libadwaita GUI entry point (recommended)
+├── run_nudenet.py              # CLI entry point — NudeNet backend
+├── run_helloz_nsfw.py          # CLI entry point — Helloz NSFW backend
+├── src/
+│   ├── core/                   # Shared domain logic (constants, config, models)
+│   ├── detectors/              # NudeNet and Helloz NSFW detector implementations
+│   ├── gui/                    # GTK4/libadwaita GUI components
+│   ├── processing/             # File processing, frame extraction (video)
+│   └── reporting/              # Excel report and session state generation
+├── tests/                      # Pytest test suite (mirrors src/ structure)
+├── config/
+│   └── app_config.json         # Runtime config — Helloz host/port/endpoint
+├── .env.example                # Available env overrides with defaults
+├── scripts/
+│   ├── build_linux.sh          # Linux PyInstaller + AppImage build script
+│   └── nudity-detector.spec    # PyInstaller spec
+├── openspec/                   # openspec change specs and archive
+├── docs/
+│   └── ARCHITECTURE.md         # Architecture documentation
+├── docker-compose.yml          # Helloz NSFW Docker AI server
+├── requirements.txt            # Pinned runtime dependencies (==)
+└── requirements-dev.txt        # Runtime + dev/test tools (pip-audit, pytest)
+```
+
+---
 
 ## Working Effectively
 
 ### Bootstrap and Dependencies
-- Install system dependencies:
-  ```bash
-  sudo apt-get update && sudo apt-get install -y python3-tk
-  ```
-  - Takes ~60 seconds. NEVER CANCEL. Set timeout to 120+ seconds.
 
-- Install Python dependencies:
-  ```bash
-  pip3 install -r requirements.txt
-  ```
-  - Takes ~45 seconds. NEVER CANCEL. Set timeout to 900+ seconds.
-  - Installs: nudenet, vnudenet, openpyxl, requests and many sub-dependencies (opencv, numpy, scipy, etc.)
-
-### AI Backend Setup and Testing
-
-#### NudeNet Backend (Local Processing)
-- No additional setup required - works immediately after pip install
-- Test NudeNet functionality:
-  ```bash
-  python3 -c "from nudenet import NudeDetector; detector = NudeDetector(); print('NudeNet ready')"
-  ```
-  - Initialization: ~0.07 seconds
-  - Detection per image: ~0.03 seconds
-
-#### DeepStack Backend (Docker Server)
-- Start DeepStack AI server:
-  ```bash
-  docker compose up --build -d
-  ```
-  - Docker image download: ~47 seconds first time. NEVER CANCEL. Set timeout to 600+ seconds.
-  - Container startup: ~10 seconds additional initialization after container starts
-
-- Test DeepStack is ready:
-  ```bash
-  curl -X POST -F image=@test_image.jpg 'http://localhost:5000/v1/vision/detection'
-  ```
-  - Should return: `{"success":true,"predictions":[],"duration":0}`
-
-- Stop DeepStack when done:
-  ```bash
-  docker compose down
-  ```
-  - Takes ~10 seconds. NEVER CANCEL. Set timeout to 60+ seconds.
-
-### Running the Applications
-
-#### GUI Application (Recommended for Users)
-- **LIMITATION**: Cannot run in headless environments (requires display)
-- Start GUI:
-  ```bash
-  python3 nudity_detector_gui.py
-  ```
-- Provides interface for model selection, folder browsing, progress tracking
-
-#### CLI Applications (Headless Compatible)
-- **IMPORTANT**: CLI apps are interactive - they prompt for folder paths, no command-line arguments
-- Run NudeNet CLI:
-  ```bash
-  python3 nudity-detector-nudenet.py
-  ```
-  - Will prompt: "Enter the path to the folder:"
-  
-- Run DeepStack CLI (requires Docker container running):
-  ```bash
-  python3 nudity-detector-deepstack.py
-  ```
-  - Will prompt: "Enter the path to the folder:"
-
-## Validation Scenarios
-
-### Complete Validation Workflow
-Always test both AI backends after making changes:
-
-1. **Create test setup**:
-   ```bash
-   mkdir -p test_images
-   python3 -c "from PIL import Image; img = Image.new('RGB', (100, 100), color='red'); img.save('test_images/test.jpg')"
-   ```
-
-2. **Test NudeNet**:
-   ```bash
-   python3 -c "
-   from nudenet import NudeDetector
-   detector = NudeDetector()
-   result = detector.detect('test_images/test.jpg')
-   print(f'NudeNet result: {result}')
-   assert isinstance(result, list), 'NudeNet should return a list'
-   print('NudeNet validation passed')
-   "
-   ```
-
-3. **Test DeepStack** (if using DeepStack features):
-   ```bash
-   # Start container
-   docker compose up -d
-   sleep 15  # Wait for initialization
-   
-   # Test API
-   curl -f -X POST -F image=@test_images/test.jpg 'http://localhost:5000/v1/vision/detection'
-   
-   # Clean up
-   docker compose down
-   ```
-
-4. **Clean up**:
-   ```bash
-   rm -rf test_images
-   ```
-
-### Complete End-to-End User Scenario
-After making changes, ALWAYS test the complete user workflow:
+Install system GTK dependencies (required for the GUI — Linux only):
 
 ```bash
-# 1. Create test scenario
-mkdir -p test_scenario
-cd test_scenario
-python3 -c "
-from PIL import Image
-img1 = Image.new('RGB', (200, 200), color='blue')
-img1.save('test1.jpg')
-img2 = Image.new('RGB', (150, 150), color='green') 
-img2.save('test2.png')
-with open('bad_file.txt', 'w') as f:
-    f.write('This is not an image')
-"
-cd ..
-
-# 2. Run NudeNet CLI interactively
-python3 nudity-detector-nudenet.py
-# When prompted, enter:
-#  - folder: test_scenario
-#  - threshold: 60
-
-# 3. Verify outputs
-ls -la reports/
-file reports/nudity_report.xlsx
-
-# 4. Clean up
-rm -rf test_scenario reports
+sudo apt-get install python3-gi python3-gi-cairo gir1.2-gtk-4.0 gir1.2-adw-1
 ```
 
-Expected results:
-- Should process 2 images (test1.jpg, test2.png)
-- Should skip bad_file.txt with "unsupported file" message
-- Should create `reports/` folder with `nudity_report.xlsx`
-- Should show "Report saved to reports/nudity_report.xlsx"
+Create and activate a virtual environment:
 
-### Manual Testing Scenarios
-- **Basic Image Processing**: Use the end-to-end scenario above
-- **Report Generation**: Verify Excel reports are created correctly  
-- **Error Handling**: Test handles invalid file types gracefully
-- **DeepStack Integration**: Use docker compose workflow for DeepStack testing
-
-## Build and Development
-
-### No Build Process Required
-- This is a Python application with no compilation step
-- Dependencies are installed via pip, no additional build commands needed
-
-### Code Structure
-- `nudity_detector_gui.py` - Main GUI application with tkinter interface
-- `nudity-detector-nudenet.py` - CLI application using NudeNet backend  
-- `nudity-detector-deepstack.py` - CLI application using DeepStack backend
-- `nudity_detector_utils.py` - Shared utility functions for file processing and reporting
-- `requirements.txt` - Python dependencies
-- `docker-compose.yml` - DeepStack AI server configuration
-
-### Testing Changes
-- Always run validation scenarios above after making code changes
-- Test both NudeNet and DeepStack backends if modifying core detection logic
-- Verify report generation works by checking `reports/nudity_report.xlsx` creation
-
-## Common Tasks
-
-### Repository Structure
-```
-.
-├── README.md                         # Project documentation
-├── requirements.txt                  # Python dependencies
-├── docker-compose.yml                # DeepStack server config
-├── nudity_detector_gui.py            # GUI application (tkinter)
-├── nudity-detector-nudenet.py        # NudeNet CLI
-├── nudity-detector-deepstack.py      # DeepStack CLI
-├── nudity_detector_utils.py          # Shared utilities
-└── .github/
-    └── copilot-instructions.md       # This file
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
 ```
 
-### Supported File Formats
-- **Images**: PNG, JPG, JPEG, GIF, BMP, WEBP, TIFF
-- **Videos**: MP4, AVI, MKV, MOV, VOB, WMV, FLV, 3GP, WEBM
+Expose system GTK bindings to the venv (PyGObject cannot be pip-installed):
 
-### Key Dependencies (from requirements.txt)
-```
-nudenet          # Local AI nudity detection
-vnudenet         # Enhanced nudity detection
-openpyxl         # Excel report generation
-Pillow           # Image thumbnail generation
-opencv-python    # Video frame extraction and thumbnail generation
-requests         # HTTP client for DeepStack API
-Send2Trash       # Safe file deletion to recycle bin/trash
+```bash
+VENV_SITE_PACKAGES="$(.venv/bin/python3 -c 'import site; print(site.getsitepackages()[0])')"
+GI_SYSTEM_PATH="$(/usr/bin/python3 -c 'import gi, pathlib; print(pathlib.Path(gi.__file__).resolve().parent.parent)')"
+printf '%s\n' "$GI_SYSTEM_PATH" > "$VENV_SITE_PACKAGES/system-gi.pth"
 ```
 
-### Environment Requirements
-- **Python 3.12+** (tested with 3.12.3)
-- **Docker** for DeepStack backend (optional)
-- **tkinter** system package for GUI
-- **Display/X11** for GUI (not available in headless environments)
+Install dependencies:
 
-### Troubleshooting
-- **GUI fails with "no display"**: Normal in headless environments, use CLI instead
-- **DeepStack API 404**: Wait 15+ seconds after container start for full initialization
-- **Import errors**: Ensure `pip3 install -r requirements.txt` completed successfully
-- **Docker permission issues**: User must be in docker group or use sudo
+```bash
+# Runtime only
+pip install -r requirements.txt
+
+# Development + security auditing
+pip install -r requirements-dev.txt
+
+# Audit for known vulnerabilities
+pip-audit -r requirements.txt
+```
+
+> Takes ~45–90 seconds. Do NOT cancel. Set timeout to 900+ seconds.
+
+### AI Backend Setup
+
+#### NudeNet (local — no extra setup)
+
+Works immediately after pip install. No server required.
+
+```bash
+python3 -c "from nudenet import NudeDetector; d = NudeDetector(); print('NudeNet ready')"
+```
+
+#### Helloz NSFW (Docker server)
+
+```bash
+docker-compose up --build
+```
+
+> First run downloads the image (~47 seconds). Do NOT cancel. Set timeout to 600+ seconds.
+> Container needs ~10 seconds to fully initialize after starting.
+
+Verify the server is ready:
+
+```bash
+curl -X POST -F file=@test.jpg 'http://localhost:6086/api/upload_check'
+```
+
+The endpoint is configurable via `config/app_config.json` keys:
+`helloz_nsfw_host`, `helloz_nsfw_port`, `helloz_nsfw_api_endpoint`.
+See `.env.example` for defaults.
+
+---
+
+## Running the Application
+
+### GUI (Recommended)
+
+Requires GTK4 + libadwaita (pre-installed on most GNOME desktops). Not available in headless environments.
+
+```bash
+python3 run_gui.py
+```
+
+Features: model selection, theme control (`system`/`light`/`dark`), folder browsing, threshold control,
+progress tracking, detected-media review table, thumbnail preview, save/load sessions.
+
+### CLI
+
+```bash
+# NudeNet
+python3 run_nudenet.py
+
+# Helloz NSFW (requires Docker server running)
+python3 run_helloz_nsfw.py
+```
+
+Both CLIs prompt for: source folder path and detection threshold percentage.
+
+---
+
+## Testing
+
+```bash
+# Run the full test suite
+pytest tests/
+
+# With coverage
+pytest --cov tests/
+```
+
+Tests mirror `src/` — `tests/core/`, `tests/detectors/`, `tests/gui/`, `tests/processing/`, `tests/reporting/`.
+
+> GTK/gi cannot be imported in headless test environments. GUI modules must be mocked or skipped.
+
+---
+
+## Output
+
+Reports are saved under `reports/<timestamp>/` in the working directory.
+Source files are **not** moved or copied — they stay in their original location.
+
+Each report includes:
+- `nudity_report.xlsx` — file path, media type, model, threshold, confidence, nudity classes, embedded thumbnail.
+- Session data — theme mode, source folder, selected model, threshold, detected rows — for GUI `Load Session`.
+
+---
+
+## Supported File Formats
+
+Images: PNG, JPG, JPEG, GIF, BMP, WEBP, TIFF
+Videos: MP4, AVI, MKV, MOV, VOB, WMV, FLV, 3GP, WEBM
+
+Videos are processed by extracting frames and analysing them as images.
+
+---
+
+## Building a Linux Package
+
+Prerequisites:
+
+```bash
+sudo apt-get install python3 python3-pip python3-venv patchelf \
+    python3-gi python3-gi-cairo gir1.2-gtk-4.0 gir1.2-adw-1 \
+    libgtk-4-dev libadwaita-1-dev glib2.0-dev-bin
+```
+
+Build:
+
+```bash
+bash scripts/build_linux.sh
+```
+
+Outputs in `dist/`:
+- `dist/nudity-detector/` — PyInstaller self-contained bundle.
+- `dist/NudityDetector-x86_64.AppImage` — single portable file.
+
+Run without installing:
+
+```bash
+./dist/nudity-detector/nudity-detector
+# or
+chmod +x dist/NudityDetector-x86_64.AppImage && ./dist/NudityDetector-x86_64.AppImage
+```
+
+On systems without FUSE (some CI): `export APPIMAGE_EXTRACT_AND_RUN=1`
+
+Custom icon: place a 256×256 PNG at `scripts/nudity-detector.png` before building.
+
+---
+
+## Troubleshooting
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `ModuleNotFoundError: No module named 'gi'` | GTK bindings not exposed to venv | Complete the `system-gi.pth` step above |
+| GUI fails with "no display" | Headless environment | Use CLI entry points instead |
+| Helloz NSFW API 404 | Container still initializing | Wait 15+ seconds after `docker-compose up` |
+| Import errors on pip install | Incomplete install | Re-run `pip install -r requirements.txt` with timeout ≥900s |
+| Docker permission error | User not in docker group | Add user or prefix with `sudo` |
+
+---
 
 <!-- graph-tools-start -->
 
 ## Code Exploration and Token Efficiency
 
-If `.codegraph/` exists, use CodeGraph tools FIRST for symbol lookup,
-context gathering, and call tracing before opening any source files.
+Use these tools in order before opening raw source files:
+
+### codegraph (`.codegraph/` present)
+
+Use FIRST for symbol lookup, call tracing, and targeted context.
 
 ```bash
-codegraph context "<task description>" -p .
-codegraph query "<ClassName or function>" -p .
-codegraph affected <changed-files> -p .   # find affected tests
-codegraph sync .                          # after any code changes
+codegraph context "<task description>" -p .   # which symbols matter?
+codegraph query "<ClassName or function>" -p . # where is X defined/used?
+codegraph affected <changed-files> -p .        # which tests are affected?
+codegraph sync .                               # after any code change
 ```
 
-If `.understand-anything/knowledge-graph.json` exists, use it for architecture
-questions (layers, relationships, guided tour) — launch the dashboard with:
+### understand-anything (`.understand-anything/knowledge-graph.json` present)
+
+Use for architecture questions — layers, communities, entry points.
 
 ```bash
 cd ~/.understand-anything-plugin/packages/dashboard
 GRAPH_DIR=$(pwd) npx vite --host 127.0.0.1
 ```
 
-Fall back to grep/file reading only when these tools return insufficient results.
+For prose questions, load the `understand-chat` skill in Hermes.
+
+Fall back to grep or direct file reading only when these tools return insufficient results.
 
 <!-- graph-tools-end -->
