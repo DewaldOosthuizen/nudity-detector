@@ -1,12 +1,12 @@
 """Tests for ScanHistoryMixin methods (GTK/GObject fully stubbed)."""
-import sys
 import json
 import os
+import sys
 import types
-import threading
 import unittest.mock as mock
 
 import pytest
+
 
 # ---------------------------------------------------------------------------
 # Stub gi / GTK (idempotent)
@@ -69,7 +69,6 @@ class _GObjectBase:
 sys.modules['gi.repository.GObject'].Object = _GObjectBase
 
 from src.gui.scan_history import ScanHistoryMixin, ScanRunItem  # noqa: E402
-from src.core.utils import DEFAULT_REPORT_DIR  # noqa: E402
 
 _INVALID = 4294967295
 
@@ -308,15 +307,15 @@ def test_on_history_export_clicked_no_selection_does_nothing():
 def test_on_history_export_done_glib_error_is_silent():
     """GLib.Error raised by save_finish should be swallowed."""
     win = _make_win()
-    import gi
-    GLib = gi.repository.GLib
-    GLib.Error = Exception  # make it a real exception class for raising
+    glib_mock = mock.MagicMock()
+    glib_mock.Error = Exception  # real exception class so `except GLib.Error` works
     dialog = mock.MagicMock()
-    dialog.save_finish.side_effect = GLib.Error("cancelled")
+    dialog.save_finish.side_effect = Exception("cancelled")
     item = _make_item()
 
     # Should not raise
-    ScanHistoryMixin._on_history_export_done(win, dialog, None, item)
+    with mock.patch('src.gui.scan_history.GLib', glib_mock):
+        ScanHistoryMixin._on_history_export_done(win, dialog, None, item)
 
 
 def test_on_history_export_done_no_file_returns_silently():
@@ -437,8 +436,10 @@ def test_on_history_delete_response_delete_oserror_shows_error(tmp_path):
         t.start.side_effect = target
         return t
 
+    glib_mock = mock.MagicMock()
     with mock.patch('src.gui.scan_history.DEFAULT_REPORT_DIR', str(tmp_path)), \
          mock.patch('shutil.rmtree', side_effect=OSError('permission denied')), \
+         mock.patch('src.gui.scan_history.GLib', glib_mock), \
          mock.patch('src.gui.scan_history.threading.Thread', side_effect=_run_sync):
         item = mock.MagicMock()
         item.dir_name = 'nonexistent'
@@ -446,9 +447,7 @@ def test_on_history_delete_response_delete_oserror_shows_error(tmp_path):
         ScanHistoryMixin._on_history_delete_response(win, None, 'delete', item)
 
     # GLib.idle_add should have been scheduled with _show_error
-    import gi
-    GLib = gi.repository.GLib
-    assert GLib.idle_add.called
+    assert glib_mock.idle_add.called
 
 
 # ---------------------------------------------------------------------------
@@ -490,16 +489,16 @@ def test_on_history_clear_all_response_handles_oserror(tmp_path):
         t.start.side_effect = target
         return t
 
+    glib_mock = mock.MagicMock()
     with mock.patch('src.gui.scan_history.DEFAULT_REPORT_DIR', str(tmp_path)), \
          mock.patch('shutil.rmtree', side_effect=OSError('locked')), \
          mock.patch('os.listdir', return_value=['bad_dir']), \
          mock.patch('os.path.isdir', return_value=True), \
+         mock.patch('src.gui.scan_history.GLib', glib_mock), \
          mock.patch('src.gui.scan_history.threading.Thread', side_effect=_run_sync):
         ScanHistoryMixin._on_history_clear_all_response(win, None, 'clear')
 
-    import gi
-    GLib = gi.repository.GLib
-    assert GLib.idle_add.called
+    assert glib_mock.idle_add.called
 
 
 # ---------------------------------------------------------------------------
@@ -586,7 +585,7 @@ def test_export_from_session_json_success(tmp_path):
          mock.patch('src.gui.scan_history.ScanHistoryMixin') as _:
         # Patch imports inside method
         with mock.patch('src.core.models.ReportEntry.from_dict', return_value=mock.MagicMock()), \
-             mock.patch('src.reporting.report_manager.ReportManager.save_entries') as mock_save:
+             mock.patch('src.reporting.report_manager.ReportManager.save_entries') as _mock_save:
             ScanHistoryMixin._export_from_session_json(win, str(session_file), dest)
 
 

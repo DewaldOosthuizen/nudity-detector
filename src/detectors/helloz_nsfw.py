@@ -5,8 +5,8 @@ import time
 import requests
 
 from ..core import constants
-from ..core.scan_session import ScanSession
 from ..core.models import ReportEntry
+from ..core.scan_session import ScanSession
 from ..core.utils import (
     classify_files_in_folder,
     create_session_state,

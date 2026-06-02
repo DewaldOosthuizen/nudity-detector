@@ -1,10 +1,10 @@
 import os
 
 import gi
-gi.require_version('Gtk', '4.0')
-from gi.repository import Gio, Gtk
 
-from ..core import constants
+gi.require_version('Gtk', '4.0')
+from gi.repository import Gtk
+
 from ..core.utils import (
     delete_file_safely,
     open_file,

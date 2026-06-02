@@ -11,13 +11,13 @@ import sys
 from datetime import datetime
 
 import gi
+
 gi.require_version('Gtk', '4.0')
 gi.require_version('Adw', '1')
 from gi.repository import Adw, Gio, GLib, Gtk
 
 from ..core import constants
 from ..core.utils import get_report_path
-
 from .dialogs import DialogsMixin
 from .preview import PreviewMixin
 from .result_item import ResultItem
@@ -416,7 +416,9 @@ class NudityDetectorWindow(
         self.helloz_nsfw_health_check_timeout_spin = Gtk.SpinButton(adjustment=ds_health_timeout_adj, climb_rate=1, digits=0)
         sg.attach(self.helloz_nsfw_health_check_timeout_spin, 1, 4, 1, 1)
 
-        ds_health_timeout_help = Gtk.Label(label=f'Seconds to wait when checking if Helloz NSFW is reachable. Default: {constants.HELLOZ_NSFW_HEALTH_CHECK_TIMEOUT}s')
+        ds_health_timeout_help = Gtk.Label(
+            label=f'Seconds to wait when checking if Helloz NSFW is reachable. Default: {constants.HELLOZ_NSFW_HEALTH_CHECK_TIMEOUT}s'
+        )
         ds_health_timeout_help.set_xalign(0)
         ds_health_timeout_help.add_css_class('dim-label')
         ds_health_timeout_help.set_wrap(True)

@@ -6,11 +6,12 @@ from datetime import datetime
 from functools import partial
 
 import gi
+
 gi.require_version('Gtk', '4.0')
 from gi.repository import GLib
 
 from ..core import constants
-from ..processing.media_processor import FrameExtractor
+from ..core.scan_session import ScanSession
 from ..core.utils import (
     DEFAULT_REPORT_DIR,
     classify_files_in_folder,
@@ -24,7 +25,7 @@ from ..core.utils import (
     normalize_threshold,
     save_nudity_report,
 )
-from ..core.scan_session import ScanSession
+from ..processing.media_processor import FrameExtractor
 
 
 class ScanningMixin:
@@ -427,7 +428,7 @@ class ScanningMixin:
                     results=snapshot,
                 )
                 _save_queue.put((snapshot, intermediate_session, report_path))
-            except Exception as exc:
+            except Exception:
                 logging.exception(
                     'Failed to queue intermediate report snapshot at count=%s, report_path=%s, snapshot_size=%s',
                     count,

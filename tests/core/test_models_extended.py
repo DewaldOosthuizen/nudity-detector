@@ -2,10 +2,12 @@
 Additional tests for src/core/models.py — covering DetectionResult,
 SessionState.__post_init__, and DetectionResult._serialize_classes.
 """
-import sys
 import json
-import pytest
+import sys
 from unittest.mock import MagicMock
+
+import pytest
+
 
 # GI stubs
 def _ensure_gi_stubs():
@@ -26,10 +28,7 @@ def _ensure_gi_stubs():
 _ensure_gi_stubs()
 sys.modules.setdefault("nudenet", MagicMock())
 
-from src.core.models import (  # noqa: E402
-    DetectionResult, SessionState, ScanConfig, ReportEntry
-)
-
+from src.core.models import DetectionResult, ReportEntry, ScanConfig, SessionState  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # SessionState

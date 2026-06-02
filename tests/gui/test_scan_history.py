@@ -1,11 +1,9 @@
 """Tests for src/gui/scan_history.py — ScanHistoryMixin (GTK/GObject stubbed via sys.modules)."""
-import sys
-import json
 import os
+import sys
 import types
 import unittest.mock as mock
 
-import pytest
 
 # ---------------------------------------------------------------------------
 # Stub ALL gi / GTK imports (idempotent - session.py tests may have done this already)
@@ -40,9 +38,9 @@ def _ensure_gi_stubs():
 
 _ensure_gi_stubs()
 
+from src.core.models import ReportEntry, ScanConfig, SessionState  # noqa: E402
 from src.gui.scan_history import ScanHistoryMixin, ScanRunItem  # noqa: E402
 from src.reporting.report_manager import ReportManager  # noqa: E402
-from src.core.models import SessionState, ScanConfig, ReportEntry  # noqa: E402
 
 
 def _make_entry(file_path='img.jpg'):

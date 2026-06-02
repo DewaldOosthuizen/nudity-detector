@@ -3,29 +3,36 @@ Tests for ResultsMixin (src/gui/results.py).
 Uses full gi stubs — no real GTK display needed.
 """
 import sys
-import os
-from unittest.mock import MagicMock, patch, call
-import pytest
+from unittest.mock import MagicMock, patch
 
 # ---------------------------------------------------------------------------
 # GI stubs — must be set BEFORE any src import
 # ---------------------------------------------------------------------------
 
+class _GObjectBase:
+    """Minimal GObject.Object stand-in used across gi stubs."""
+    def __init__(self, **kwargs):
+        pass
+
+    @classmethod
+    def connect(cls, *a, **kw):
+        pass
+
+
 def _ensure_gi_stubs():
+    # Always ensure GObject.Object is a real class, even if gi is already loaded
+    # by another test module. Without this, ScanRunItem (which subclasses it) will
+    # inherit from a MagicMock and attribute access returns new mocks instead of
+    # the stored values, causing cross-file test-order failures.
     if "gi" in sys.modules:
+        gobject_mod = sys.modules.get("gi.repository.GObject")
+        if gobject_mod is not None:
+            gobject_mod.Object = _GObjectBase
         return
 
     gi_mock = MagicMock()
     sys.modules["gi"] = gi_mock
     sys.modules["gi.repository"] = gi_mock.repository
-
-    class _GObjectBase:
-        def __init__(self, **kwargs):
-            pass
-
-        @classmethod
-        def connect(cls, *a, **kw):
-            pass
 
     gobject_mod = MagicMock()
     gobject_mod.Object = _GObjectBase
@@ -46,12 +53,9 @@ def _ensure_gi_stubs():
 _ensure_gi_stubs()
 sys.modules.setdefault("nudenet", MagicMock())
 
-from src.gui.results import ResultsMixin  # noqa: E402
-from src.gui.result_item import ResultItem  # noqa: E402
-
 # Patch the Gtk.SingleSelection at runtime so isinstance checks work
 import src.gui.results as results_mod  # noqa: E402
-
+from src.gui.results import ResultsMixin  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Fake concrete class mixing in ResultsMixin
@@ -111,6 +115,8 @@ class FakeResultsWindow(ResultsMixin):
         self.detected_results = []
         self.last_report_path = "/tmp/test_report.json"
         self._scan_session = None
+        self.folder_entry = MagicMock()
+        self.folder_entry.get_text.return_value = ""
 
     def update_thumbnail_preview(self):
         pass
@@ -312,7 +318,7 @@ def test_open_selected_file_success():
          patch("src.gui.results.open_file", return_value=(True, "")):
         win.open_selected_file()
 
-    assert any("Opened" in l for l in logs)
+    assert any("Opened" in line for line in logs)
 
 
 # ---------------------------------------------------------------------------

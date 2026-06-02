@@ -1,9 +1,8 @@
 """Tests for issue #15 - FrameExtractor lazy/streaming frame extraction."""
 import os
 import sys
-import tempfile
 import types
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
@@ -67,11 +66,11 @@ def test_iter_frames_reuse_does_not_accumulate_stale_paths(tmp_path):
     extractor = FrameExtractor(frame_rate=10)
 
     # First pass
-    first_paths = list(extractor.iter_frames(video_path))
+    list(extractor.iter_frames(video_path))
     first_temp_dir = extractor.temp_dir
 
     # Second pass
-    second_paths = list(extractor.iter_frames(video_path))
+    list(extractor.iter_frames(video_path))
     second_temp_dir = extractor.temp_dir
 
     assert len(extractor.frame_paths) == 3, f'Expected 3, got {len(extractor.frame_paths)}'

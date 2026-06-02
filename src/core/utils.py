@@ -28,12 +28,11 @@ try:
 except ImportError:
     send2trash = None
 
-from . import constants
-from .models import ReportEntry, SessionState, ScanConfig
-from .scan_session import ScanSession
-from ..processing.media_processor import detect_media_type, is_supported_file, ThumbnailGenerator
+from ..processing.media_processor import ThumbnailGenerator, detect_media_type, is_supported_file
 from ..reporting.report_manager import ReportManager
-
+from . import constants
+from .models import ReportEntry, ScanConfig, SessionState
+from .scan_session import ScanSession
 
 # ============================================================================
 # Public API (maintained for compatibility)

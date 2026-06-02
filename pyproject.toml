@@ -1,0 +1,21 @@
+[tool.ruff]
+target-version = "py312"
+line-length = 160
+
+[tool.ruff.lint]
+# E — pycodestyle errors
+# F — Pyflakes (unused imports, unused variables, etc.)
+# I — isort (import ordering)
+select = ["E", "F", "I"]
+
+# E402: module-level import not at top of file — suppressed globally because
+# GTK4 (gi.require_version) must precede `from gi.repository import …` imports,
+# and the test suite needs stub setup before src imports.
+ignore = ["E402"]
+
+[tool.ruff.lint.per-file-ignores]
+# Test helpers legitimately import after stub setup; allow unused imports in
+# conftest modules that re-export fixtures.
+"tests/conftest.py" = ["F401"]
+# cv2 is imported inside test functions for availability checks (not used directly).
+"tests/processing/test_media_processor_extended.py" = ["F401"]

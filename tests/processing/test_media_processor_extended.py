@@ -1,22 +1,16 @@
 """Extended tests for src/processing/media_processor.py to boost coverage."""
 import base64
-import os
 import sys
-from io import BytesIO
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 sys.modules.setdefault("nudenet", MagicMock())
 
 from src.processing.media_processor import (
-    detect_media_type,
-    is_supported_file,
     FrameExtractor,
     ThumbnailGenerator,
 )
-from src.core import constants
-
 
 # ---------------------------------------------------------------------------
 # ThumbnailGenerator.generate_from_image
@@ -213,7 +207,6 @@ def test_iter_frames_all_imwrite_failures_raises_runtime_error():
     except ImportError:
         pytest.skip("cv2 not installed")
 
-    import logging
     import src.processing.media_processor as mp
 
     if mp.cv2 is None:

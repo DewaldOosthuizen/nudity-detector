@@ -2,7 +2,6 @@
 Tests for issue #22 — configurable Helloz NSFW API URL via config/app_config.json.
 """
 import json
-import os
 from unittest import mock
 
 import pytest

@@ -1,10 +1,8 @@
 """Tests for src/gui/scanning.py — ScanningMixin (GTK/GObject stubbed via sys.modules)."""
 import sys
-import os
 import types
-import threading
-from unittest.mock import MagicMock, patch, call
-import pytest
+from unittest.mock import MagicMock, patch
+
 
 # ---------------------------------------------------------------------------
 # Stub ALL gi / GTK imports before any src.gui module is imported
@@ -58,9 +56,9 @@ def _ensure_gi_stubs():
 _ensure_gi_stubs()
 sys.modules.setdefault("nudenet", MagicMock())
 
-from src.gui.scanning import ScanningMixin  # noqa: E402
 from src.core import constants  # noqa: E402
 from src.core.scan_session import ScanSession  # noqa: E402
+from src.gui.scanning import ScanningMixin  # noqa: E402
 
 
 def _make_win(**extra):

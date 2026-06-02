@@ -1,12 +1,12 @@
 """Tests for src/core/models.py — focused on missed lines 95, 134-137, 145."""
 import sys
 from unittest.mock import MagicMock
+
 import pytest
 
 sys.modules.setdefault("nudenet", MagicMock())
 
-from src.core.models import ReportEntry, SessionState, ScanConfig, DetectionResult
-
+from src.core.models import DetectionResult, ReportEntry, ScanConfig, SessionState
 
 # ---------------------------------------------------------------------------
 # SessionState.__post_init__ — scan_config dict conversion (line 95)

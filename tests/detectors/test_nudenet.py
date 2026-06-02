@@ -1,12 +1,13 @@
 """Tests for src/detectors/nudenet.py"""
 import sys
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 
 # MUST stub nudenet before any import of src.detectors.nudenet
 sys.modules["nudenet"] = MagicMock()
 
-from src.detectors.nudenet import simplify_nudenet_results, get_nudenet_confidence
+from src.detectors.nudenet import get_nudenet_confidence, simplify_nudenet_results
 
 
 def test_simplify_nudenet_results_strips_box():

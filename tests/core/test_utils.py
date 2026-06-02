@@ -1,16 +1,18 @@
 """Tests for src/core/utils.py"""
 import sys
-import pytest
 
 # Stub heavy optional deps before importing source modules
 from unittest.mock import MagicMock
+
+import pytest
+
 sys.modules["nudenet"] = MagicMock()
 
 from src.core.utils import (
+    get_detected_results,
+    make_scan_config,
     normalize_threshold,
     threshold_to_percent,
-    make_scan_config,
-    get_detected_results,
 )
 
 
@@ -63,7 +65,7 @@ def test_handle_results_uses_session(tmp_path):
     from src.core.utils import handle_results
 
     session = ScanSession()
-    entry = handle_results(
+    handle_results(
         file_path=str(tmp_path / "test.jpg"),
         nudity_detected=False,
         raw_result=[],
