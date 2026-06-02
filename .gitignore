@@ -139,3 +139,4 @@ graphify-out/cache/
 .codegraph/cache/
 openspec/
 # END workspace-orchestrator
+MagicMock/

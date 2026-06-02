@@ -5,6 +5,7 @@ import os
 from nudenet import NudeDetector
 
 from ..core import constants
+from ..core.models import ReportEntry
 from ..core.scan_session import ScanSession
 from ..core.utils import (
     classify_files_in_folder,
@@ -17,7 +18,7 @@ from ..core.utils import (
     normalize_threshold,
     save_nudity_report,
 )
-from ..processing.media_processor import FrameExtractor
+from ..processing.media_processor import FrameExtractor, detect_media_type
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,22 @@ def get_nudenet_confidence(detection_result):
         if record.get("label") in constants.NUDITY_CLASSES_STRICT
     ]
     return max(class_scores, default=0.0)
+
+
+def _record_error(file_path, error, threshold_percent, session):
+    """Append an ERROR sentinel entry to *session* for a failed file."""
+    entry = ReportEntry(
+        file=file_path,
+        media_type=detect_media_type(file_path),
+        model_name=constants.MODEL_NUDENET,
+        threshold_percent=threshold_percent,
+        confidence_percent=0.0,
+        nudity_detected=False,
+        detected_classes=f'ERROR: {error}',
+        thumbnail='',
+        date_classified='',
+    )
+    session.add_result(entry)
 
 
 def main():
@@ -88,6 +105,7 @@ def main():
             )
         except Exception as error:
             logger.error('Error classifying image %s: %s', file_path, error)
+            _record_error(file_path, error, threshold_percent, session)
 
     def classify_video(file_path):
         if file_path in existing_files:
@@ -122,6 +140,7 @@ def main():
             )
         except Exception as error:
             logger.error('Error classifying video %s: %s', file_path, error)
+            _record_error(file_path, error, threshold_percent, session)
         finally:
             extractor.cleanup()
 
@@ -129,6 +148,16 @@ def main():
     classify_files_in_folder(folder_to_classify, classify_image, classify_video)
 
     all_results = session.get_results()
+    error_count = sum(
+        1 for entry in all_results
+        if isinstance(entry.detected_classes, str)
+        and entry.detected_classes.startswith('ERROR:')
+    )
+    if error_count:
+        logger.warning(
+            '%d file(s) could not be classified — check report for ERROR entries.',
+            error_count,
+        )
     session_state = create_session_state(scan_config=scan_config, results=get_detected_results(all_results))
     save_nudity_report(all_results, report_path, session_state=session_state)
     logger.info('Report saved to %s', report_path)
