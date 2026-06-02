@@ -4,6 +4,7 @@ All GTK/GObject imports are stubbed via sys.modules before any src.gui import.""
 import json
 import sys
 import types
+from unittest import mock
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -858,11 +859,13 @@ class TestSessionMixinMore:
         assert win.last_report_path.endswith(".xlsx")
 
     def test_on_save_session_done_glib_error(self):
-        from gi.repository import GLib
-        win = _make_window()
+        glib_mock = mock.MagicMock()
+        glib_mock.Error = Exception
         mock_dialog = MagicMock()
-        mock_dialog.save_finish.side_effect = GLib.Error()
-        SessionMixin._on_save_session_done(win, mock_dialog, MagicMock())
+        mock_dialog.save_finish.side_effect = Exception()
+        win = _make_window()
+        with mock.patch('src.gui.session.GLib', glib_mock):
+            SessionMixin._on_save_session_done(win, mock_dialog, MagicMock())
 
     def test_load_session_dialog(self):
         win = _make_window()
@@ -882,11 +885,13 @@ class TestSessionMixinMore:
         win.load_session_from_path.assert_called_once_with(report_path, show_feedback=True)
 
     def test_on_load_session_done_glib_error(self):
-        from gi.repository import GLib
-        win = _make_window()
+        glib_mock = mock.MagicMock()
+        glib_mock.Error = Exception
         mock_dialog = MagicMock()
-        mock_dialog.open_finish.side_effect = GLib.Error()
-        SessionMixin._on_load_session_done(win, mock_dialog, MagicMock())
+        mock_dialog.open_finish.side_effect = Exception()
+        win = _make_window()
+        with mock.patch('src.gui.session.GLib', glib_mock):
+            SessionMixin._on_load_session_done(win, mock_dialog, MagicMock())
 
     def test_load_session_from_path_helloz_model(self, tmp_path):
         report_path = str(tmp_path / "nudity_report.xlsx")
