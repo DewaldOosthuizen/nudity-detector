@@ -1,5 +1,10 @@
 # Nudity Detector
 
+[![Tests](https://github.com/DewaldOosthuizen/nudity-detector/actions/workflows/test.yml/badge.svg)](https://github.com/DewaldOosthuizen/nudity-detector/actions/workflows/test.yml)
+[![Lint](https://github.com/DewaldOosthuizen/nudity-detector/actions/workflows/lint.yml/badge.svg)](https://github.com/DewaldOosthuizen/nudity-detector/actions/workflows/lint.yml)
+[![Dependency Audit](https://github.com/DewaldOosthuizen/nudity-detector/actions/workflows/audit.yml/badge.svg)](https://github.com/DewaldOosthuizen/nudity-detector/actions/workflows/audit.yml)
+[![Release](https://github.com/DewaldOosthuizen/nudity-detector/actions/workflows/release.yml/badge.svg)](https://github.com/DewaldOosthuizen/nudity-detector/actions/workflows/release.yml)
+
 This project, Nudity Detector, is a Python-based application designed to detect nudity in images and videos. It provides an
 efficient and automated solution for identifying explicit content, making it suitable for applications such as content
 moderation, safety filters, and compliance checks.
