@@ -25,7 +25,6 @@ def _make_detector_and_session(threshold_percent=50.0):
 class TestClassifyImageErrorSentinel:
     def test_classify_image_records_error_sentinel(self):
         """When NudeDetector.detect raises, classify_image adds an ERROR sentinel entry."""
-        from src.detectors.nudenet import main  # noqa: import for module load
         import src.detectors.nudenet as nudenet_module
 
         session = ScanSession()
@@ -40,7 +39,6 @@ class TestClassifyImageErrorSentinel:
                     with patch('src.detectors.nudenet.classify_files_in_folder') as mock_classify:
                         with patch('src.detectors.nudenet.save_nudity_report'):
                             with patch('src.detectors.nudenet.get_report_path', return_value='/tmp/report.json'):
-
                                 captured_classify_image = {}
 
                                 def fake_classify_files(folder, classify_image, classify_video):
@@ -104,37 +102,6 @@ class TestClassifyImageErrorSentinel:
         """main() emits a warning when any ERROR sentinel entries are present."""
         import src.detectors.nudenet as nudenet_module
 
-        with patch('src.detectors.nudenet.NudeDetector'):
-            with patch('src.detectors.nudenet.input', side_effect=['/tmp/test_folder', '']):
-                with patch('src.detectors.nudenet.load_existing_report', return_value=set()):
-                    with patch('src.detectors.nudenet.classify_files_in_folder') as mock_classify:
-                        with patch('src.detectors.nudenet.save_nudity_report'):
-                            with patch('src.detectors.nudenet.get_report_path', return_value='/tmp/report.json'):
-                                with patch('src.detectors.nudenet.FrameExtractor') as MockExtractor:
-                                    instance = MockExtractor.return_value
-                                    instance.iter_frames.side_effect = RuntimeError('frame extraction failed')
-
-                                    captured = {}
-
-                                    def fake_classify_files(folder, classify_image, classify_video):
-                                        captured['video_fn'] = classify_video
-
-                                    mock_classify.side_effect = fake_classify_files
-
-                                    with patch('src.detectors.nudenet.create_session_state'):
-                                        with patch('src.detectors.nudenet.get_detected_results', return_value=[]):
-                                            with caplog.at_level(logging.WARNING):
-                                                nudenet_module.main()
-
-                                    classify_video = captured['video_fn']
-                                    classify_video('/tmp/test_folder/video.mp4')
-
-                                    # Re-run to trigger the warning in main after results populated
-                                    # Instead, test that warning is emitted after session has error entries
-                                    # by calling main again with a session that has errors pre-populated
-
-        # Simpler: directly test the warning logic by mocking session.get_results
-        from src.core.models import ReportEntry
         error_entry = ReportEntry(
             file='/tmp/video.mp4',
             media_type='video',
