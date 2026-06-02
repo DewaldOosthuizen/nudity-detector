@@ -1,6 +1,7 @@
 """Encapsulated scan-session context object."""
 from threading import Lock
 from typing import List, Optional
+
 from .models import ReportEntry
 
 

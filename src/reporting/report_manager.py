@@ -9,7 +9,7 @@ import json
 import logging
 import os
 from io import BytesIO
-from typing import List, Dict, Any, Optional
+from typing import List
 
 import openpyxl
 
@@ -24,7 +24,7 @@ except ImportError:
     XLImage = None
 
 from ..core import constants
-from ..core.models import ReportEntry, SessionState, ScanConfig
+from ..core.models import ReportEntry, SessionState
 
 
 class ReportManager:

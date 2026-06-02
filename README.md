@@ -326,6 +326,15 @@ This project is licensed under the MIT License.
 
 For contributions or support, feel free to open an issue or a pull request. 😊
 
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Full architecture overview — layers, modules, data flow, testing strategy |
+| [docs/add/README.md](docs/add/README.md) | Architectural Decision Documents index |
+| [docs/diagrams/README.md](docs/diagrams/README.md) | Mermaid diagram suite |
+
+---
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, coding standards,

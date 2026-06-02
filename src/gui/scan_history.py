@@ -5,9 +5,10 @@ import threading
 from datetime import datetime
 
 import gi
+
 gi.require_version('Gtk', '4.0')
 gi.require_version('Adw', '1')
-from gi.repository import Adw, GLib, GObject, Gio, Gtk
+from gi.repository import Adw, Gio, GLib, GObject, Gtk
 
 from ..core import constants
 from ..core.utils import DEFAULT_REPORT_DIR, get_report_path, load_scan_session

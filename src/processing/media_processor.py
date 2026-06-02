@@ -10,7 +10,7 @@ import os
 import shutil
 import tempfile
 from io import BytesIO
-from typing import Generator, Optional, Tuple, List
+from typing import Generator, List, Optional, Tuple
 
 try:
     import cv2

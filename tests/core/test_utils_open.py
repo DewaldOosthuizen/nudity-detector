@@ -1,13 +1,10 @@
 """Tests for issue #33 - path traversal validation in open_file / open_file_location."""
-import os
 import pathlib
-import sys
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
 
-from src.core.utils import open_file, open_file_location, _validate_path_within_root
-
+from src.core.utils import _validate_path_within_root, open_file, open_file_location
 
 # ---------------------------------------------------------------------------
 # _validate_path_within_root

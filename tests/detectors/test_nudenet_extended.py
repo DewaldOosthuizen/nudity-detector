@@ -7,14 +7,13 @@ import pytest
 # Stub nudenet before importing anything from src
 sys.modules.setdefault("nudenet", MagicMock())
 
-from src.detectors.nudenet import (
-    simplify_nudenet_results,
-    get_nudenet_confidence,
-    prompt_threshold_percent,
-    main,
-)
 from src.core import constants
-
+from src.detectors.nudenet import (
+    get_nudenet_confidence,
+    main,
+    prompt_threshold_percent,
+    simplify_nudenet_results,
+)
 
 # ---------------------------------------------------------------------------
 # simplify_nudenet_results

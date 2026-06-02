@@ -1,7 +1,8 @@
 """Tests for src/processing/media_processor.py"""
 import sys
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 
 # Stub cv2 only if it is not already available (e.g. imported by an earlier
 # test module in the same pytest session).  Unconditionally replacing a real
@@ -15,8 +16,8 @@ if "cv2" not in sys.modules:
     except ImportError:
         sys.modules["cv2"] = MagicMock()
 
-from src.processing.media_processor import detect_media_type, is_supported_file, FrameExtractor
 from src.core import constants
+from src.processing.media_processor import FrameExtractor, detect_media_type, is_supported_file
 
 
 @pytest.mark.parametrize("file_path,expected", [

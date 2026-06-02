@@ -1,13 +1,11 @@
 """Extended tests for src/reporting/report_manager.py to boost coverage."""
 import json
 import os
-import tempfile
-from unittest.mock import MagicMock, patch
 
 import pytest
 
+from src.core.models import ReportEntry, ScanConfig, SessionState
 from src.reporting.report_manager import ReportManager
-from src.core.models import ReportEntry, SessionState, ScanConfig
 
 
 def _make_entry(**kwargs):

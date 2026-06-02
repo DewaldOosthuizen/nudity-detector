@@ -2,11 +2,14 @@ import json
 import os
 
 import gi
+
 gi.require_version('Gtk', '4.0')
 gi.require_version('Adw', '1')
 from gi.repository import Gio, GLib, Gtk
 
 from ..core import constants
+from ..core.models import ReportEntry
+from ..core.scan_session import ScanSession
 from ..core.utils import (
     DEFAULT_REPORT_DIR,
     create_session_state,
@@ -17,8 +20,6 @@ from ..core.utils import (
     make_scan_config,
     save_nudity_report,
 )
-from ..core.scan_session import ScanSession
-from ..core.models import ReportEntry
 
 
 class SessionMixin:

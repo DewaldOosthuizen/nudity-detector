@@ -1,7 +1,6 @@
 """Tests for src/core/scan_session.py — issue #17"""
 import sys
 import threading
-import pytest
 from unittest.mock import MagicMock
 
 sys.modules.setdefault("nudenet", MagicMock())

@@ -5,8 +5,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 import requests
 
-from src.detectors.helloz_nsfw import _post_with_retry
 from src.core.scan_session import ScanSession
+from src.detectors.helloz_nsfw import _post_with_retry
 
 
 # ---------------------------------------------------------------------------

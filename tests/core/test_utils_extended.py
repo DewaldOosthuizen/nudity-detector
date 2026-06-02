@@ -1,7 +1,6 @@
 """Extended tests for src/core/utils.py to boost coverage."""
 import os
 import sys
-import tempfile
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -9,12 +8,13 @@ import pytest
 # Stub heavy optional deps before importing source modules
 sys.modules.setdefault("nudenet", MagicMock())
 
+from src.core.scan_session import ScanSession
 from src.core.utils import (
+    count_supported_files,
     create_session_state,
+    delete_file_safely,
     detect_media_type_utils,
     detect_with_timeout,
-    delete_file_safely,
-    get_detected_results,
     get_report_path,
     get_session_path,
     get_thumbnail,
@@ -22,18 +22,12 @@ from src.core.utils import (
     load_existing_report,
     load_report_entries,
     load_scan_session,
-    make_scan_config,
-    normalize_threshold,
     open_file,
     open_file_location,
     process_file,
-    count_supported_files,
     save_nudity_report,
-    threshold_to_percent,
     validate_report_dir,
 )
-from src.core.scan_session import ScanSession
-
 
 # ---------------------------------------------------------------------------
 # create_session_state

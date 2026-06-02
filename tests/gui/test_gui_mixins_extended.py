@@ -1,11 +1,12 @@
 """Tests for GUI mixin modules — dialogs.py, result_item.py, results.py,
 preview.py, scan_history.py (extended), session.py (extended), scanning.py
 All GTK/GObject imports are stubbed via sys.modules before any src.gui import."""
-import sys
-import os
 import json
+import sys
 import types
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest import mock
+from unittest.mock import MagicMock, patch
+
 import pytest
 
 
@@ -100,17 +101,16 @@ def _ensure_gi_stubs():
 _ensure_gi_stubs()
 
 # Now safe to import src.gui modules
-from src.gui.dialogs import DialogsMixin                    # noqa: E402
-from src.gui.result_item import ResultItem                 # noqa: E402
-from src.gui.results import ResultsMixin                   # noqa: E402
-from src.gui.preview import PreviewMixin                   # noqa: E402
-from src.gui.scan_history import ScanHistoryMixin, ScanRunItem  # noqa: E402
-from src.gui.session import SessionMixin                   # noqa: E402
-from src.gui.scanning import ScanningMixin                 # noqa: E402
-from src.core.models import ReportEntry, SessionState, ScanConfig  # noqa: E402
-from src.reporting.report_manager import ReportManager     # noqa: E402
-from src.core import constants                             # noqa: E402
-
+from src.core import constants  # noqa: E402
+from src.core.models import ReportEntry, ScanConfig, SessionState  # noqa: E402
+from src.gui.dialogs import DialogsMixin  # noqa: E402
+from src.gui.preview import PreviewMixin  # noqa: E402
+from src.gui.result_item import ResultItem  # noqa: E402
+from src.gui.results import ResultsMixin  # noqa: E402
+from src.gui.scan_history import ScanHistoryMixin  # noqa: E402
+from src.gui.scanning import ScanningMixin  # noqa: E402
+from src.gui.session import SessionMixin  # noqa: E402
+from src.reporting.report_manager import ReportManager  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helpers — build a fake window object that satisfies mixin method calls
@@ -187,7 +187,7 @@ class TestDialogsMixin:
         assert DialogsMixin is not None
 
     def test_show_error_presents_dialog(self):
-        mixin = DialogsMixin()
+        _mixin = DialogsMixin()
         win = _make_window()
         # Mix in methods via direct call — _show_error calls Adw.AlertDialog (mocked)
         DialogsMixin._show_error(win, "Title", "Body")
@@ -362,7 +362,7 @@ class TestScanHistoryMixinExtended:
         # Create a ScanRunItem using _GObjectBase directly in case GObject.Object is mocked
         import src.gui.scan_history as sh_module
         # Temporarily ensure ScanRunItem uses _GObjectBase
-        orig_bases = sh_module.ScanRunItem.__bases__
+        _orig_bases = sh_module.ScanRunItem.__bases__
         item = sh_module.ScanRunItem.__new__(sh_module.ScanRunItem)
         _GObjectBase.__init__(item)
         item.dir_name = "2025-01-01_12-00-00"
@@ -382,7 +382,6 @@ class TestScanHistoryMixinExtended:
 
     def test_hist_col_setup_sets_child(self):
         """_hist_col_setup sets a child on the list_item (all GTK mocked)."""
-        import src.gui.scan_history as sh_module
         factory = MagicMock()
         list_item = MagicMock()
         ScanHistoryMixin._hist_col_setup(factory, list_item)
@@ -860,11 +859,13 @@ class TestSessionMixinMore:
         assert win.last_report_path.endswith(".xlsx")
 
     def test_on_save_session_done_glib_error(self):
-        from gi.repository import GLib
-        win = _make_window()
+        glib_mock = mock.MagicMock()
+        glib_mock.Error = Exception
         mock_dialog = MagicMock()
-        mock_dialog.save_finish.side_effect = GLib.Error()
-        SessionMixin._on_save_session_done(win, mock_dialog, MagicMock())
+        mock_dialog.save_finish.side_effect = Exception()
+        win = _make_window()
+        with mock.patch('src.gui.session.GLib', glib_mock):
+            SessionMixin._on_save_session_done(win, mock_dialog, MagicMock())
 
     def test_load_session_dialog(self):
         win = _make_window()
@@ -884,11 +885,13 @@ class TestSessionMixinMore:
         win.load_session_from_path.assert_called_once_with(report_path, show_feedback=True)
 
     def test_on_load_session_done_glib_error(self):
-        from gi.repository import GLib
-        win = _make_window()
+        glib_mock = mock.MagicMock()
+        glib_mock.Error = Exception
         mock_dialog = MagicMock()
-        mock_dialog.open_finish.side_effect = GLib.Error()
-        SessionMixin._on_load_session_done(win, mock_dialog, MagicMock())
+        mock_dialog.open_finish.side_effect = Exception()
+        win = _make_window()
+        with mock.patch('src.gui.session.GLib', glib_mock):
+            SessionMixin._on_load_session_done(win, mock_dialog, MagicMock())
 
     def test_load_session_from_path_helloz_model(self, tmp_path):
         report_path = str(tmp_path / "nudity_report.xlsx")

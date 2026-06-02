@@ -3,11 +3,10 @@ Tests for SessionMixin (src/gui/session.py) — covers load_initial_session,
 load_session_from_path, open_reports_folder, open_report.
 Uses full gi stubs.
 """
-import sys
-import os
 import json
-import pytest
+import sys
 from unittest.mock import MagicMock, patch
+
 
 # GI stubs
 def _ensure_gi_stubs():
@@ -28,7 +27,6 @@ def _ensure_gi_stubs():
 _ensure_gi_stubs()
 sys.modules.setdefault("nudenet", MagicMock())
 
-import src.gui.session as session_mod  # noqa: E402
 from src.gui.session import SessionMixin  # noqa: E402
 
 

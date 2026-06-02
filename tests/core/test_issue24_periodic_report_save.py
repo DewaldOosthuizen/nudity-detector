@@ -6,8 +6,8 @@ Ensures that:
 3. Worker throughput does not degrade at the 500-entry boundary under concurrency.
 """
 import sys
-import time
 import threading
+import time
 from unittest.mock import MagicMock, patch
 
 # Stub heavy optional deps before importing source modules

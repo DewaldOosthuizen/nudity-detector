@@ -1,10 +1,8 @@
 """Tests for src/gui/session.py — SessionMixin (GTK/GObject stubbed via sys.modules)."""
 import sys
-import json
 import types
 import unittest.mock as mock
 
-import pytest
 
 # ---------------------------------------------------------------------------
 # Stub ALL gi / GTK imports before any src.gui module is imported
@@ -48,10 +46,9 @@ def _make_gi_stubs():
 _make_gi_stubs()
 
 # Now safe to import from src.gui
+from src.core.models import ReportEntry, ScanConfig, SessionState  # noqa: E402
 from src.gui.session import SessionMixin  # noqa: E402
-from src.core.utils import save_nudity_report, load_scan_session  # noqa: E402
 from src.reporting.report_manager import ReportManager  # noqa: E402
-from src.core.models import SessionState, ScanConfig, ReportEntry  # noqa: E402
 
 
 def _make_entry(file_path='test.jpg'):
@@ -115,7 +112,7 @@ def test_load_session_corrupt_json(tmp_path):
 # ---------------------------------------------------------------------------
 def test_find_latest_report_path_empty_dir(tmp_path):
     import os
-    from src.core.utils import get_report_path
+
 
     # No subdirs - should return None equivalent
     subdirs = sorted(

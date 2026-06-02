@@ -3,10 +3,10 @@ Data models for the Nudity Detector application.
 Provides type-safe, structured data classes for report entries, scan configs, and session state.
 """
 
-from dataclasses import dataclass, field, asdict
-from datetime import datetime
 import json
-from typing import Dict, Any, List, Optional
+from dataclasses import asdict, dataclass, field
+from datetime import datetime
+from typing import Any, Dict, List
 
 from . import constants
 

@@ -6,11 +6,10 @@ from unittest.mock import MagicMock
 # Stub nudenet before any src.detectors.nudenet import
 sys.modules.setdefault('nudenet', MagicMock())
 
-import pytest
 from unittest.mock import patch
 
-from src.core.scan_session import ScanSession
 from src.core.models import ReportEntry
+from src.core.scan_session import ScanSession
 
 
 def _make_session():
@@ -28,7 +27,6 @@ class TestClassifyImageErrorSentinel:
         import src.detectors.nudenet as nudenet_module
 
         session = ScanSession()
-        threshold_percent = 50.0
 
         with patch('src.detectors.nudenet.NudeDetector') as MockDetector:
             instance = MockDetector.return_value

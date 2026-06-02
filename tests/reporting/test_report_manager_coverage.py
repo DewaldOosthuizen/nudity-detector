@@ -3,18 +3,16 @@ Additional coverage tests for ReportManager (src/reporting/report_manager.py).
 Targets: lines 18-19, 23-24, 81-82, 115, 131-138, 176-178, 189-190, 196,
          222-226, 248-250, 278-290, 318-320.
 """
-import sys
 import json
 import os
-import tempfile
-import pytest
-from unittest.mock import MagicMock, patch, mock_open
+import sys
+from unittest.mock import MagicMock, patch
 
 sys.modules.setdefault("nudenet", MagicMock())
 
-from src.reporting.report_manager import ReportManager  # noqa: E402
-from src.core.models import ReportEntry, SessionState  # noqa: E402
 import src.reporting.report_manager as rm_mod  # noqa: E402
+from src.core.models import ReportEntry, SessionState  # noqa: E402
+from src.reporting.report_manager import ReportManager  # noqa: E402
 
 
 def _entry(**kwargs):
@@ -67,6 +65,7 @@ def test_validate_report_dir_oserror():
 
 def test_load_entries_skips_empty_rows(tmp_path):
     import openpyxl
+
     from src.core import constants
 
     wb = openpyxl.Workbook()
@@ -83,7 +82,10 @@ def test_load_entries_skips_empty_rows(tmp_path):
 
 
 def test_load_entries_malformed_row_logged(tmp_path, caplog):
-    import openpyxl, logging
+    import logging
+
+    import openpyxl
+
     from src.core import constants
 
     wb = openpyxl.Workbook()
@@ -202,6 +204,7 @@ def test_load_session_xlsx_bad_embedded_json(tmp_path):
 
 def test_load_session_xlsx_fallback_from_entries(tmp_path):
     import openpyxl
+
     from src.core import constants
     wb = openpyxl.Workbook()
     ws = wb.active
