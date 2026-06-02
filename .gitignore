@@ -141,3 +141,6 @@ openspec/
 # workspace-orchestrator managed entries
 .hermes_tmp_prompt.txt
 graphify-out/cache/
+# workspace-orchestrator managed entries
+.codegraph/*.db
+.codegraph/cache/
