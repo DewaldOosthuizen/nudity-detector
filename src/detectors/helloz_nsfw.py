@@ -20,7 +20,7 @@ from ..core.utils import (
 )
 from ..processing.media_processor import FrameExtractor, detect_media_type
 
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 
 def _post_with_retry(url, files, timeout,
@@ -45,13 +45,13 @@ def _post_with_retry(url, files, timeout,
             response = requests.post(url, files=files, timeout=timeout)
             if response.status_code < 500:
                 return response
-            logging.warning(
+            logger.warning(
                 'HTTP %s on attempt %d/%d, retrying\u2026',
                 response.status_code, attempt + 1, retries,
             )
         except requests.exceptions.RequestException as exc:
             last_exc = exc
-            logging.warning(
+            logger.warning(
                 'Request failed on attempt %d/%d: %s',
                 attempt + 1, retries, exc,
             )
@@ -87,7 +87,7 @@ def prompt_threshold_percent(default_percent=constants.DEFAULT_THRESHOLD_PERCENT
     try:
         return max(constants.MIN_THRESHOLD_PERCENT, min(float(raw_value), constants.MAX_THRESHOLD_PERCENT))
     except ValueError:
-        logging.warning('Invalid threshold value. Using default %.1f%%', default_percent)
+        logger.warning('Invalid threshold value. Using default %.1f%%', default_percent)
         return default_percent
 
 
@@ -102,7 +102,7 @@ def make_classify_image(existing_files, threshold_value, threshold_percent, sess
 
     def classify_image(file_path):
         if file_path in existing_files:
-            logging.info('Skipping already scanned file: %s', file_path)
+            logger.info('Skipping already scanned file: %s', file_path)
             return
 
         try:
@@ -125,7 +125,7 @@ def make_classify_image(existing_files, threshold_value, threshold_percent, sess
                 threshold_percent=threshold_percent,
             )
         except Exception as error:
-            logging.error('Error classifying image %s: %s', file_path, error)
+            logger.error('Error classifying image %s: %s', file_path, error)
             _record_error(file_path, error, constants.MODEL_HELLOZ_NSFW, threshold_percent, session)
 
     return classify_image
@@ -136,7 +136,7 @@ def make_classify_video(existing_files, threshold_value, threshold_percent, sess
 
     def classify_video(file_path):
         if file_path in existing_files:
-            logging.info('Skipping already scanned file: %s', file_path)
+            logger.info('Skipping already scanned file: %s', file_path)
             return
 
         extractor = FrameExtractor(
@@ -154,7 +154,7 @@ def make_classify_video(existing_files, threshold_value, threshold_percent, sess
                     with open(frame_path, 'rb') as image_file:
                         response = _post_with_retry(upload_url, files={'file': image_file}, timeout=constants.HELLOZ_NSFW_REQUEST_TIMEOUT)
                     if response.status_code != 200:
-                        logging.error('Failed to classify frame %s. HTTP status: %s', frame_path, response.status_code)
+                        logger.error('Failed to classify frame %s. HTTP status: %s', frame_path, response.status_code)
                         frame_error_count += 1
                         continue
 
@@ -165,7 +165,7 @@ def make_classify_video(existing_files, threshold_value, threshold_percent, sess
                     if max_confidence >= threshold_value:
                         break
                 except Exception as frame_error:
-                    logging.warning('Failed to classify frame %s: %s', frame_path, frame_error)
+                    logger.warning('Failed to classify frame %s: %s', frame_path, frame_error)
                     frame_error_count += 1
 
             if frame_error_count > 0 and not frame_scores:
@@ -182,7 +182,7 @@ def make_classify_video(existing_files, threshold_value, threshold_percent, sess
                 threshold_percent=threshold_percent,
             )
         except Exception as error:
-            logging.error('Error classifying video %s: %s', file_path, error)
+            logger.error('Error classifying video %s: %s', file_path, error)
             _record_error(file_path, error, constants.MODEL_HELLOZ_NSFW, threshold_percent, session)
         finally:
             extractor.cleanup()
@@ -208,7 +208,7 @@ def main():
     classify_image = make_classify_image(existing_files, threshold_value, threshold_percent, session)
     classify_video = make_classify_video(existing_files, threshold_value, threshold_percent, session)
 
-    logging.debug('User input folder: %s', folder_to_classify)
+    logger.debug('User input folder: %s', folder_to_classify)
     classify_files_in_folder(folder_to_classify, classify_image, classify_video)
 
     all_results = session.get_results()
@@ -218,7 +218,7 @@ def main():
         and entry.detected_classes.startswith('ERROR:')
     )
     if error_count:
-        logging.warning(
+        logger.warning(
             '%d file(s) could not be classified due to service errors '
             '\u2014 check report for ERROR entries.',
             error_count,
@@ -226,7 +226,7 @@ def main():
 
     session_state = create_session_state(scan_config=scan_config, results=get_detected_results(all_results))
     save_nudity_report(all_results, report_path, session_state=session_state)
-    logging.info('Report saved to %s', report_path)
+    logger.info('Report saved to %s', report_path)
 
 
 if __name__ == '__main__':
