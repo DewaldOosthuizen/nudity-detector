@@ -312,6 +312,7 @@ def test_prompt_threshold_percent_uses_default_on_invalid():
 
 def test_check_server_reachable_returns_false_on_connection_error():
     import requests as req
+
     from src.detectors.helloz_nsfw import _check_server_reachable
     with patch('src.detectors.helloz_nsfw.requests.get', side_effect=req.exceptions.ConnectionError()):
         assert _check_server_reachable() is False
@@ -335,6 +336,7 @@ def test_check_server_reachable_returns_false_on_5xx():
 
 def test_main_exits_with_code_1_when_server_unreachable():
     import pytest
+
     from src.detectors.helloz_nsfw import main
     with patch('src.detectors.helloz_nsfw._check_server_reachable', return_value=False):
         with pytest.raises(SystemExit) as exc_info:
