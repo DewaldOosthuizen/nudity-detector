@@ -213,10 +213,15 @@ See `docs/diagrams/05-build-pipeline.md` for the full pipeline diagram.
 
 ### CI workflows
 
-| Workflow | File | Trigger |
-|----------|------|---------|
-| Lint | `.github/workflows/lint.yml` | Every push and pull request |
-| Release | `.github/workflows/release.yml` | Tag matching `v[0-9]+.[0-9]+.[0-9]*` |
+| Workflow | File | Trigger | Purpose |
+|----------|------|---------|---------|
+| Lint | `.github/workflows/lint.yml` | Every push and pull request | `ruff check src/ tests/` — must pass before merge |
+| Tests | `.github/workflows/tests.yml` | Every push and pull request | `pytest --cov` with coverage threshold |
+| Dependency Audit | `.github/workflows/audit.yml` | Every push and pull request | `pip-audit` — flags known CVEs |
+| Release | `.github/workflows/release.yml` | Tag `v*.*.*` pushed | Builds AppImage, creates GitHub Release |
+
+See [docs/releasing.md](releasing.md) for the full release process, versioning
+convention, and rollback procedure.
 
 ### Build-time host requirements
 

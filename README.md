@@ -326,6 +326,28 @@ This project is licensed under the MIT License.
 
 For contributions or support, feel free to open an issue or a pull request. 😊
 
+## Releasing
+
+A GitHub Release with an AppImage attached is created automatically when a
+version tag is pushed. No manual steps are needed beyond tagging.
+
+```
+# stable release
+git tag v1.2.0
+git push origin v1.2.0
+
+# pre-release  (tag contains a hyphen — marked pre-release automatically)
+git tag v1.2.0-rc1
+git push origin v1.2.0-rc1
+```
+
+The `Release` workflow builds the AppImage on a clean Ubuntu runner, verifies
+the artifact, and publishes it to the GitHub Releases page with auto-generated
+release notes from commits since the previous tag.
+
+See [docs/releasing.md](docs/releasing.md) for the full process, versioning
+convention, and rollback procedure.
+
 ## Documentation
 
 | Document | Description |
@@ -333,6 +355,7 @@ For contributions or support, feel free to open an issue or a pull request. 😊
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Full architecture overview — layers, modules, data flow, testing strategy |
 | [docs/add/README.md](docs/add/README.md) | Architectural Decision Documents index |
 | [docs/diagrams/README.md](docs/diagrams/README.md) | Mermaid diagram suite |
+| [docs/releasing.md](docs/releasing.md) | Full release process and versioning guide |
 
 ---
 ## Contributing
