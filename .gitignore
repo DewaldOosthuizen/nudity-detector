@@ -144,3 +144,11 @@ graphify-out/cache/
 # workspace-orchestrator managed entries
 .codegraph/*.db
 .codegraph/cache/
+# BEGIN workspace-orchestrator
+.hermes_tmp_prompt.txt
+graphify-out/cache/
+.understand-anything/intermediate/
+.understand-anything/diff-overlay.json
+.codegraph/*.db
+.codegraph/cache/
+# END workspace-orchestrator
