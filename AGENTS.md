@@ -111,6 +111,20 @@ sudo apt-get install python3 python3-pip python3-venv patchelf \
 On systems without FUSE (e.g. some CI environments) set `APPIMAGE_EXTRACT_AND_RUN=1` before
 running the AppImage.
 
+Running the built artifacts:
+
+```bash
+# PyInstaller bundle (no Python install required)
+./dist/nudity-detector/nudity-detector
+
+# AppImage (make executable first)
+chmod +x dist/NudityDetector-x86_64.AppImage
+./dist/NudityDetector-x86_64.AppImage
+```
+
+Note: NudeNet model weights are downloaded automatically on first run — internet access is
+required. Subsequent runs use the cached weights.
+
 ---
 
 <!-- graph-tools-start -->
