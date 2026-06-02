@@ -17,13 +17,19 @@ vnudenet_datas, vnudenet_binaries, vnudenet_hiddenimports = collect_all('vnudene
 gi_datas, gi_binaries, gi_hiddenimports = collect_all('gi')
 cv2_datas, cv2_binaries, cv2_hiddenimports = collect_all('cv2')
 
+_config_dir = project_root / 'config'
+_config_entry = [(str(_config_dir), 'config')] if _config_dir.is_dir() else []
+
 all_datas = (
     nudenet_datas
     + vnudenet_datas
     + gi_datas
     + cv2_datas
-    # Bundle the app config so the packaged binary finds it at runtime
-    + [(str(project_root / 'config'), 'config')]
+    # Bundle the app config only when the directory exists locally.
+    # config/ is gitignored (user runtime state) and is absent on CI —
+    # the app falls back to hardcoded defaults when config/app_config.json
+    # is not present, so this entry is purely a local-build convenience.
+    + _config_entry
 )
 all_binaries = nudenet_binaries + vnudenet_binaries + gi_binaries + cv2_binaries
 all_hiddenimports = (
