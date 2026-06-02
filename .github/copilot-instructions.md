@@ -1,4 +1,3 @@
-UPDATED
 # Nudity Detector
 
 Python-based application for detecting nudity in images and videos using AI backends.
