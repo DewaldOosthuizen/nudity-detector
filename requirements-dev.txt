@@ -1,6 +1,6 @@
 pytest-cov>=7.1.0
 -r requirements.txt
 pip-audit>=2.10.0
-pytest>=8.0.0
+pytest>=9.0.3
 ruff>=0.5.0
 
