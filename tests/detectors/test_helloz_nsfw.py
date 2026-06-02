@@ -313,7 +313,7 @@ def test_prompt_threshold_percent_uses_default_on_invalid():
 def test_check_server_reachable_returns_false_on_connection_error():
     import requests as req
     from src.detectors.helloz_nsfw import _check_server_reachable
-    with patch('src.detectors.helloz_nsfw.requests.get', side_effect=req.exceptions.ConnectionError):
+    with patch('src.detectors.helloz_nsfw.requests.get', side_effect=req.exceptions.ConnectionError()):
         assert _check_server_reachable() is False
 
 
