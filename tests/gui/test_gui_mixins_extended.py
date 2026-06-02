@@ -25,6 +25,10 @@ class _GObjectBase:
 def _ensure_gi_stubs():
     # Always ensure GObject.Object is the real _GObjectBase —
     # another file may have already installed gi stubs with a MagicMock.
+
+    class _GLibError(Exception):
+        pass
+
     if "gi" in sys.modules:
         # Re-install the real class on whatever GObject mock is present
         gobject_mod = sys.modules.get("gi.repository.GObject")
@@ -36,6 +40,13 @@ def _ensure_gi_stubs():
         if repo_mod is not None and hasattr(repo_mod, "GObject"):
             repo_mod.GObject.Object = _GObjectBase
             repo_mod.GObject.GObject = _GObjectBase
+        # Ensure GLib.Error is a real exception class to prevent
+        # filesystem leaks when used in `except GLib.Error:` blocks.
+        glib_mod = sys.modules.get("gi.repository.GLib")
+        if glib_mod is not None:
+            glib_mod.Error = _GLibError
+        if repo_mod is not None and hasattr(repo_mod, "GLib"):
+            repo_mod.GLib.Error = _GLibError
         return
 
     gi_mod = types.ModuleType("gi")
@@ -51,6 +62,11 @@ def _ensure_gi_stubs():
 
     adw_mod = MagicMock()
     glib_mod = MagicMock()
+    # GLib.Error must be a real exception class so `except GLib.Error:` works
+    # in src/gui/session.py and prevents MagicMock paths leaking to the filesystem.
+    class _GLibError(Exception):
+        pass
+    glib_mod.Error = _GLibError
     gio_mod = MagicMock()
     gdk_mod = MagicMock()
     gdkpixbuf_mod = MagicMock()

@@ -17,6 +17,11 @@ def _make_gi_stubs():
     gtk_mod.INVALID_LIST_POSITION = 4294967295
     adw_mod = mock.MagicMock()
     glib_mod = mock.MagicMock()
+    # GLib.Error must be a real exception class so `except GLib.Error:` works
+    # and prevents MagicMock string paths being written to the filesystem.
+    class _GLibError(Exception):
+        pass
+    glib_mod.Error = _GLibError
     gobject_mod = mock.MagicMock()
     gio_mod = mock.MagicMock()
     gdk_mod = mock.MagicMock()

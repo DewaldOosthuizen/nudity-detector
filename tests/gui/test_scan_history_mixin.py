@@ -22,6 +22,13 @@ def _ensure_gi_stubs():
         gtk_mod = sys.modules.get('gi.repository.Gtk')
         if gtk_mod is not None:
             gtk_mod.INVALID_LIST_POSITION = 4294967295
+        # Ensure GLib.Error is a real exception class to prevent
+        # filesystem leaks when used in `except GLib.Error:` blocks.
+        glib_mod = sys.modules.get('gi.repository.GLib')
+        if glib_mod is not None:
+            class _GLibErrorExisting(Exception):
+                pass
+            glib_mod.Error = _GLibErrorExisting
         return
 
     gi_mod = types.ModuleType('gi')
@@ -37,6 +44,11 @@ def _ensure_gi_stubs():
     gtk_mod.INVALID_LIST_POSITION = 4294967295
     adw_mod = mock.MagicMock()
     glib_mod = mock.MagicMock()
+    # GLib.Error must be a real exception class so `except GLib.Error:` works
+    # and prevents MagicMock string paths being written to the filesystem.
+    class _GLibError(Exception):
+        pass
+    glib_mod.Error = _GLibError
     gio_mod = mock.MagicMock()
     gdk_mod = mock.MagicMock()
     gi_mod.repository = repo_mod

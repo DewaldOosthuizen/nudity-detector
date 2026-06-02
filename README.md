@@ -335,6 +335,10 @@ For contributions or support, feel free to open an issue or a pull request. 😊
 | [docs/diagrams/README.md](docs/diagrams/README.md) | Mermaid diagram suite |
 
 ---
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, coding standards,
+validation commands, and the pull request checklist.
 
 ## Development
 

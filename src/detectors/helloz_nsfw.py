@@ -1,5 +1,6 @@
 import logging
 import os
+import sys
 import time
 
 import requests
@@ -190,7 +191,24 @@ def make_classify_video(existing_files, threshold_value, threshold_percent, sess
     return classify_video
 
 
+def _check_server_reachable(timeout=constants.HELLOZ_NSFW_HEALTH_CHECK_TIMEOUT):
+    """Return True when the Helloz NSFW server responds with a non-5xx status."""
+    try:
+        r = requests.get(constants.get_helloz_nsfw_connection_check_url(), timeout=timeout)
+        return r.status_code < 500
+    except requests.exceptions.RequestException:
+        return False
+
+
 def main():
+    logging.info('Starting Helloz NSFW CLI scan')
+    if not _check_server_reachable():
+        logging.error(
+            'Helloz NSFW server is not reachable at %s. '
+            'Start the Docker service and retry.',
+            constants.get_helloz_nsfw_connection_check_url(),
+        )
+        sys.exit(1)
     report_path = get_report_path()
     existing_files = load_existing_report(report_path)
     session = ScanSession()

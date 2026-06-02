@@ -304,3 +304,39 @@ def test_prompt_threshold_percent_uses_default_on_invalid():
     with patch('builtins.input', return_value='not_a_number'):
         result = prompt_threshold_percent(default_percent=60.0)
     assert result == 60.0
+
+
+# ---------------------------------------------------------------------------
+# Tests for _check_server_reachable (issue #52)
+# ---------------------------------------------------------------------------
+
+def test_check_server_reachable_returns_false_on_connection_error():
+    import requests as req
+    from src.detectors.helloz_nsfw import _check_server_reachable
+    with patch('src.detectors.helloz_nsfw.requests.get', side_effect=req.exceptions.ConnectionError()):
+        assert _check_server_reachable() is False
+
+
+def test_check_server_reachable_returns_true_on_200():
+    from src.detectors.helloz_nsfw import _check_server_reachable
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    with patch('src.detectors.helloz_nsfw.requests.get', return_value=mock_resp):
+        assert _check_server_reachable() is True
+
+
+def test_check_server_reachable_returns_false_on_5xx():
+    from src.detectors.helloz_nsfw import _check_server_reachable
+    mock_resp = MagicMock()
+    mock_resp.status_code = 503
+    with patch('src.detectors.helloz_nsfw.requests.get', return_value=mock_resp):
+        assert _check_server_reachable() is False
+
+
+def test_main_exits_with_code_1_when_server_unreachable():
+    import pytest
+    from src.detectors.helloz_nsfw import main
+    with patch('src.detectors.helloz_nsfw._check_server_reachable', return_value=False):
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+        assert exc_info.value.code == 1
