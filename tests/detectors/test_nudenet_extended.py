@@ -46,7 +46,7 @@ def test_simplify_nudenet_results_missing_keys():
 # ---------------------------------------------------------------------------
 
 def test_get_nudenet_confidence_with_nudity_class():
-    nudity_class = next(iter(constants.NUDITY_CLASSES_STRICT))
+    nudity_class = next(iter(constants.NUDITY_CLASSES_BROAD))
     raw = [
         {"label": nudity_class, "score": 0.85},
         {"label": "FACE_FEMALE", "score": 0.5},
@@ -66,7 +66,7 @@ def test_get_nudenet_confidence_empty():
 
 
 def test_get_nudenet_confidence_max_of_multiple():
-    nudity_class = next(iter(constants.NUDITY_CLASSES_STRICT))
+    nudity_class = next(iter(constants.NUDITY_CLASSES_BROAD))
     raw = [
         {"label": nudity_class, "score": 0.7},
         {"label": nudity_class, "score": 0.95},
@@ -120,7 +120,7 @@ def test_main_image_scan(tmp_path, monkeypatch):
     inputs = iter([str(tmp_path), "60"])
     monkeypatch.setattr("builtins.input", lambda _: next(inputs, ""))
 
-    nudity_class = next(iter(constants.NUDITY_CLASSES_STRICT))
+    nudity_class = next(iter(constants.NUDITY_CLASSES_BROAD))
     fake_detector = MagicMock()
     fake_detector.detect.return_value = [{"label": nudity_class, "score": 0.9}]
 
@@ -198,7 +198,7 @@ def test_main_video_early_exit(tmp_path, monkeypatch):
     inputs = iter([str(tmp_path), "60"])
     monkeypatch.setattr("builtins.input", lambda _: next(inputs, ""))
 
-    nudity_class = next(iter(constants.NUDITY_CLASSES_STRICT))
+    nudity_class = next(iter(constants.NUDITY_CLASSES_BROAD))
     fake_detector = MagicMock()
     fake_detector.detect.return_value = [{"label": nudity_class, "score": 0.95}]
 

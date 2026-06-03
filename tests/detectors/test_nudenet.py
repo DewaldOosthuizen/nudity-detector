@@ -22,10 +22,10 @@ def test_simplify_nudenet_results_empty_input():
 
 
 def test_get_nudenet_confidence_picks_nudity_class_only():
-    """FACE_F is not in NUDITY_CLASSES_STRICT; nudity classes should be picked up."""
+    """FACE_F is not in NUDITY_CLASSES_BROAD; nudity classes should be picked up."""
     from src.core import constants
     # Build a nudity class label from the strict set
-    nudity_label = next(iter(constants.NUDITY_CLASSES_STRICT))
+    nudity_label = next(iter(constants.NUDITY_CLASSES_BROAD))
     raw = [
         {"label": "FACE_F", "score": 0.99},
         {"label": nudity_label, "score": 0.85},

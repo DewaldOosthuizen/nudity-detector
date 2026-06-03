@@ -45,7 +45,7 @@ def get_nudenet_confidence(detection_result):
     class_scores = [
         record.get("score", 0.0)
         for record in detection_result
-        if record.get("label") in constants.NUDITY_CLASSES_STRICT
+        if record.get("label") in constants.NUDITY_CLASSES_BROAD
     ]
     return max(class_scores, default=0.0)
 
