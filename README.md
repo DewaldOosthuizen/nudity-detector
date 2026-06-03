@@ -367,8 +367,9 @@ convention, and rollback procedure.
 ---
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, coding standards,
-validation commands, and the pull request checklist.
+Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) for
+the full workflow, including how to pick up an issue, branch naming conventions,
+local validation steps, and the pull request process.
 
 ## Development
 
