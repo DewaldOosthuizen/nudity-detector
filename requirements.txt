@@ -55,7 +55,7 @@ packaging==26.2
     #   onnxruntime
     #   onnxruntime-gpu
     #   scikit-image
-pillow==12.2.0
+pillow==12.3.0
     # via
     #   -r requirements.in
     #   imageio
