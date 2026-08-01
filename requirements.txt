@@ -41,7 +41,7 @@ onnxruntime==1.26.0
     # via nudenet
 onnxruntime-gpu==1.26.0
     # via vnudenet
-opencv-python==4.13.0.92
+opencv-python==5.0.0.93
     # via -r requirements.in
 opencv-python-headless==4.13.0.92
     # via
