@@ -69,6 +69,8 @@ protobuf==7.35.0
     #   onnxruntime-gpu
 pydload==1.0.9
     # via vnudenet
+python-magic==0.4.27
+    # via -r requirements.in
 python-utils==3.9.1
     # via progressbar2
 requests==2.34.2

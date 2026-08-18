@@ -20,19 +20,59 @@ from src.core import constants
 from src.processing.media_processor import FrameExtractor, detect_media_type, is_supported_file
 
 
-@pytest.mark.parametrize("file_path,expected", [
-    ("photo.jpg", constants.MEDIA_TYPE_IMAGE),
-    ("photo.JPEG", constants.MEDIA_TYPE_IMAGE),
-    ("clip.mp4", constants.MEDIA_TYPE_VIDEO),
-    ("movie.MKV", constants.MEDIA_TYPE_VIDEO),
-    ("document.pdf", constants.MEDIA_TYPE_UNKNOWN),
-    ("no_extension", constants.MEDIA_TYPE_UNKNOWN),
+@pytest.mark.parametrize("file_path,mime,expected", [
+    ("photo.jpg", "image/jpeg", constants.MEDIA_TYPE_IMAGE),
+    ("photo.JPEG", "image/jpeg", constants.MEDIA_TYPE_IMAGE),
+    ("clip.mp4", "video/mp4", constants.MEDIA_TYPE_VIDEO),
+    ("movie.MKV", "video/x-matroska", constants.MEDIA_TYPE_VIDEO),
+    ("document.pdf", None, constants.MEDIA_TYPE_UNKNOWN),
+    ("no_extension", None, constants.MEDIA_TYPE_UNKNOWN),
 ])
-def test_detect_media_type(file_path, expected):
+def test_detect_media_type(monkeypatch, file_path, mime, expected):
+    if mime is not None:
+        expected_mime = mime
+        monkeypatch.setattr(
+            "src.processing.media_processor.magic.from_file",
+            lambda path, mime=True: expected_mime,
+        )
     assert detect_media_type(file_path) == expected
 
 
-def test_is_supported_file_true():
+def test_detect_media_type_extension_mime_mismatch(monkeypatch):
+    """A .jpg-extensioned file whose magic bytes are not an image MIME is UNKNOWN."""
+    monkeypatch.setattr(
+        "src.processing.media_processor.magic.from_file",
+        lambda path, mime=True: "application/octet-stream",
+    )
+    assert detect_media_type("payload.jpg") == constants.MEDIA_TYPE_UNKNOWN
+
+
+def test_detect_media_type_video_octet_stream_rejected(monkeypatch):
+    """A .mp4-extensioned file reporting application/octet-stream is UNKNOWN,
+    not video — regression guard against the video-path bypass identified in review."""
+    monkeypatch.setattr(
+        "src.processing.media_processor.magic.from_file",
+        lambda path, mime=True: "application/octet-stream",
+    )
+    assert detect_media_type("payload.mp4") == constants.MEDIA_TYPE_UNKNOWN
+
+
+def test_detect_media_type_magic_error_returns_unknown(monkeypatch):
+    """magic.from_file raising OSError/MagicException maps to MEDIA_TYPE_UNKNOWN,
+    it must not propagate."""
+    def _raise(path, mime=True):
+        raise OSError("cannot read file")
+    monkeypatch.setattr(
+        "src.processing.media_processor.magic.from_file", _raise,
+    )
+    assert detect_media_type("photo.jpg") == constants.MEDIA_TYPE_UNKNOWN
+
+
+def test_is_supported_file_true(monkeypatch):
+    monkeypatch.setattr(
+        "src.processing.media_processor.magic.from_file",
+        lambda path, mime=True: "image/png",
+    )
     assert is_supported_file("image.png") is True
 
 

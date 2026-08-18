@@ -117,11 +117,19 @@ def test_validate_report_dir_empty():
 # detect_media_type_utils
 # ---------------------------------------------------------------------------
 
-def test_detect_media_type_utils_image():
+def test_detect_media_type_utils_image(monkeypatch):
+    monkeypatch.setattr(
+        "src.processing.media_processor.magic.from_file",
+        lambda path, mime=True: "image/jpeg",
+    )
     assert detect_media_type_utils("photo.jpg") == "image"
 
 
-def test_detect_media_type_utils_video():
+def test_detect_media_type_utils_video(monkeypatch):
+    monkeypatch.setattr(
+        "src.processing.media_processor.magic.from_file",
+        lambda path, mime=True: "video/mp4",
+    )
     assert detect_media_type_utils("clip.mp4") == "video"
 
 
@@ -232,9 +240,13 @@ def test_open_file_location_existing_file(tmp_path):
 # process_file
 # ---------------------------------------------------------------------------
 
-def test_process_file_image(tmp_path):
+def test_process_file_image(tmp_path, monkeypatch):
     f = tmp_path / "test.jpg"
     f.write_bytes(b"data")
+    monkeypatch.setattr(
+        "src.processing.media_processor.magic.from_file",
+        lambda path, mime=True: "image/jpeg",
+    )
     image_cb = MagicMock()
     video_cb = MagicMock()
     process_file(str(f), image_cb, video_cb)
@@ -242,9 +254,13 @@ def test_process_file_image(tmp_path):
     video_cb.assert_not_called()
 
 
-def test_process_file_video(tmp_path):
+def test_process_file_video(tmp_path, monkeypatch):
     f = tmp_path / "test.mp4"
     f.write_bytes(b"data")
+    monkeypatch.setattr(
+        "src.processing.media_processor.magic.from_file",
+        lambda path, mime=True: "video/mp4",
+    )
     image_cb = MagicMock()
     video_cb = MagicMock()
     process_file(str(f), image_cb, video_cb)
@@ -266,10 +282,20 @@ def test_process_file_unsupported(tmp_path):
 # count_supported_files
 # ---------------------------------------------------------------------------
 
-def test_count_supported_files(tmp_path):
+def test_count_supported_files(tmp_path, monkeypatch):
     (tmp_path / "a.jpg").write_bytes(b"")
     (tmp_path / "b.mp4").write_bytes(b"")
     (tmp_path / "c.txt").write_bytes(b"")
+
+    def fake_from_file(path, mime=True):
+        if path.endswith(".jpg"):
+            return "image/jpeg"
+        if path.endswith(".mp4"):
+            return "video/mp4"
+        return "text/plain"
+    monkeypatch.setattr(
+        "src.processing.media_processor.magic.from_file", fake_from_file,
+    )
     count = count_supported_files(str(tmp_path))
     assert count == 2
 
@@ -282,12 +308,22 @@ def test_count_supported_files_empty(tmp_path):
 # classify_files_in_folder
 # ---------------------------------------------------------------------------
 
-def test_classify_files_in_folder_basic(tmp_path):
+def test_classify_files_in_folder_basic(tmp_path, monkeypatch):
     from src.core.utils import classify_files_in_folder
 
     (tmp_path / "a.jpg").write_bytes(b"")
     (tmp_path / "b.mp4").write_bytes(b"")
     (tmp_path / "c.txt").write_bytes(b"")
+
+    def fake_from_file(path, mime=True):
+        if path.endswith(".jpg"):
+            return "image/jpeg"
+        if path.endswith(".mp4"):
+            return "video/mp4"
+        return "text/plain"
+    monkeypatch.setattr(
+        "src.processing.media_processor.magic.from_file", fake_from_file,
+    )
 
     image_cb = MagicMock()
     video_cb = MagicMock()
