@@ -18,11 +18,17 @@ from unittest.mock import MagicMock, patch
 # ---------------------------------------------------------------------------
 def _ensure_gi_stubs():
     if "gi" in sys.modules:
+        class _Base:
+            def __init__(self, *a, **kw): pass
         gobject_mod = sys.modules.get("gi.repository.GObject")
         if gobject_mod is not None:
-            class _Base:
-                def __init__(self, *a, **kw): pass
             gobject_mod.Object = _Base
+        adw_mod = sys.modules.get("gi.repository.Adw")
+        if adw_mod is not None:
+            class _AdwApplicationWindow(_Base):
+                def __getattr__(self, name):
+                    return MagicMock()
+            adw_mod.ApplicationWindow = _AdwApplicationWindow
         glib_mod = sys.modules.get("gi.repository.GLib")
         if glib_mod is not None:
             class _GLibError(Exception):
@@ -42,6 +48,11 @@ def _ensure_gi_stubs():
     gtk_mod = MagicMock()
     gtk_mod.INVALID_LIST_POSITION = 4294967295
     adw_mod = MagicMock()
+
+    class _AdwApplicationWindow(_GObjectBase):
+        def __getattr__(self, name):
+            return MagicMock()
+    adw_mod.ApplicationWindow = _AdwApplicationWindow
     glib_mod = MagicMock()
 
     class _GLibError(Exception):
