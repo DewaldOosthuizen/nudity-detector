@@ -32,7 +32,6 @@ numpy==2.4.6
     #   nudenet
     #   onnxruntime
     #   onnxruntime-gpu
-    #   opencv-python
     #   opencv-python-headless
     #   scikit-image
     #   scipy
@@ -41,8 +40,6 @@ onnxruntime==1.26.0
     # via nudenet
 onnxruntime-gpu==1.26.0
     # via vnudenet
-opencv-python==5.0.0.93
-    # via -r requirements.in
 opencv-python-headless==4.13.0.92
     # via
     #   nudenet
