@@ -488,8 +488,8 @@ class ScanningMixin:
                 folder_path,
                 classify_image,
                 classify_video,
-                worker_count=self._get_worker_thread_count(),
-                worker_timeout=self._get_worker_thread_timeout(),
+                worker_count=self._get_worker_thread_count_for_model(model_name),
+                worker_timeout=self._get_worker_thread_timeout_for_model(model_name),
             )
 
             processed = files_processed[0]

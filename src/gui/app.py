@@ -77,6 +77,30 @@ class NudityDetectorWindow(
         except (ValueError, TypeError):
             self._worker_thread_timeout = constants.WORKER_THREAD_TIMEOUT
         try:
+            self._nudenet_worker_thread_count = max(
+                1, int(cfg.get('nudenet_worker_thread_count', constants.NUDENET_WORKER_THREAD_COUNT)),
+            )
+        except (ValueError, TypeError):
+            self._nudenet_worker_thread_count = constants.NUDENET_WORKER_THREAD_COUNT
+        try:
+            self._nudenet_worker_thread_timeout = max(
+                1, int(cfg.get('nudenet_worker_thread_timeout', constants.NUDENET_WORKER_THREAD_TIMEOUT)),
+            )
+        except (ValueError, TypeError):
+            self._nudenet_worker_thread_timeout = constants.NUDENET_WORKER_THREAD_TIMEOUT
+        try:
+            self._helloz_nsfw_worker_thread_count = max(
+                1, int(cfg.get('helloz_nsfw_worker_thread_count', constants.HELLOZ_NSFW_WORKER_THREAD_COUNT)),
+            )
+        except (ValueError, TypeError):
+            self._helloz_nsfw_worker_thread_count = constants.HELLOZ_NSFW_WORKER_THREAD_COUNT
+        try:
+            self._helloz_nsfw_worker_thread_timeout = max(
+                1, int(cfg.get('helloz_nsfw_worker_thread_timeout', constants.HELLOZ_NSFW_WORKER_THREAD_TIMEOUT)),
+            )
+        except (ValueError, TypeError):
+            self._helloz_nsfw_worker_thread_timeout = constants.HELLOZ_NSFW_WORKER_THREAD_TIMEOUT
+        try:
             self._detect_timeout = max(1, int(cfg.get('detect_timeout', constants.DETECT_TIMEOUT)))
         except (ValueError, TypeError):
             self._detect_timeout = constants.DETECT_TIMEOUT
@@ -790,6 +814,20 @@ class NudityDetectorWindow(
 
     def _get_worker_thread_timeout(self) -> int:
         return max(1, int(self.worker_thread_timeout_spin.get_value()))
+
+    def _get_worker_thread_count_for_model(self, model_name) -> int:
+        if model_name == constants.MODEL_NUDENET:
+            return getattr(self, '_nudenet_worker_thread_count', constants.NUDENET_WORKER_THREAD_COUNT)
+        if model_name == constants.MODEL_HELLOZ_NSFW:
+            return getattr(self, '_helloz_nsfw_worker_thread_count', constants.HELLOZ_NSFW_WORKER_THREAD_COUNT)
+        return self._get_worker_thread_count()
+
+    def _get_worker_thread_timeout_for_model(self, model_name) -> int:
+        if model_name == constants.MODEL_NUDENET:
+            return getattr(self, '_nudenet_worker_thread_timeout', constants.NUDENET_WORKER_THREAD_TIMEOUT)
+        if model_name == constants.MODEL_HELLOZ_NSFW:
+            return getattr(self, '_helloz_nsfw_worker_thread_timeout', constants.HELLOZ_NSFW_WORKER_THREAD_TIMEOUT)
+        return self._get_worker_thread_timeout()
 
     def _get_detect_timeout(self) -> int:
         return max(1, int(self.detect_timeout_spin.get_value()))

@@ -229,6 +229,13 @@ WORKER_THREAD_COUNT = 10
 WORKER_THREAD_TIMEOUT = 5  # seconds
 DETECT_TIMEOUT = 60  # seconds for individual detections
 
+# Per-model worker tuning defaults (CPU-bound NudeNet vs I/O-bound Helloz NSFW).
+# Used only when the corresponding app_config.json key is absent.
+NUDENET_WORKER_THREAD_COUNT = 4
+NUDENET_WORKER_THREAD_TIMEOUT = 10  # seconds
+HELLOZ_NSFW_WORKER_THREAD_COUNT = 20
+HELLOZ_NSFW_WORKER_THREAD_TIMEOUT = 35  # seconds
+
 # ============================================================================
 # System Directories (Safety)
 # ============================================================================
