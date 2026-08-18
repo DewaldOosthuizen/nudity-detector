@@ -30,9 +30,10 @@ from src.processing.media_processor import FrameExtractor, detect_media_type, is
 ])
 def test_detect_media_type(monkeypatch, file_path, mime, expected):
     if mime is not None:
+        expected_mime = mime
         monkeypatch.setattr(
             "src.processing.media_processor.magic.from_file",
-            lambda path, mime=True: mime,
+            lambda path, mime=True: expected_mime,
         )
     assert detect_media_type(file_path) == expected
 

@@ -12,6 +12,19 @@ IMAGE_EXTENSIONS = frozenset({'.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', 
 VIDEO_EXTENSIONS = frozenset({'.mp4', '.avi', '.mkv', '.mov', '.vob', '.wmv', '.flv', '.3gp', '.webm'})
 SUPPORTED_EXTENSIONS = IMAGE_EXTENSIONS | VIDEO_EXTENSIONS
 
+MIME_IMAGE_TYPES = frozenset({
+    'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/tiff', 'image/bmp',
+})
+# NOTE: 'application/octet-stream' is deliberately NOT included here. libmagic reports
+# that generic MIME type as a fallback for a huge range of unrecognized/malformed
+# binary content, so admitting it would let any file renamed to a trusted video
+# extension (e.g. payload.mp4) sail through the extension+MIME cross-check unchanged,
+# defeating the purpose of the magic-byte verification.
+MIME_VIDEO_TYPES = frozenset({
+    'video/mp4', 'video/x-msvideo', 'video/x-matroska', 'video/quicktime',
+    'video/x-ms-wmv', 'video/x-flv', 'video/3gpp', 'video/webm',
+})
+
 MEDIA_TYPE_IMAGE = 'image'
 MEDIA_TYPE_VIDEO = 'video'
 MEDIA_TYPE_UNKNOWN = 'unknown'

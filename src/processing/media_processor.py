@@ -12,6 +12,8 @@ import tempfile
 from io import BytesIO
 from typing import Generator, List, Optional, Tuple
 
+import magic
+
 try:
     import cv2
 except ImportError:
@@ -26,7 +28,13 @@ from ..core import constants
 
 
 def detect_media_type(file_path: str) -> str:
-    """Detect media type from file extension.
+    """Detect media type via extension and magic-byte MIME verification.
+
+    The extension is used as a cheap first-pass filter; the file's real
+    content is then inspected via libmagic and cross-checked against a
+    narrowly-scoped MIME allowlist before the media type is trusted. This
+    prevents a payload crafted to exploit a parser CVE from being classified
+    as image/video purely because of a spoofed extension.
 
     Args:
         file_path: Path to media file
@@ -37,9 +45,18 @@ def detect_media_type(file_path: str) -> str:
     _, ext = os.path.splitext(file_path)
     ext = ext.lower()
 
-    if ext in constants.IMAGE_EXTENSIONS:
+    if ext not in constants.SUPPORTED_EXTENSIONS:
+        return constants.MEDIA_TYPE_UNKNOWN
+
+    try:
+        mime = magic.from_file(file_path, mime=True)
+    except (OSError, magic.MagicException) as e:
+        logging.warning('Could not determine MIME type for %s: %s', file_path, e)
+        return constants.MEDIA_TYPE_UNKNOWN
+
+    if ext in constants.IMAGE_EXTENSIONS and mime in constants.MIME_IMAGE_TYPES:
         return constants.MEDIA_TYPE_IMAGE
-    if ext in constants.VIDEO_EXTENSIONS:
+    if ext in constants.VIDEO_EXTENSIONS and mime in constants.MIME_VIDEO_TYPES:
         return constants.MEDIA_TYPE_VIDEO
 
     return constants.MEDIA_TYPE_UNKNOWN

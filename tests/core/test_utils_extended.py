@@ -240,9 +240,13 @@ def test_open_file_location_existing_file(tmp_path):
 # process_file
 # ---------------------------------------------------------------------------
 
-def test_process_file_image(tmp_path):
+def test_process_file_image(tmp_path, monkeypatch):
     f = tmp_path / "test.jpg"
     f.write_bytes(b"data")
+    monkeypatch.setattr(
+        "src.processing.media_processor.magic.from_file",
+        lambda path, mime=True: "image/jpeg",
+    )
     image_cb = MagicMock()
     video_cb = MagicMock()
     process_file(str(f), image_cb, video_cb)
@@ -250,9 +254,13 @@ def test_process_file_image(tmp_path):
     video_cb.assert_not_called()
 
 
-def test_process_file_video(tmp_path):
+def test_process_file_video(tmp_path, monkeypatch):
     f = tmp_path / "test.mp4"
     f.write_bytes(b"data")
+    monkeypatch.setattr(
+        "src.processing.media_processor.magic.from_file",
+        lambda path, mime=True: "video/mp4",
+    )
     image_cb = MagicMock()
     video_cb = MagicMock()
     process_file(str(f), image_cb, video_cb)

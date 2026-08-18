@@ -79,7 +79,20 @@ Two detector backends are available:
 
    > **Note:** If you see `ModuleNotFoundError: No module named 'gi'` when running the GUI, this step was not completed. Step 4 must be done first.
 
-6. **Install requirements**:
+7. **Install the `libmagic` system library** (required for magic-byte media type detection):
+
+   The `python-magic` dependency wraps the system `libmagic` shared library, which is used to
+   verify a file's real content type before trusting its extension.
+
+   On Ubuntu/Debian:
+
+   ```bash
+   sudo apt-get install libmagic1
+   ```
+
+   > **Note:** `libmagic1` is already present on most Linux systems (it backs the `file` command).
+
+7. **Install requirements**:
 
   Two dependency files are provided:
 
