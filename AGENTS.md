@@ -26,7 +26,7 @@ Two detector backends:
 | Path | Contents |
 |---|---|
 | `config/app_config.json` | Runtime config — Helloz host/port/endpoint |
-| `.env.example` | Available env overrides with defaults |
+| `.env.example` | Config-key reference table — all `app_config.json` keys, their code-default constants, and default values |
 | `reports/` | Generated Excel reports (`nudity_report.xlsx`) |
 | `scripts/` | Linux build script + PyInstaller spec |
 | `tests/` | Pytest test suite |
