@@ -3,13 +3,12 @@ Tests for issue #72 — startup validation logging in _load_helloz_config.
 """
 from unittest import mock
 
-import pytest
+from src.core import constants
 
 
 class TestLoadHellozConfigWarning:
     def test_warning_emitted_when_config_missing(self):
         """_load_helloz_config logs a warning when app_config.json is missing."""
-        from src.core import constants
         with mock.patch('builtins.open', side_effect=OSError('not found')):
             with mock.patch.object(constants.logger, 'warning') as mock_warning:
                 result = constants._load_helloz_config()
@@ -24,9 +23,6 @@ class TestLoadHellozConfigWarning:
 
     def test_warning_emitted_when_config_malformed(self, tmp_path):
         """_load_helloz_config logs a warning when app_config.json is malformed."""
-        from src.core import constants
-        import json
-        import os
         config_path = tmp_path / 'app_config.json'
         config_path.write_text('{ not valid json')
         original_path = constants._config_path()

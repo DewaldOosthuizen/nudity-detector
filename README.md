@@ -154,7 +154,55 @@ Two detector backends are available:
 
    - The Helloz NSFW endpoint is configurable via `config/app_config.json` using the keys
      `helloz_nsfw_host`, `helloz_nsfw_port`, and `helloz_nsfw_api_endpoint`.
-     See `.env.example` for the available settings and their default values.
+
+## Configuration
+
+The Nudity Detector application has a single configuration surface: `config/app_config.json`.
+No environment-variable overrides are supported — there is no `python-dotenv` or `os.environ`
+usage anywhere in the codebase. `.env.example` is a plain-text reference table documenting all
+`app_config.json` keys, their code-default constants (where applicable), and default values; it
+is not an env-var template.
+
+All 18 keys in `config/app_config.json`:
+
+| Key | Default | Constant (src/core/constants.py) | Scope |
+|-----|---------|----------------------------------|-------|
+| `theme` | `"dark"` | `THEME_DARK` | app-wide |
+| `model` | `"helloz_nsfw"` | *no constant* | app-wide |
+| `threshold_percent` | `60.0` | `DEFAULT_THRESHOLD_PERCENT` | app-wide |
+| `last_source_folder` | `"/home/dewald/Pictures"` | *no constant* | app-wide |
+| `progress_update_interval` | `100` | `SCAN_PROGRESS_UPDATE_INTERVAL` | app-wide |
+| `video_frame_rate` | `10` | `VIDEO_FRAME_RATE` (code default: 5) | app-wide |
+| `worker_thread_count` | `10` | *no constant* | app-wide |
+| `worker_thread_timeout` | `250` | *no constant* | app-wide |
+| `nudenet_worker_thread_count` | `4` | *no constant* | app-wide |
+| `nudenet_worker_thread_timeout` | `10` | *no constant* | app-wide |
+| `helloz_nsfw_worker_thread_count` | `20` | *no constant* | Helloz-NSFW |
+| `helloz_nsfw_worker_thread_timeout` | `35` | *no constant* | Helloz-NSFW |
+| `detect_timeout` | `250` | `DETECT_TIMEOUT` (code default: 60 s) | app-wide |
+| `helloz_nsfw_host` | `"localhost"` | `HELLOZ_NSFW_HOST` | Helloz-NSFW |
+| `helloz_nsfw_port` | `6086` | `HELLOZ_NSFW_PORT` | Helloz-NSFW |
+| `helloz_nsfw_api_endpoint` | `"/api/upload_check"` | `HELLOZ_NSFW_API_ENDPOINT` | Helloz-NSFW |
+| `helloz_nsfw_request_timeout` | `300` | `HELLOZ_NSFW_REQUEST_TIMEOUT` (code default: 30 s) | Helloz-NSFW |
+| `helloz_nsfw_health_check_timeout` | `5` | `HELLOZ_NSFW_HEALTH_CHECK_TIMEOUT` | Helloz-NSFW |
+
+Note on units: `detect_timeout`, `worker_thread_timeout`,
+`nudenet_worker_thread_timeout`, `helloz_nsfw_worker_thread_timeout`, and
+`helloz_nsfw_worker_thread_count` are stored in milliseconds in
+`config/app_config.json` but the corresponding constants in
+`src/core/constants.py` use seconds where applicable — the values differ by design
+and are not interchangeable.
+
+Five keys have no corresponding constant in `src/core/constants.py` and are read
+directly from `config/app_config.json` at runtime:
+`last_source_folder`, `nudenet_worker_thread_count`,
+`nudenet_worker_thread_timeout`, `helloz_nsfw_worker_thread_count`, and
+`helloz_nsfw_worker_thread_timeout`.
+
+Startup validation: if `config/app_config.json` is missing or contains invalid JSON,
+`_load_helloz_config` in `src/core/constants.py` logs a `WARNING` and falls back to
+the built-in defaults from `constants.py`. See the `logger.warning` call in that
+function for the exact message.
 
 9. **Run the process**:
 

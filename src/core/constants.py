@@ -3,7 +3,10 @@ Centralized constants for the Nudity Detector application.
 Provides single source of truth for configuration values, avoiding magic numbers.
 """
 import json
+import logging
 import os
+
+logger = logging.getLogger(__name__)
 
 # ============================================================================
 # Media Type Configuration
@@ -149,6 +152,10 @@ def _load_helloz_config():
             scheme = 'http' if host in _LOOPBACK_HOSTS else 'https'
         return host, port, endpoint, scheme
     except (OSError, json.JSONDecodeError):
+        logger.warning(
+            "app_config.json not found or invalid at %s; using built-in defaults",
+            _config_path(),
+        )
         return HELLOZ_NSFW_HOST, HELLOZ_NSFW_PORT, HELLOZ_NSFW_API_ENDPOINT, 'http'
 
 
