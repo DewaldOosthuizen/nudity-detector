@@ -262,7 +262,7 @@ class ScanningMixin:
     # ------------------------------------------------------------------
 
     def request_helloz_nsfw_score(self, image_path, requests_module, helloz_nsfw_url, request_timeout):
-        request_url = helloz_nsfw_url or constants.HELLOZ_NSFW_URL
+        request_url = helloz_nsfw_url or constants.get_helloz_nsfw_url()
         with open(image_path, 'rb') as image_file:
             response = requests_module.post(
                 request_url,

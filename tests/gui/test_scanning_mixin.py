@@ -98,7 +98,7 @@ def _make_win(**extra):
     win._get_detect_timeout = MagicMock(return_value=10)
     win._get_video_frame_rate = MagicMock(return_value=10)
     win._get_progress_interval = MagicMock(return_value=10)
-    win._get_helloz_nsfw_url = MagicMock(return_value=constants.HELLOZ_NSFW_URL)
+    win._get_helloz_nsfw_url = MagicMock(return_value='http://localhost:6086/api/upload_check')
     win._get_helloz_nsfw_request_timeout = MagicMock(return_value=10)
     win._get_helloz_nsfw_check_url = MagicMock(return_value="http://localhost:9999/health")
     win._get_helloz_nsfw_health_check_timeout = MagicMock(return_value=1)
@@ -320,7 +320,7 @@ class TestScanningMixinHellozNsfw:
         # Configure the return value so the unpack `result, confidence_score = scored_result` works.
         win.request_helloz_nsfw_score.return_value = (resp_json, 0.9)
         ScanningMixin.run_helloz_nsfw_image(
-            win, str(img), set(), 0.6, 60.0, MagicMock(), constants.HELLOZ_NSFW_URL, 10, session
+            win, str(img), set(), 0.6, 60.0, MagicMock(), 'http://localhost:6086/api/upload_check', 10, session
         )
         assert len(session.get_results()) == 1
 
@@ -333,7 +333,7 @@ class TestScanningMixinHellozNsfw:
         # Simulate a failed request (None return) from request_helloz_nsfw_score
         win.request_helloz_nsfw_score.return_value = None
         ScanningMixin.run_helloz_nsfw_image(
-            win, str(img), set(), 0.6, 60.0, MagicMock(), constants.HELLOZ_NSFW_URL, 10, session
+            win, str(img), set(), 0.6, 60.0, MagicMock(), 'http://localhost:6086/api/upload_check', 10, session
         )
         # GLib.idle_add is mocked, nothing to assert except no crash
 
@@ -367,7 +367,7 @@ class TestScanningMixinHellozNsfwVideo:
         win.extract_video_frames.return_value = (fake_extractor, frame_iter)
 
         ScanningMixin.run_helloz_nsfw_video(
-            win, str(vid), set(), 0.6, 60.0, MagicMock(), constants.HELLOZ_NSFW_URL, 10, session
+            win, str(vid), set(), 0.6, 60.0, MagicMock(), 'http://localhost:6086/api/upload_check', 10, session
         )
         fake_extractor.cleanup.assert_called()
 
