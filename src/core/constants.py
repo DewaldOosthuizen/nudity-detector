@@ -182,9 +182,7 @@ def get_helloz_nsfw_connection_check_url():
     return f'{scheme}://{host}:{port}'
 
 
-# Backward-compatible module-level aliases (resolved at import time)
-HELLOZ_NSFW_URL = get_helloz_nsfw_url()
-HELLOZ_NSFW_CONNECTION_CHECK_URL = get_helloz_nsfw_connection_check_url()
+
 
 # ============================================================================
 # GUI Configuration - UI Constants
