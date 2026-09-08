@@ -1,18 +1,128 @@
 name: Release
+#
+# CalVer rolling-release pipeline. Runs on every push to `main` (and manual
+# workflow_dispatch) instead of on manual `v*` tag pushes. The workflow itself
+# computes the next CalVer tag, creates it, then builds and publishes the
+# AppImage — matching the auto-versioning flow used by the reference repos
+# (tech-cheat-sheets-and-notes style: validate -> gate -> build -> tag+release).
+#
+# Phases:
+#   1. validation        — lint / pip-audit / test, run again here (NOT just
+#                           reused from PR Gate) because PR Gate validates the
+#                           PR *head* commit, while this workflow validates the
+#                           exact commit that will actually be released — which
+#                           can differ after squash-merge/rebase, or after a
+#                           direct push to main that bypassed PR Gate entirely.
+#   2. validation-gate    — summary job (needs: all validation jobs,
+#                           if: always()); nothing below this point runs unless
+#                           validation fully passed.
+#   3. build              — KEPT VERBATIM from the old release.yml: apt-get
+#                           system deps, PyInstaller via scripts/build_linux.sh,
+#                           verify artifacts. Version-based renaming is deferred
+#                           to the next job since the CalVer tag doesn't exist
+#                           until version-tag-release computes/creates it.
+#   4. version-tag-release — computes the CalVer tag (YYYY.MM.DD[.N]), skips
+#                           if HEAD is already tagged, creates+pushes the tag,
+#                           downloads the build artifact, renames it with the
+#                           new tag, and creates the GitHub Release with the
+#                           AppImage attached (softprops/action-gh-release,
+#                           merged into this same job rather than a separate
+#                           tag-push-triggered workflow).
+#
+# No pyproject.toml version bump: this repo's pyproject.toml has no [project]
+# table / version field (only [tool.ruff] config), so there is nothing to bump
+# or commit before tagging. This mirrors tech-cheat-sheets-and-notes' own
+# fallback for repos with "no safe way to push a bump commit" — just tag.
 
 on:
   push:
-    tags:
-      - "v[0-9]+.[0-9]+.[0-9]*"
+    branches: ["main"]
+  workflow_dispatch: {}
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
 
 permissions:
-  contents: write   # required to create the GitHub Release and upload assets
+  contents: write   # required to create tags + the GitHub Release and upload assets
 
 jobs:
-  build-appimage:
+  # ---------------------------------------------------------------------
+  # Phase 1: validation (duplicated from pr_gate.yml — see header rationale)
+  # ---------------------------------------------------------------------
+  lint:
+    name: Lint (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install ruff
+        run: pip install "ruff>=0.16.0"
+      - name: Run ruff
+        run: ruff check src/ tests/
+
+  test:
+    name: Tests (pytest --cov)
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+      - name: Run tests with coverage
+        run: pytest --cov --cov-report=term-missing tests/
+
+  pip-audit:
+    name: Dependency Audit (pip-audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Audit dependencies
+        run: |
+          pip install pip-audit
+          pip-audit -r requirements.txt
+
+  # ---------------------------------------------------------------------
+  # Phase 2: validation gate — nothing downstream runs unless this passes
+  # ---------------------------------------------------------------------
+  validation-gate:
+    name: Validation Gate
+    runs-on: ubuntu-latest
+    needs: [lint, test, pip-audit]
+    if: always()
+    steps:
+      - name: Check validation results
+        run: |
+          echo "lint:      ${{ needs.lint.result }}"
+          echo "test:      ${{ needs.test.result }}"
+          echo "pip-audit: ${{ needs.pip-audit.result }}"
+
+          if [[ "${{ needs.lint.result }}" != "success" || \
+                "${{ needs.test.result }}" != "success" || \
+                "${{ needs.pip-audit.result }}" != "success" ]]; then
+            echo "::error::Release validation failed; aborting release."
+            exit 1
+          fi
+
+          echo "Validation passed for $(git rev-parse HEAD 2>/dev/null || echo "${{ github.sha }}")."
+
+  # ---------------------------------------------------------------------
+  # Phase 3: build — AppImage build, kept verbatim from the old release.yml
+  # ---------------------------------------------------------------------
+  build:
     name: Build AppImage
     runs-on: ubuntu-latest
-
+    needs: validation-gate
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -56,20 +166,134 @@ jobs:
           test -d dist/nudity-detector
           echo "Bundle size:   $(du -sh dist/nudity-detector | cut -f1)"
 
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: appimage-build
+          path: dist/NudityDetector-x86_64.AppImage
+          retention-days: 1
+
+  # ---------------------------------------------------------------------
+  # Phase 4: version-tag-release — CalVer tag computation/creation, then
+  # rename + attach the AppImage to a GitHub Release created in this job.
+  # ---------------------------------------------------------------------
+  version-tag-release:
+    name: Version, Tag & Release
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: appimage-build
+          path: dist
+
+      - name: Determine whether to skip (HEAD already tagged)
+        id: skip_check
+        run: |
+          git fetch --tags --force origin
+
+          LAST_TAG=$(git tag -l --sort=-version:refname \
+            | grep -E '^[0-9]{4}\.[0-9]{2}\.[0-9]{2}(\.[0-9]+)?$' \
+            | head -n1)
+
+          HEAD_SHA=$(git rev-parse HEAD)
+
+          if [[ -n "$LAST_TAG" ]]; then
+            TAG_SHA=$(git rev-parse "$LAST_TAG" 2>/dev/null || echo "")
+            if [[ "$TAG_SHA" == "$HEAD_SHA" ]]; then
+              echo "HEAD is already tagged as $LAST_TAG; skipping release."
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "skip=false" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "No prior CalVer tag found; proceeding with release."
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Compute CalVer tag
+        id: compute_tag
+        if: steps.skip_check.outputs.skip == 'false'
+        run: |
+          BASE="$(date -u +%Y).$(date -u +%m).$(date -u +%d)"
+
+          # Find the max existing micro suffix among origin tags matching
+          # BASE or BASE.N for today.
+          MAX=-1
+          while IFS= read -r t; do
+            [[ -z "$t" ]] && continue
+            if [[ "$t" == "$BASE" ]]; then
+              if (( MAX < 0 )); then MAX=0; fi
+            elif [[ "$t" =~ ^${BASE}\.([0-9]+)$ ]]; then
+              n="${BASH_REMATCH[1]}"
+              if (( n > MAX )); then MAX="$n"; fi
+            fi
+          done < <(git tag -l | grep -E "^${BASE}(\.[0-9]+)?$")
+
+          if (( MAX < 0 )); then
+            TAG="$BASE"
+          else
+            TAG="${BASE}.$((MAX + 1))"
+          fi
+
+          if ! [[ "$TAG" =~ ^[0-9]{4}\.[0-9]{2}\.[0-9]{2}(\.[0-9]+)?$ ]]; then
+            echo "::error::Computed tag '$TAG' failed CalVer regex validation."
+            exit 1
+          fi
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Computed CalVer tag: $TAG"
+
+      - name: Verify tag not already on origin
+        if: steps.skip_check.outputs.skip == 'false'
+        run: |
+          TAG="${{ steps.compute_tag.outputs.tag }}"
+          if git ls-remote --tags origin | grep -q "refs/tags/${TAG}\$"; then
+            echo "::error::Tag $TAG already exists on origin."
+            exit 1
+          fi
+
+      - name: Warn if HEAD is ahead of origin/main
+        if: steps.skip_check.outputs.skip == 'false'
+        run: |
+          git fetch origin main
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "::warning::HEAD is not an ancestor of origin/main (non-fatal) — \
+              continuing, but double-check this release corresponds to the \
+              intended main history."
+          fi
+
+      - name: Create and push CalVer tag
+        if: steps.skip_check.outputs.skip == 'false'
+        run: |
+          TAG="${{ steps.compute_tag.outputs.tag }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "Release $TAG (CalVer rolling release)"
+          git push origin "$TAG"
+
       - name: Rename AppImage with version tag
+        if: steps.skip_check.outputs.skip == 'false'
         env:
-          VERSION: ${{ github.ref_name }}
+          VERSION: ${{ steps.compute_tag.outputs.tag }}
         run: |
           mv dist/NudityDetector-x86_64.AppImage \
              "dist/NudityDetector-${VERSION}-x86_64.AppImage"
 
       - name: Create GitHub Release and upload AppImage
+        if: steps.skip_check.outputs.skip == 'false'
         uses: softprops/action-gh-release@v2
         with:
-          name: "Nudity Detector ${{ github.ref_name }}"
-          tag_name: ${{ github.ref_name }}
+          name: "Nudity Detector ${{ steps.compute_tag.outputs.tag }}"
+          tag_name: ${{ steps.compute_tag.outputs.tag }}
           draft: false
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          prerelease: false
           generate_release_notes: true
           files: |
-            dist/NudityDetector-${{ github.ref_name }}-x86_64.AppImage
+            dist/NudityDetector-${{ steps.compute_tag.outputs.tag }}-x86_64.AppImage
