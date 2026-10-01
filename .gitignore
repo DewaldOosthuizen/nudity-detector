@@ -135,7 +135,6 @@ reports/
 config/
 
 MagicMock/
-
 # BEGIN workspace-orchestrator
 graphify-out/
 .understand-anything/
