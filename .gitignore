@@ -118,6 +118,9 @@ venv.bak/
 .dmypy.json
 dmypy.json
 
+# ruff
+.ruff_cache
+
 # Pyre type checker
 .pyre/
 
@@ -133,5 +136,9 @@ config/
 
 MagicMock/
 
-
-.ruff_cache
+# BEGIN workspace-orchestrator
+graphify-out/
+.understand-anything/
+.codegraph/
+openspec/
+# END workspace-orchestrator
