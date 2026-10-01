@@ -132,12 +132,6 @@ reports/
 config/
 
 MagicMock/
-# BEGIN workspace-orchestrator
-.hermes_tmp_prompt.txt
-graphify-out/cache/
-.understand-anything/intermediate/
-.understand-anything/diff-overlay.json
-.codegraph/*.db
-.codegraph/cache/
-openspec/
-# END workspace-orchestrator
+
+
+.ruff_cache
