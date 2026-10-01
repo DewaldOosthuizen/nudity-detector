@@ -13,78 +13,33 @@ darkdetect==0.8.0
 et-xmlfile==2.0.0
     # via openpyxl
 flatbuffers==25.12.19
-    # via
-    #   onnxruntime
-    #   onnxruntime-gpu
+    # via onnxruntime
 idna==3.17
     # via requests
-imageio==2.37.3
-    # via scikit-image
-lazy-loader==0.5
-    # via scikit-image
-networkx==3.6.1
-    # via scikit-image
 nudenet==3.4.2
     # via -r requirements.in
 numpy==2.4.6
     # via
-    #   imageio
     #   nudenet
     #   onnxruntime
-    #   onnxruntime-gpu
     #   opencv-python-headless
-    #   scikit-image
-    #   scipy
-    #   tifffile
 onnxruntime==1.26.0
     # via nudenet
-onnxruntime-gpu==1.26.0
-    # via vnudenet
 opencv-python-headless==4.13.0.92
-    # via
-    #   nudenet
-    #   vnudenet
+    # via nudenet
 openpyxl==3.1.5
     # via -r requirements.in
 packaging==26.2
-    # via
-    #   lazy-loader
-    #   onnxruntime
-    #   onnxruntime-gpu
-    #   scikit-image
+    # via onnxruntime
 pillow==12.3.0
-    # via
-    #   -r requirements.in
-    #   imageio
-    #   scikit-image
-    #   vnudenet
-progressbar2==4.5.0
-    # via pydload
+    # via -r requirements.in
 protobuf==7.35.0
-    # via
-    #   onnxruntime
-    #   onnxruntime-gpu
-pydload==1.0.9
-    # via vnudenet
+    # via onnxruntime
 python-magic==0.4.27
     # via -r requirements.in
-python-utils==3.9.1
-    # via progressbar2
 requests==2.34.2
-    # via
-    #   -r requirements.in
-    #   pydload
-scikit-image==0.26.0
-    # via vnudenet
-scipy==1.17.1
-    # via scikit-image
+    # via -r requirements.in
 send2trash==2.1.0
     # via -r requirements.in
-tifffile==2026.3.3
-    # via scikit-image
-typing-extensions==4.15.0
-    # via python-utils
 urllib3==2.7.0
     # via requests
-vnudenet==2.1.0
-    # via -r requirements.in

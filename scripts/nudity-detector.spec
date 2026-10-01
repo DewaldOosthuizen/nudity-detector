@@ -13,7 +13,6 @@ project_root = spec_dir.parent
 
 # ── Collect complete packages that need all sub-modules & data ───────────────
 nudenet_datas, nudenet_binaries, nudenet_hiddenimports = collect_all('nudenet')
-vnudenet_datas, vnudenet_binaries, vnudenet_hiddenimports = collect_all('vnudenet')
 gi_datas, gi_binaries, gi_hiddenimports = collect_all('gi')
 cv2_datas, cv2_binaries, cv2_hiddenimports = collect_all('cv2')
 
@@ -22,7 +21,6 @@ _config_entry = [(str(_config_dir), 'config')] if _config_dir.is_dir() else []
 
 all_datas = (
     nudenet_datas
-    + vnudenet_datas
     + gi_datas
     + cv2_datas
     # Bundle the app config only when the directory exists locally.
@@ -31,10 +29,9 @@ all_datas = (
     # is not present, so this entry is purely a local-build convenience.
     + _config_entry
 )
-all_binaries = nudenet_binaries + vnudenet_binaries + gi_binaries + cv2_binaries
+all_binaries = nudenet_binaries + gi_binaries + cv2_binaries
 all_hiddenimports = (
     nudenet_hiddenimports
-    + vnudenet_hiddenimports
     + gi_hiddenimports
     + cv2_hiddenimports
     + [

@@ -472,3 +472,10 @@ This project uses a pip-tools two-file workflow to keep dependencies fully pinne
    git add requirements.in requirements.txt && git commit
 
 Important: never use "pip freeze > requirements.txt". Always regenerate via pip-compile.
+
+The project intentionally uses only the CPU-only `onnxruntime` variant. The
+`vnudenet` package and its `onnxruntime-gpu` transitive dependency are
+excluded from `requirements.in` because they are unused by this codebase and
+would add approximately 500 MB of CUDA/cuDNN artifacts to CPU-only
+installations. The rationale is also documented in a comment above the
+`nudenet` line in `requirements.in`.

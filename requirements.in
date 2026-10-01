@@ -1,7 +1,13 @@
 # Abstract dependencies — edit this file, then run:
 #   pip-compile requirements.in -o requirements.txt
+# The project uses only the CPU-only ONNX Runtime for NudeNet inference.
+# `vnudenet` and `onnxruntime-gpu` are intentionally excluded because they
+# are unused in this codebase and would add ~500 MB of CUDA/cuDNN artifacts
+# to CPU-only installations. Reintroducing either requires explicit
+# justification. See also: https://github.com/Gilf666/vnudenet/issues (upstream
+# issue requesting that onnxruntime-gpu be made an optional extra).
 nudenet>=3.4.2,<4
-VNudeNet>=2.1.0,<3
+# VNudeNet>=2.1.0,<3  # REMOVED: unused transitive dependency; see comment above
 openpyxl>=3.1.5,<4
 Pillow>=12.3.0,<13
 requests>=2.34.2,<3
