@@ -63,6 +63,3 @@ Tool commands:
 - Branch from `main` using `feature/<issue>-<topic>`, `fix/<issue>-<topic>`, `chore/<topic>`, or `docs/<topic>`.
 - Commit messages: imperative mood, 72-char subject, `Closes #<n>` in footer.
 - Open PRs against `main`, request review, do not merge your own PR.
-
-⚠️ File-mutation verifier: 1 file edit(s) FAILED this turn despite any wording above that may suggest otherwise. Run `git status` or `read_file` to confirm what actually landed.
-  • `/home/dewald/Workspace/personal/github/nudity-detector/AGENTS.md` — [write_file] BLOCKED: write to protected agent-instruction file(s) (AGENTS.md) requires approval but no interactive user or gateway is present to approve it. The user has NOT consented to this…
