@@ -376,11 +376,15 @@ class ScanningMixin:
         scan_session = self._scan_session
 
         # ------------------------------------------------------------------
-        # Step 1 — Count supported files before starting workers.
-        # This lets us show a real progress fraction and verify completion.
+        # Single directory walk — collect all files once.
         # ------------------------------------------------------------------
         scan_start_time = datetime.now()
-        total_files = count_supported_files(folder_path)
+        all_files = []
+        for root, _, files in os.walk(folder_path):
+            for file_name in files:
+                all_files.append(os.path.join(root, file_name))
+
+        total_files = count_supported_files(folder_path, file_list=all_files)
         GLib.idle_add(self.log_message, f'Found {total_files} supported file(s) to scan.')
         if total_files == 0:
             GLib.idle_add(self.log_message, 'No supported media files found. Scan complete.', 'warning')
@@ -490,6 +494,7 @@ class ScanningMixin:
                 classify_video,
                 worker_count=self._get_worker_thread_count(),
                 worker_timeout=self._get_worker_thread_timeout(),
+                file_list=all_files,
             )
 
             processed = files_processed[0]
