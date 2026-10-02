@@ -554,3 +554,155 @@ class TestScanningMixinStartScanning:
                  patch("src.gui.scanning.os.makedirs"):
                 ScanningMixin.start_scanning(win)
         mock_thread.start.assert_called()
+
+
+# ---------------------------------------------------------------------------
+# Issue #91 — timeout unit boundary (real accessors must yield seconds)
+# ---------------------------------------------------------------------------
+
+def _load_nudity_window_class():
+    """Import ``NudityDetectorWindow`` from ``src.gui.app`` with clean gi stubs.
+
+    ``src.gui.app`` defines ``NudityDetectorWindow(..., Adw.ApplicationWindow)``,
+    so importing it needs ``Adw.ApplicationWindow``/``Adw.Application`` to be real
+    classes and ``GObject.Object`` to be a real class. That is not guaranteed here:
+    ``src/core/utils.py`` imports ``send2trash``, which imports the *real*
+    ``gi.repository`` when a core test is collected first (pytest collects
+    alphabetically), and the sibling gui stubs then leave it in a corrupted state.
+
+    The import is therefore performed lazily, after (re)installing a complete,
+    self-contained stub set for ``gi`` and its submodules, so this module collects
+    and passes regardless of test-collection order.
+    """
+    class _GObjectBase:
+        def __init__(self, *a, **kw):
+            pass
+
+    class _FakeAdwWindow:
+        def __init__(self, *a, **kw):
+            pass
+
+    class _FakeAdwApplication:
+        def __init__(self, *a, **kw):
+            pass
+
+    gi_mod = types.ModuleType("gi")
+    gi_mod.require_version = MagicMock()
+    repo_mod = types.ModuleType("gi.repository")
+
+    adw_mod = MagicMock()
+    adw_mod.ApplicationWindow = _FakeAdwWindow
+    adw_mod.Application = _FakeAdwApplication
+    gtk_mod = MagicMock()
+    gtk_mod.INVALID_LIST_POSITION = 4294967295
+    gobject_mod = MagicMock()
+    gobject_mod.Object = _GObjectBase
+    glib_mod = MagicMock()
+
+    class _GLibError(Exception):
+        pass
+
+    glib_mod.Error = _GLibError
+    gio_mod = MagicMock()
+    gdk_mod = MagicMock()
+    gdkpixbuf_mod = MagicMock()
+
+    gi_mod.repository = repo_mod
+    repo_mod.Adw = adw_mod
+    repo_mod.Gtk = gtk_mod
+    repo_mod.GObject = gobject_mod
+    repo_mod.GLib = glib_mod
+    repo_mod.Gio = gio_mod
+    repo_mod.Gdk = gdk_mod
+    repo_mod.GdkPixbuf = gdkpixbuf_mod
+
+    stubs = {
+        "gi": gi_mod,
+        "gi.repository": repo_mod,
+        "gi.repository.Adw": adw_mod,
+        "gi.repository.Gtk": gtk_mod,
+        "gi.repository.GObject": gobject_mod,
+        "gi.repository.GLib": glib_mod,
+        "gi.repository.Gio": gio_mod,
+        "gi.repository.Gdk": gdk_mod,
+        "gi.repository.GdkPixbuf": gdkpixbuf_mod,
+    }
+    sys.modules.update(stubs)
+
+    from src.gui.app import NudityDetectorWindow  # noqa: E402
+    return NudityDetectorWindow
+
+
+class TestTimeoutUnits:
+    """The GUI accessors are the unit boundary: they must return whole seconds."""
+
+    def test_accessor_worker_timeout_returns_seconds(self):
+        window_cls = _load_nudity_window_class()
+        win = MagicMock()
+        win.worker_thread_timeout_spin.get_value.return_value = 5
+        result = window_cls._get_worker_thread_timeout(win)
+        assert result == 5
+        assert result != 5000
+        assert result != 0.005
+
+    def test_accessor_detect_timeout_returns_seconds(self):
+        window_cls = _load_nudity_window_class()
+        win = MagicMock()
+        win.detect_timeout_spin.get_value.return_value = 60
+        result = window_cls._get_detect_timeout(win)
+        assert result == 60
+
+    def test_accessor_converts_legacy_millisecond_value(self):
+        window_cls = _load_nudity_window_class()
+        win = MagicMock()
+        win.worker_thread_timeout_spin.get_value.return_value = 2500
+        assert window_cls._get_worker_thread_timeout(win) == 3
+
+    def test_classify_files_in_folder_receives_seconds(self, tmp_path):
+        window_cls = _load_nudity_window_class()
+        win = _make_win()
+        win.folder_entry.get_text.return_value = str(tmp_path)
+        win._get_model.return_value = constants.MODEL_NUDENET
+        win._get_worker_thread_count = MagicMock(return_value=1)
+        # Bind the REAL accessor so this test exercises the unit boundary itself.
+        win._get_worker_thread_timeout = types.MethodType(
+            window_cls._get_worker_thread_timeout, win
+        )
+        win.worker_thread_timeout_spin.get_value.return_value = 5
+        win.create_nudenet_classifiers = MagicMock(return_value=(MagicMock(), MagicMock()))
+
+        with patch("src.gui.scanning.threading.Thread") as mock_thread_cls, \
+             patch("src.gui.scanning.classify_files_in_folder") as mock_classify, \
+             patch("src.gui.scanning.count_supported_files", return_value=1), \
+             patch("src.gui.scanning.save_nudity_report"), \
+             patch("src.gui.scanning.os.makedirs"):
+            ScanningMixin.start_scanning(win)
+            # Invoke the real process_files (win.process_files is a MagicMock on the
+            # stub window), reusing the folder/report args start_scanning built.
+            args = mock_thread_cls.call_args.kwargs["args"]
+            ScanningMixin.process_files(win, *args)
+
+        assert mock_classify.call_args.kwargs["worker_timeout"] == 5
+
+    def test_detect_with_timeout_receives_seconds(self, tmp_path):
+        window_cls = _load_nudity_window_class()
+        win = _make_win()
+        win.is_processing = True
+        # Bind the REAL accessor so the value reaching detect_with_timeout is the
+        # normalized seconds value produced by the unit boundary.
+        win._get_detect_timeout = types.MethodType(
+            window_cls._get_detect_timeout, win
+        )
+        win.detect_timeout_spin.get_value.return_value = 60
+        session = ScanSession()
+        img = tmp_path / "img.jpg"
+        img.write_bytes(b"x")
+        fake_detector = MagicMock()
+        with patch("nudenet.NudeDetector", return_value=fake_detector), \
+             patch("src.gui.scanning.detect_with_timeout", return_value=[]) as mock_detect:
+            classify_image, _ = ScanningMixin.create_nudenet_classifiers(
+                win, set(), 0.6, 60.0, session
+            )
+            classify_image(str(img))
+        # detect_with_timeout(detector, file_path, timeout_seconds)
+        assert mock_detect.call_args.args[2] == 60
