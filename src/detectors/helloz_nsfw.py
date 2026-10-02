@@ -6,7 +6,6 @@ import time
 import requests
 
 from ..core import constants
-from ..core.models import ReportEntry
 from ..core.scan_session import ScanSession
 from ..core.utils import (
     classify_files_in_folder,
@@ -17,9 +16,11 @@ from ..core.utils import (
     load_existing_report,
     make_scan_config,
     normalize_threshold,
+    prompt_threshold_percent,
+    record_error,
     save_nudity_report,
 )
-from ..processing.media_processor import FrameExtractor, detect_media_type
+from ..processing.media_processor import FrameExtractor
 
 logger = logging.getLogger(__name__)
 
@@ -63,35 +64,6 @@ def _post_with_retry(url, files, timeout,
     )
 
 
-def _record_error(file_path, error, model_name, threshold_percent, session):
-    """Append an ERROR sentinel entry to *session* for a failed file."""
-    media_type = detect_media_type(file_path)
-    entry = ReportEntry(
-        file=file_path,
-        media_type=media_type,
-        model_name=model_name,
-        threshold_percent=threshold_percent,
-        confidence_percent=0.0,
-        nudity_detected=False,
-        detected_classes=f'ERROR: {error}',
-        thumbnail='',
-        date_classified='',
-    )
-    session.add_result(entry)
-
-
-def prompt_threshold_percent(default_percent=constants.DEFAULT_THRESHOLD_PERCENT):
-    raw_value = input(f'Enter detection threshold percentage [{default_percent}]: ').strip()
-    if not raw_value:
-        return default_percent
-
-    try:
-        return max(constants.MIN_THRESHOLD_PERCENT, min(float(raw_value), constants.MAX_THRESHOLD_PERCENT))
-    except ValueError:
-        logger.warning('Invalid threshold value. Using default %.1f%%', default_percent)
-        return default_percent
-
-
 def extract_frames(file_path, frame_rate=constants.VIDEO_FRAME_RATE):
     """Legacy wrapper for backward compatibility."""
     extractor = FrameExtractor(frame_rate=frame_rate, temp_prefix=constants.FRAME_TEMP_DIR_PREFIX_CLI_HELLOZ_NSFW)
@@ -127,7 +99,7 @@ def make_classify_image(existing_files, threshold_value, threshold_percent, sess
             )
         except Exception as error:
             logger.error('Error classifying image %s: %s', file_path, error)
-            _record_error(file_path, error, constants.MODEL_HELLOZ_NSFW, threshold_percent, session)
+            record_error(file_path, error, threshold_percent, session, model_name=constants.MODEL_HELLOZ_NSFW)
 
     return classify_image
 
@@ -184,7 +156,7 @@ def make_classify_video(existing_files, threshold_value, threshold_percent, sess
             )
         except Exception as error:
             logger.error('Error classifying video %s: %s', file_path, error)
-            _record_error(file_path, error, constants.MODEL_HELLOZ_NSFW, threshold_percent, session)
+            record_error(file_path, error, threshold_percent, session, model_name=constants.MODEL_HELLOZ_NSFW)
         finally:
             extractor.cleanup()
 

@@ -4,66 +4,25 @@ import os
 from nudenet import NudeDetector
 
 from ..core import constants
-from ..core.models import ReportEntry
 from ..core.scan_session import ScanSession
 from ..core.utils import (
     classify_files_in_folder,
     create_session_state,
     get_detected_results,
+    get_nudenet_confidence,
     get_report_path,
     handle_results,
     load_existing_report,
     make_scan_config,
     normalize_threshold,
+    prompt_threshold_percent,
+    record_error,
     save_nudity_report,
+    simplify_nudenet_results,
 )
-from ..processing.media_processor import FrameExtractor, detect_media_type
+from ..processing.media_processor import FrameExtractor
 
 logger = logging.getLogger(__name__)
-
-
-def prompt_threshold_percent(default_percent=constants.DEFAULT_THRESHOLD_PERCENT):
-    raw_value = input(f'Enter detection threshold percentage [{default_percent}]: ').strip()
-    if not raw_value:
-        return default_percent
-
-    try:
-        return max(constants.MIN_THRESHOLD_PERCENT, min(float(raw_value), constants.MAX_THRESHOLD_PERCENT))
-    except ValueError:
-        logger.warning('Invalid threshold value. Using default %.1f%%', default_percent)
-        return default_percent
-
-
-def simplify_nudenet_results(detection_result):
-    return [
-        {'class': record.get('label', ''), 'score': record.get('score', 0.0)}
-        for record in detection_result
-    ]
-
-
-def get_nudenet_confidence(detection_result):
-    class_scores = [
-        record.get("score", 0.0)
-        for record in detection_result
-        if record.get("label") in constants.NUDITY_CLASSES_BROAD
-    ]
-    return max(class_scores, default=0.0)
-
-
-def _record_error(file_path, error, threshold_percent, session):
-    """Append an ERROR sentinel entry to *session* for a failed file."""
-    entry = ReportEntry(
-        file=file_path,
-        media_type=detect_media_type(file_path),
-        model_name=constants.MODEL_NUDENET,
-        threshold_percent=threshold_percent,
-        confidence_percent=0.0,
-        nudity_detected=False,
-        detected_classes=f'ERROR: {error}',
-        thumbnail='',
-        date_classified='',
-    )
-    session.add_result(entry)
 
 
 def main():
@@ -104,7 +63,7 @@ def main():
             )
         except Exception as error:
             logger.error('Error classifying image %s: %s', file_path, error)
-            _record_error(file_path, error, threshold_percent, session)
+            record_error(file_path, error, threshold_percent, session, model_name=constants.MODEL_NUDENET)
 
     def classify_video(file_path):
         if file_path in existing_files:
@@ -139,7 +98,7 @@ def main():
             )
         except Exception as error:
             logger.error('Error classifying video %s: %s', file_path, error)
-            _record_error(file_path, error, threshold_percent, session)
+            record_error(file_path, error, threshold_percent, session, model_name=constants.MODEL_NUDENET)
         finally:
             extractor.cleanup()
 

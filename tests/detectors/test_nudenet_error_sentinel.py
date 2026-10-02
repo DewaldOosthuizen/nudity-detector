@@ -32,7 +32,7 @@ class TestClassifyImageErrorSentinel:
             instance = MockDetector.return_value
             instance.detect.side_effect = RuntimeError('model exploded')
 
-            with patch('src.detectors.nudenet.input', side_effect=['/tmp/test_folder', '']):
+            with patch('builtins.input', side_effect=['/tmp/test_folder', '']):
                 with patch('src.detectors.nudenet.load_existing_report', return_value=set()):
                     with patch('src.detectors.nudenet.classify_files_in_folder') as mock_classify:
                         with patch('src.detectors.nudenet.save_nudity_report'):
@@ -66,7 +66,7 @@ class TestClassifyImageErrorSentinel:
         session = ScanSession()
 
         with patch('src.detectors.nudenet.NudeDetector'):
-            with patch('src.detectors.nudenet.input', side_effect=['/tmp/test_folder', '']):
+            with patch('builtins.input', side_effect=['/tmp/test_folder', '']):
                 with patch('src.detectors.nudenet.load_existing_report', return_value=set()):
                     with patch('src.detectors.nudenet.classify_files_in_folder') as mock_classify:
                         with patch('src.detectors.nudenet.save_nudity_report'):
@@ -113,7 +113,7 @@ class TestClassifyImageErrorSentinel:
         )
 
         with patch('src.detectors.nudenet.NudeDetector'):
-            with patch('src.detectors.nudenet.input', side_effect=['/tmp/test_folder', '']):
+            with patch('builtins.input', side_effect=['/tmp/test_folder', '']):
                 with patch('src.detectors.nudenet.load_existing_report', return_value=set()):
                     with patch('src.detectors.nudenet.classify_files_in_folder'):
                         with patch('src.detectors.nudenet.save_nudity_report'):

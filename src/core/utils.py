@@ -85,6 +85,87 @@ def threshold_to_percent(threshold_value) -> float:
     return round(normalize_threshold(threshold_value) * 100, 2)
 
 
+def prompt_threshold_percent(default_percent=constants.DEFAULT_THRESHOLD_PERCENT):
+    """Prompt user for a threshold percentage with clamping.
+
+    Args:
+        default_percent: Fallback value when input is empty or invalid.
+
+    Returns:
+        Clamped threshold percentage between MIN_THRESHOLD_PERCENT and MAX_THRESHOLD_PERCENT.
+    """
+    raw_value = input(f'Enter detection threshold percentage [{default_percent}]: ').strip()
+    if not raw_value:
+        return default_percent
+
+    try:
+        return max(constants.MIN_THRESHOLD_PERCENT, min(float(raw_value), constants.MAX_THRESHOLD_PERCENT))
+    except ValueError:
+        logging.warning('Invalid threshold value. Using default %.1f%%', default_percent)
+        return default_percent
+
+
+def record_error(file_path, error, threshold_percent, session, model_name=constants.MODEL_NUDENET):
+    """Append an ERROR sentinel entry to *session* for a failed file.
+
+    Args:
+        file_path: Path to the file that failed classification.
+        error: Exception or error message describing the failure.
+        threshold_percent: Threshold percentage used for this scan.
+        session: ScanSession to append the error entry to.
+        model_name: Detection model name (defaults to MODEL_NUDENET).
+    """
+    media_type = detect_media_type(file_path)
+    entry = ReportEntry(
+        file=file_path,
+        media_type=media_type,
+        model_name=model_name,
+        threshold_percent=threshold_percent,
+        confidence_percent=0.0,
+        nudity_detected=False,
+        detected_classes=f'ERROR: {error}',
+        thumbnail='',
+        date_classified='',
+    )
+    session.add_result(entry)
+
+
+def simplify_nudenet_results(detection_result):
+    """Simplify NudeNet detection result to class/score dicts.
+
+    Args:
+        detection_result: Raw list of detection records from NudeDetector.
+
+    Returns:
+        List of {'class': str, 'score': float} dicts.
+    """
+    return [
+        {'class': record.get('label', ''), 'score': record.get('score', 0.0)}
+        for record in detection_result
+    ]
+
+
+def get_nudenet_confidence(detection_result):
+    """Get highest confidence score among broad nudity classes.
+
+    Uses NUDITY_CLASSES_BROAD (includes extended classes) for consistency
+    with the CLI detectors. The GUI scanning mixin previously used
+    NUDITY_CLASSES (narrow set), which caused fewer detections than CLI.
+
+    Args:
+        detection_result: Raw list of detection records from NudeDetector.
+
+    Returns:
+        Maximum confidence score among nudity classes, or 0.0 if none found.
+    """
+    class_scores = [
+        record.get("score", 0.0)
+        for record in detection_result
+        if record.get("label") in constants.NUDITY_CLASSES_BROAD
+    ]
+    return max(class_scores, default=0.0)
+
+
 def make_scan_config(source_folder='', model_name='nudenet', threshold_percent=60, theme_mode='system') -> dict:
     """Create scan config dictionary."""
     config = ScanConfig(
