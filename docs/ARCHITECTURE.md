@@ -215,10 +215,8 @@ See `docs/diagrams/05-build-pipeline.md` for the full pipeline diagram.
 
 | Workflow | File | Trigger | Purpose |
 |----------|------|---------|---------|
-| Lint | `.github/workflows/lint.yml` | Every push and pull request | `ruff check src/ tests/` — must pass before merge |
-| Tests | `.github/workflows/tests.yml` | Every push and pull request | `pytest --cov` with coverage threshold |
-| Dependency Audit | `.github/workflows/audit.yml` | Every push and pull request | `pip-audit` — flags known CVEs |
-| Release | `.github/workflows/release.yml` | Tag `v*.*.*` pushed | Builds AppImage, creates GitHub Release |
+| PR Gate | `.github/workflows/pr_gate.yml` | Every pull request targeting `main` | Consolidated quality gate: `lint` (`ruff check src/ tests/`), `test` (`pytest --cov --cov-report=term-missing tests/`, `needs: lint`), `pip-audit` (`pip-audit -r requirements.txt`, parallel with lint), and `pr-gate-summary` (needs all three, `if: always()`) — a single required status check for branch protection |
+| Release | `.github/workflows/release.yml` | Push to `main` and `workflow_dispatch` | Re-validates, computes a CalVer tag (`YYYY.MM.DD[.N]`), builds the AppImage, pushes the tag, and creates a GitHub Release with the AppImage attached — does NOT trigger on manual `v*.*.*` tag pushes |
 
 See [docs/releasing.md](releasing.md) for the full release process, versioning
 convention, and rollback procedure.
