@@ -235,6 +235,48 @@ WORKER_THREAD_TIMEOUT = 5  # seconds
 DETECT_TIMEOUT = 60  # seconds for individual detections
 
 # ============================================================================
+# Threading — Timeout Units
+# ============================================================================
+MILLISECONDS_PER_SECOND = 1000
+# Any configured timeout at or above this bound cannot be a valid seconds value
+# (the GUI caps timeouts at 300 s for workers and 600 s for detection), so it is
+# treated as a legacy millisecond value and converted.
+LEGACY_TIMEOUT_MS_THRESHOLD = 1000
+
+
+def milliseconds_to_seconds(milliseconds):
+    """Convert a timeout expressed in milliseconds to seconds.
+
+    Args:
+        milliseconds: Timeout value in milliseconds.
+
+    Returns:
+        The equivalent timeout in seconds.
+    """
+    return milliseconds / MILLISECONDS_PER_SECOND
+
+
+def normalize_timeout_seconds(value, default_seconds):
+    """Normalize a configured timeout value to whole seconds for the threading API.
+
+    Args:
+        value: Raw timeout value read from config (seconds, or a legacy millisecond value).
+        default_seconds: Fallback value in seconds when value is missing or invalid.
+
+    Returns:
+        Timeout in whole seconds, always >= 1.
+    """
+    if value is None:
+        return default_seconds
+    try:
+        numeric = int(value)
+    except (TypeError, ValueError):
+        return default_seconds
+    if numeric >= LEGACY_TIMEOUT_MS_THRESHOLD:
+        numeric = int(milliseconds_to_seconds(numeric) + 0.5)
+    return max(1, numeric)
+
+# ============================================================================
 # System Directories (Safety)
 # ============================================================================
 SYSTEM_PROTECTED_DIRS = ('/', '/etc', '/sys', '/dev', '/proc', '/root')

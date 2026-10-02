@@ -174,24 +174,33 @@ All 18 keys in `config/app_config.json`:
 | `progress_update_interval` | `100` | `SCAN_PROGRESS_UPDATE_INTERVAL` | app-wide |
 | `video_frame_rate` | `10` | `VIDEO_FRAME_RATE` (code default: 5) | app-wide |
 | `worker_thread_count` | `10` | *no constant* | app-wide |
-| `worker_thread_timeout` | `250` | *no constant* | app-wide |
+| `worker_thread_timeout` | `5` | `WORKER_THREAD_TIMEOUT` | app-wide |
 | `nudenet_worker_thread_count` | `4` | *no constant* | app-wide |
 | `nudenet_worker_thread_timeout` | `10` | *no constant* | app-wide |
 | `helloz_nsfw_worker_thread_count` | `20` | *no constant* | Helloz-NSFW |
 | `helloz_nsfw_worker_thread_timeout` | `35` | *no constant* | Helloz-NSFW |
-| `detect_timeout` | `250` | `DETECT_TIMEOUT` (code default: 60 s) | app-wide |
+| `detect_timeout` | `60` | `DETECT_TIMEOUT` | app-wide |
 | `helloz_nsfw_host` | `"localhost"` | `HELLOZ_NSFW_HOST` | Helloz-NSFW |
 | `helloz_nsfw_port` | `6086` | `HELLOZ_NSFW_PORT` | Helloz-NSFW |
 | `helloz_nsfw_api_endpoint` | `"/api/upload_check"` | `HELLOZ_NSFW_API_ENDPOINT` | Helloz-NSFW |
 | `helloz_nsfw_request_timeout` | `300` | `HELLOZ_NSFW_REQUEST_TIMEOUT` (code default: 30 s) | Helloz-NSFW |
 | `helloz_nsfw_health_check_timeout` | `5` | `HELLOZ_NSFW_HEALTH_CHECK_TIMEOUT` | Helloz-NSFW |
 
-Note on units: `detect_timeout`, `worker_thread_timeout`,
-`nudenet_worker_thread_timeout`, `helloz_nsfw_worker_thread_timeout`, and
-`helloz_nsfw_worker_thread_count` are stored in milliseconds in
-`config/app_config.json` but the corresponding constants in
-`src/core/constants.py` use seconds where applicable — the values differ by design
-and are not interchangeable.
+Note on units: all timeout keys (`worker_thread_timeout`, `detect_timeout`,
+`helloz_nsfw_request_timeout`, `helloz_nsfw_health_check_timeout`) are stored in
+seconds in `config/app_config.json`, matching the constants in
+`src/core/constants.py` and the `threading` API.
+
+`nudenet_worker_thread_timeout` and `helloz_nsfw_worker_thread_timeout` are
+**not read by any code** (no `src/` references) and are retained only as
+reference entries; their removal is recommended as a separate cleanup.
+
+Migration note (issue #91): if your existing `config/app_config.json` still
+contains the old millisecond values `worker_thread_timeout: 250` or
+`detect_timeout: 250`, change them to `5` and `60` respectively. The value `250`
+is **not** auto-migrated because it is ambiguous — it is both the former
+millisecond default and a legal 250-second value — so re-check your timeout
+values after upgrading.
 
 Five keys have no corresponding constant in `src/core/constants.py` and are read
 directly from `config/app_config.json` at runtime:

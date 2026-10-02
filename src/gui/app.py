@@ -72,14 +72,12 @@ class NudityDetectorWindow(
             self._worker_thread_count = max(1, int(cfg.get('worker_thread_count', constants.WORKER_THREAD_COUNT)))
         except (ValueError, TypeError):
             self._worker_thread_count = constants.WORKER_THREAD_COUNT
-        try:
-            self._worker_thread_timeout = max(1, int(cfg.get('worker_thread_timeout', constants.WORKER_THREAD_TIMEOUT)))
-        except (ValueError, TypeError):
-            self._worker_thread_timeout = constants.WORKER_THREAD_TIMEOUT
-        try:
-            self._detect_timeout = max(1, int(cfg.get('detect_timeout', constants.DETECT_TIMEOUT)))
-        except (ValueError, TypeError):
-            self._detect_timeout = constants.DETECT_TIMEOUT
+        self._worker_thread_timeout = constants.normalize_timeout_seconds(
+            cfg.get('worker_thread_timeout'), constants.WORKER_THREAD_TIMEOUT
+        )
+        self._detect_timeout = constants.normalize_timeout_seconds(
+            cfg.get('detect_timeout'), constants.DETECT_TIMEOUT
+        )
         try:
             self._video_frame_rate = max(1, int(cfg.get('video_frame_rate', constants.VIDEO_FRAME_RATE)))
         except (ValueError, TypeError):
@@ -789,10 +787,32 @@ class NudityDetectorWindow(
         return max(1, int(self.worker_thread_count_spin.get_value()))
 
     def _get_worker_thread_timeout(self) -> int:
-        return max(1, int(self.worker_thread_timeout_spin.get_value()))
+        """Return the worker-thread join timeout in seconds.
+
+        Delegates unit normalization to ``constants.normalize_timeout_seconds`` so
+        the value handed to ``threading.Thread.join(timeout=...)`` is always in
+        whole seconds (the threading API unit).
+
+        Returns:
+            Timeout in seconds, always >= 1.
+        """
+        return constants.normalize_timeout_seconds(
+            self.worker_thread_timeout_spin.get_value(), constants.WORKER_THREAD_TIMEOUT
+        )
 
     def _get_detect_timeout(self) -> int:
-        return max(1, int(self.detect_timeout_spin.get_value()))
+        """Return the per-file detection timeout in seconds.
+
+        Delegates unit normalization to ``constants.normalize_timeout_seconds`` so
+        the value handed to ``detect_with_timeout(..., timeout_seconds=...)`` is
+        always in whole seconds.
+
+        Returns:
+            Timeout in seconds, always >= 1.
+        """
+        return constants.normalize_timeout_seconds(
+            self.detect_timeout_spin.get_value(), constants.DETECT_TIMEOUT
+        )
 
     def _get_helloz_nsfw_host(self) -> str:
         return self.helloz_nsfw_host_entry.get_text().strip() or constants.HELLOZ_NSFW_HOST
