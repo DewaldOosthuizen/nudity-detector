@@ -27,6 +27,7 @@ sequenceDiagram
         alt Image
             Worker->>Detector: classify(file, threshold)
         else Video
+            ScanMixin->>Utils: create_frame_extractor(frame_rate, prefix)
             Worker->>MP: FrameExtractor.iter_frames(file)
             loop For each frame
                 Worker->>Detector: classify(frame, threshold)

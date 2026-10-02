@@ -23,7 +23,7 @@ graph TD
     end
 
     subgraph Coord["Coordination Layer — src/core/utils.py"]
-        UTILS["utils.py\norchestrator + public API"]
+        UTILS["utils.py orchestrator + public API\ncreate_frame_extractor"]
     end
 
     subgraph Det["Detection Layer — src/detectors/"]
