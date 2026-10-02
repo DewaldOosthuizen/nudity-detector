@@ -304,6 +304,27 @@ def test_count_supported_files_empty(tmp_path):
     assert count_supported_files(str(tmp_path)) == 0
 
 
+def test_count_supported_files_with_file_list(tmp_path, monkeypatch):
+    (tmp_path / "a.jpg").write_bytes(b"")
+    (tmp_path / "b.mp4").write_bytes(b"")
+    (tmp_path / "c.txt").write_bytes(b"")
+
+    def fake_from_file(path, mime=True):
+        if path.endswith(".jpg"): return "image/jpeg"
+        if path.endswith(".mp4"): return "video/mp4"
+        return "text/plain"
+    monkeypatch.setattr("src.processing.media_processor.magic.from_file", fake_from_file)
+
+    file_list = [str(tmp_path / "a.jpg"), str(tmp_path / "b.mp4"), str(tmp_path / "c.txt")]
+    count = count_supported_files(str(tmp_path), file_list=file_list)
+    assert count == 2
+
+
+def test_count_supported_files_file_list_empty(tmp_path):
+    count = count_supported_files(str(tmp_path), file_list=[])
+    assert count == 0
+
+
 # ---------------------------------------------------------------------------
 # classify_files_in_folder
 # ---------------------------------------------------------------------------
@@ -338,6 +359,64 @@ def test_classify_files_in_folder_invalid_worker_count(tmp_path):
 
     with pytest.raises(ValueError, match="worker_count must be at least 1"):
         classify_files_in_folder(str(tmp_path), MagicMock(), MagicMock(), worker_count=0)
+
+
+def test_classify_files_in_folder_with_file_list(tmp_path, monkeypatch):
+    from src.core.utils import classify_files_in_folder
+
+    (tmp_path / "a.jpg").write_bytes(b"")
+    (tmp_path / "b.mp4").write_bytes(b"")
+
+    def fake_from_file(path, mime=True):
+        if path.endswith(".jpg"): return "image/jpeg"
+        if path.endswith(".mp4"): return "video/mp4"
+        return "text/plain"
+    monkeypatch.setattr("src.processing.media_processor.magic.from_file", fake_from_file)
+
+    image_cb = MagicMock()
+    video_cb = MagicMock()
+    file_list = [str(tmp_path / "a.jpg"), str(tmp_path / "b.mp4")]
+    classify_files_in_folder(str(tmp_path), image_cb, video_cb, worker_count=2, file_list=file_list)
+
+    assert image_cb.call_count == 1
+    assert video_cb.call_count == 1
+
+
+def test_classify_files_in_folder_single_walk_same_as_double_walk(tmp_path, monkeypatch):
+    """Regression: single walk via file_list must produce same results as two separate walks."""
+    from src.core.utils import classify_files_in_folder, count_supported_files
+
+    (tmp_path / "a.jpg").write_bytes(b"")
+    (tmp_path / "b.mp4").write_bytes(b"")
+    (tmp_path / "c.txt").write_bytes(b"")
+
+    def fake_from_file(path, mime=True):
+        if path.endswith(".jpg"): return "image/jpeg"
+        if path.endswith(".mp4"): return "video/mp4"
+        return "text/plain"
+    monkeypatch.setattr("src.processing.media_processor.magic.from_file", fake_from_file)
+
+    # Two-walk approach (old behaviour)
+    count_old = count_supported_files(str(tmp_path))
+    image_cb_old = MagicMock()
+    video_cb_old = MagicMock()
+    classify_files_in_folder(str(tmp_path), image_cb_old, video_cb_old, worker_count=2)
+    old_image_calls = image_cb_old.call_count
+    old_video_calls = video_cb_old.call_count
+
+    # Single-walk approach (new behaviour)
+    all_files = []
+    for root, _, files in os.walk(str(tmp_path)):
+        for file_name in files:
+            all_files.append(os.path.join(root, file_name))
+    count_new = count_supported_files(str(tmp_path), file_list=all_files)
+    image_cb_new = MagicMock()
+    video_cb_new = MagicMock()
+    classify_files_in_folder(str(tmp_path), image_cb_new, video_cb_new, worker_count=2, file_list=all_files)
+
+    assert count_new == count_old
+    assert image_cb_new.call_count == old_image_calls
+    assert video_cb_new.call_count == old_video_calls
 
 
 # ---------------------------------------------------------------------------
