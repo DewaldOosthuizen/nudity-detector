@@ -373,7 +373,7 @@ def process_file(file_path: str, classify_image, classify_video) -> None:
         classify_video(file_path)
 
 
-def count_supported_files(folder_path: str) -> int:
+def count_supported_files(folder_path: str, file_list: list[str] | None = None) -> int:
     """Count all supported media files in a folder tree.
 
     Performs a single os.walk pass to count files where is_supported_file()
@@ -383,10 +383,16 @@ def count_supported_files(folder_path: str) -> int:
 
     Args:
         folder_path: Root folder to walk
+        file_list: Optional pre-computed list of file paths to count.
+            When provided, iterates over this list instead of calling os.walk.
+            Uses full-path is_supported_file() for consistency with
+            classify_files_in_folder.
 
     Returns:
         Number of supported files found
     """
+    if file_list is not None:
+        return sum(1 for f in file_list if is_supported_file(f))
     total = 0
     for _root, _dirs, files in os.walk(folder_path):
         for file_name in files:
@@ -401,6 +407,7 @@ def classify_files_in_folder(
     classify_video,
     worker_count: int = constants.WORKER_THREAD_COUNT,
     worker_timeout: int = constants.WORKER_THREAD_TIMEOUT,
+    file_list: list[str] | None = None,
 ) -> None:
     """Classify all supported files in folder using worker threads.
 
@@ -413,6 +420,9 @@ def classify_files_in_folder(
         classify_video: Video classification callable
         worker_count: Number of concurrent worker threads
         worker_timeout: Seconds to wait for each worker to finish
+        file_list: Optional pre-computed list of file paths to process.
+            When provided, queues items from this list instead of calling os.walk.
+
     """
     if worker_count < 1:
         raise ValueError(f'worker_count must be at least 1, got {worker_count}')
@@ -444,10 +454,14 @@ def classify_files_in_folder(
         workers.append(worker)
 
     try:
-        # Stream files into the queue as they are discovered.
-        for root, _, files in os.walk(folder_path):
-            for file_name in files:
-                file_queue.put(os.path.join(root, file_name))
+        if file_list is not None:
+            for file_path in file_list:
+                file_queue.put(file_path)
+        else:
+            # Stream files into the queue as they are discovered.
+            for root, _, files in os.walk(folder_path):
+                for file_name in files:
+                    file_queue.put(os.path.join(root, file_name))
     finally:
         # Send one sentinel per worker to signal completion, even if
         # directory traversal fails before all files are queued.

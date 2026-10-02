@@ -310,8 +310,10 @@ def test_count_supported_files_with_file_list(tmp_path, monkeypatch):
     (tmp_path / "c.txt").write_bytes(b"")
 
     def fake_from_file(path, mime=True):
-        if path.endswith(".jpg"): return "image/jpeg"
-        if path.endswith(".mp4"): return "video/mp4"
+        if path.endswith(".jpg"):
+            return "image/jpeg"
+        if path.endswith(".mp4"):
+            return "video/mp4"
         return "text/plain"
     monkeypatch.setattr("src.processing.media_processor.magic.from_file", fake_from_file)
 
@@ -368,8 +370,10 @@ def test_classify_files_in_folder_with_file_list(tmp_path, monkeypatch):
     (tmp_path / "b.mp4").write_bytes(b"")
 
     def fake_from_file(path, mime=True):
-        if path.endswith(".jpg"): return "image/jpeg"
-        if path.endswith(".mp4"): return "video/mp4"
+        if path.endswith(".jpg"):
+            return "image/jpeg"
+        if path.endswith(".mp4"):
+            return "video/mp4"
         return "text/plain"
     monkeypatch.setattr("src.processing.media_processor.magic.from_file", fake_from_file)
 
@@ -391,8 +395,10 @@ def test_classify_files_in_folder_single_walk_same_as_double_walk(tmp_path, monk
     (tmp_path / "c.txt").write_bytes(b"")
 
     def fake_from_file(path, mime=True):
-        if path.endswith(".jpg"): return "image/jpeg"
-        if path.endswith(".mp4"): return "video/mp4"
+        if path.endswith(".jpg"):
+            return "image/jpeg"
+        if path.endswith(".mp4"):
+            return "video/mp4"
         return "text/plain"
     monkeypatch.setattr("src.processing.media_processor.magic.from_file", fake_from_file)
 
