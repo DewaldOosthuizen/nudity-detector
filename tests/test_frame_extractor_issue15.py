@@ -43,18 +43,23 @@ def test_iter_frames_early_exit_writes_only_n_frames(tmp_path):
     extractor = FrameExtractor(frame_rate=1)
     count = 0
     captured_temp_dir = None
+    jpeg_count_at_break = 0
     for frame_path in extractor.iter_frames(video_path):
         count += 1
-        # Capture temp_dir while still inside the generator (before finally cleans up)
+        # Capture temp_dir and JPEG count while still inside the generator
         if captured_temp_dir is None:
             captured_temp_dir = extractor.temp_dir
         if count == 3:
+            # Count JPEGs at break point, before generator close triggers cleanup
+            jpeg_count_at_break = len([
+                f for f in os.listdir(extractor.temp_dir)
+                if f.endswith('.jpg')
+            ])
             break
 
     # Exactly 3 JPEG files should exist at break point
     assert captured_temp_dir is not None
-    jpegs = [f for f in os.listdir(captured_temp_dir) if f.endswith('.jpg')]
-    assert len(jpegs) == 3
+    assert jpeg_count_at_break == 3
 
     # Auto-cleanup ran on generator close (break triggers GeneratorExit -> finally)
     assert extractor.temp_dir is None

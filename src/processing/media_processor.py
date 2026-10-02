@@ -92,56 +92,58 @@ class FrameExtractor:
         self.temp_dir: Optional[str] = None
         self.frame_paths: List[str] = []
 
-    def extract(self, file_path: str) -> Tuple[str, List[str]]:
+    def extract(self, file_path: str) -> Tuple[Optional[str], List[str]]:
         """Extract all frames from a video file (eager, backward-compatible shim).
 
-        Delegates to iter_frames(). Prefer iter_frames() for large videos
-        to enable early-exit and avoid writing unneeded frames.
+        Materializes every sampled frame as a JPEG in a temporary directory and
+        returns the directory path plus the list of frame paths. Unlike
+        iter_frames(), the temp directory is NOT cleaned up here (auto-cleanup
+        would delete the files before the caller can read them) — the caller
+        MUST call self.cleanup() after consuming the returned files.
 
-        Returns:
-            Tuple of (temp_dir, frame_paths)
-        """
-        # Consume the generator fully — iter_frames() resets state internally.
-        for _ in self.iter_frames(file_path):
-            pass
-        return self.temp_dir, self.frame_paths
-
-    # Benchmark note: For a 60-min video at 30fps with VIDEO_FRAME_RATE=10,
-    # early exit at frame N saves writing approximately (10800 - N) JPEG frames to disk.
-    def iter_frames(self, file_path: str) -> Generator[str, None, None]:
-        """Yield one frame path at a time for lazy/streaming processing.
-
-        Writes each sampled frame to a temporary directory on demand and
-        yields its path. The caller can break early to avoid writing
-        unneeded frames.
-
-        The temporary directory is owned by self.temp_dir. Callers MUST
-        call self.cleanup() unconditionally after iteration (even after
-        an early break), because the temp_dir is created before the first
-        yield.
+        This method intentionally does NOT delegate to iter_frames() (which now
+        auto-cleans on exit); it drives the private _iter_frames_core() which
+        yields live files without removing the temp directory.
 
         Args:
             file_path: Path to the video file.
 
-        Yields:
-            Absolute path to each written frame JPEG.
+        Returns:
+            Tuple of (temp_dir, frame_paths). On success temp_dir is the path to
+            the temporary directory holding the frame JPEGs (caller must clean up)
+            and frame_paths lists every written frame. temp_dir is None only when
+            no directory was created or cleanup() has already run; it mirrors the
+            Optional[str] type of self.temp_dir (line 92).
 
         Raises:
-            RuntimeError: If OpenCV is unavailable or the video cannot be opened.
+            RuntimeError: If OpenCV is unavailable, the video cannot be opened,
+                or no frames could be extracted.
         """
         if cv2 is None:
             raise RuntimeError('OpenCV (cv2) is required for frame extraction but is not installed')
+        self._prepare_temp_dir()
+        success = False
+        try:
+            for _ in self._iter_frames_core(file_path):
+                pass
+            success = True
+            return self.temp_dir, self.frame_paths
+        finally:
+            if not success:
+                self.cleanup()
 
-        # Clean up any previous temp directory and reset state for a new extraction run.
-        self.cleanup()
-        self.temp_dir = tempfile.mkdtemp(prefix=self.temp_prefix)
-        self.frame_paths = []
+    def _iter_frames_core(self, file_path: str) -> Generator[str, None, None]:
+        """Internal extraction generator — yields frame paths WITHOUT auto-cleanup.
 
+        Manages its own VideoCapture (released in a finally). Does not create or
+        remove self.temp_dir; the caller prepares temp_dir and owns cleanup.
+        Kept separate from iter_frames() so extract() can consume every frame
+        and return live files that persist for the caller, while iter_frames()
+        wraps this core with automatic cleanup on every exit path.
+        """
         cap = cv2.VideoCapture(file_path)
         if not cap.isOpened():
-            self.cleanup()
             raise RuntimeError(f'Could not open video file: {file_path}')
-
         try:
             frame_count = 0
             while cap.isOpened():
@@ -163,10 +165,47 @@ class FrameExtractor:
                         )
                 frame_count += 1
             if not self.frame_paths:
-                self.cleanup()
                 raise RuntimeError(f'No frames could be extracted from video file: {file_path}')
         finally:
             cap.release()
+
+    def _prepare_temp_dir(self) -> None:
+        """Reset any previous run and create a fresh temp directory for extraction."""
+        self.cleanup()
+        self.temp_dir = tempfile.mkdtemp(prefix=self.temp_prefix)
+        self.frame_paths = []
+
+    # Benchmark note: For a 60-min video at 30fps with VIDEO_FRAME_RATE=10,
+    # early exit at frame N saves writing approximately (10800 - N) JPEG frames to disk.
+    def iter_frames(self, file_path: str) -> Generator[str, None, None]:
+        """Yield one frame path at a time for lazy/streaming processing.
+
+        Writes each sampled frame to a temporary directory on demand and
+        yields its path. The caller can break early to avoid writing
+        unneeded frames.
+
+        The temporary directory is owned by self.temp_dir and is automatically
+        cleaned up on every exit path (normal completion, early break,
+        GeneratorExit/GC, or any exception). Explicit self.cleanup() after
+        iteration remains safe because cleanup() is idempotent.
+
+        Args:
+            file_path: Path to the video file.
+
+        Yields:
+            Absolute path to each written frame JPEG.
+
+        Raises:
+            RuntimeError: If OpenCV is unavailable or the video cannot be opened.
+        """
+        if cv2 is None:
+            raise RuntimeError('OpenCV (cv2) is required for frame extraction but is not installed')
+
+        self._prepare_temp_dir()
+        try:
+            yield from self._iter_frames_core(file_path)
+        finally:
+            self.cleanup()
 
     def cleanup(self) -> None:
         """Clean up temporary frame directory."""
