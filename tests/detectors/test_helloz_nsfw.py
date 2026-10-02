@@ -285,7 +285,7 @@ def test_extract_frames_delegates_to_frame_extractor(tmp_path):
 # ---------------------------------------------------------------------------
 
 def test_prompt_threshold_percent_returns_valid_value():
-    from src.detectors.helloz_nsfw import prompt_threshold_percent
+    from src.core.utils import prompt_threshold_percent
     with patch('builtins.input', return_value='75'):
         result = prompt_threshold_percent()
     assert 0 <= result <= 100
@@ -293,14 +293,14 @@ def test_prompt_threshold_percent_returns_valid_value():
 
 
 def test_prompt_threshold_percent_uses_default_on_empty():
-    from src.detectors.helloz_nsfw import prompt_threshold_percent
+    from src.core.utils import prompt_threshold_percent
     with patch('builtins.input', return_value=''):
         result = prompt_threshold_percent(default_percent=50.0)
     assert result == 50.0
 
 
 def test_prompt_threshold_percent_uses_default_on_invalid():
-    from src.detectors.helloz_nsfw import prompt_threshold_percent
+    from src.core.utils import prompt_threshold_percent
     with patch('builtins.input', return_value='not_a_number'):
         result = prompt_threshold_percent(default_percent=60.0)
     assert result == 60.0

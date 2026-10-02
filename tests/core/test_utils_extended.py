@@ -8,6 +8,7 @@ import pytest
 # Stub heavy optional deps before importing source modules
 sys.modules.setdefault("nudenet", MagicMock())
 
+from src.core import constants
 from src.core.scan_session import ScanSession
 from src.core.utils import (
     count_supported_files,
@@ -25,6 +26,7 @@ from src.core.utils import (
     open_file,
     open_file_location,
     process_file,
+    record_error,
     save_nudity_report,
     validate_report_dir,
 )
@@ -454,3 +456,29 @@ def test_handle_results_nudity_detected(tmp_path):
         )
     assert entry["nudity_detected"] is True
     assert len(session.get_results()) == 1
+
+
+# ---------------------------------------------------------------------------
+# record_error (new — issue #89)
+# ---------------------------------------------------------------------------
+
+def test_record_error_default_model_name(tmp_path):
+    """record_error default model_name is MODEL_NUDENET."""
+    session = ScanSession()
+    file_path = str(tmp_path / "test.jpg")
+    record_error(file_path, "some error", 60.0, session)
+    results = session.get_results()
+    assert len(results) == 1
+    assert results[0].model_name == constants.MODEL_NUDENET
+    assert results[0].detected_classes.startswith("ERROR:")
+
+
+def test_record_error_explicit_helloz_model_name(tmp_path):
+    """record_error with MODEL_HELLOZ_NSFW produces entry with correct model_name."""
+    session = ScanSession()
+    file_path = str(tmp_path / "test.jpg")
+    record_error(file_path, "some error", 60.0, session, model_name=constants.MODEL_HELLOZ_NSFW)
+    results = session.get_results()
+    assert len(results) == 1
+    assert results[0].model_name == constants.MODEL_HELLOZ_NSFW
+    assert results[0].detected_classes.startswith("ERROR:")
