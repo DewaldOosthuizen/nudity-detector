@@ -28,11 +28,31 @@ try:
 except ImportError:
     send2trash = None
 
-from ..processing.media_processor import ThumbnailGenerator, detect_media_type, is_supported_file
+from ..processing.media_processor import FrameExtractor, ThumbnailGenerator, detect_media_type, is_supported_file
 from ..reporting.report_manager import ReportManager
 from . import constants
 from .models import ReportEntry, ScanConfig, SessionState
 from .scan_session import ScanSession
+
+
+def create_frame_extractor(frame_rate, temp_prefix):
+    """Create a FrameExtractor instance for video frame extraction.
+
+    Coordination-layer facade that prevents the GUI layer from importing
+    FrameExtractor directly from the processing (infrastructure) layer.
+
+    Args:
+        frame_rate: Extract every Nth frame (must be >= 1)
+        temp_prefix: Prefix for temporary directory
+
+    Returns:
+        FrameExtractor instance
+
+    Raises:
+        ValueError: If frame_rate is less than 1
+    """
+    return FrameExtractor(frame_rate=frame_rate, temp_prefix=temp_prefix)
+
 
 # ============================================================================
 # Public API (maintained for compatibility)

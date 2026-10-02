@@ -16,6 +16,7 @@ from ..core.utils import (
     DEFAULT_REPORT_DIR,
     classify_files_in_folder,
     count_supported_files,
+    create_frame_extractor,
     create_session_state,
     detect_with_timeout,
     get_detected_results,
@@ -25,7 +26,6 @@ from ..core.utils import (
     normalize_threshold,
     save_nudity_report,
 )
-from ..processing.media_processor import FrameExtractor
 
 
 class ScanningMixin:
@@ -140,7 +140,7 @@ class ScanningMixin:
         return None
 
     def extract_video_frames(self, file_path, temp_prefix):
-        extractor = FrameExtractor(
+        extractor = create_frame_extractor(
             frame_rate=self._get_video_frame_rate(),
             temp_prefix=temp_prefix,
         )
