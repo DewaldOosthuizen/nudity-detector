@@ -190,7 +190,7 @@ class TestScanningMixinBasics:
         win = _make_win()
         fake_extractor = MagicMock()
         fake_extractor.iter_frames.return_value = iter(["/tmp/frame_0.jpg"])
-        with patch("src.gui.scanning.FrameExtractor", return_value=fake_extractor):
+        with patch("src.gui.scanning.create_frame_extractor", return_value=fake_extractor):
             extractor, frames = ScanningMixin.extract_video_frames(win, str(tmp_path / "test.mp4"), "prefix_")
         assert extractor is fake_extractor
 

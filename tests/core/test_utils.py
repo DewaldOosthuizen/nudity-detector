@@ -59,6 +59,25 @@ def test_get_detected_results_filters_by_nudity_detected():
     assert all(r["nudity_detected"] for r in results)
 
 
+def test_create_frame_extractor_returns_instance():
+    """create_frame_extractor delegates to FrameExtractor constructor."""
+    from src.core.utils import create_frame_extractor
+    from src.processing.media_processor import FrameExtractor
+
+    extractor = create_frame_extractor(frame_rate=5, temp_prefix="test_")
+    assert isinstance(extractor, FrameExtractor)
+    assert extractor.frame_rate == 5
+    assert extractor.temp_prefix == "test_"
+
+
+def test_create_frame_extractor_raises_on_invalid_frame_rate():
+    """create_frame_extractor raises ValueError when frame_rate < 1."""
+    from src.core.utils import create_frame_extractor
+
+    with pytest.raises(ValueError, match="frame_rate must be >= 1"):
+        create_frame_extractor(frame_rate=0, temp_prefix="")
+
+
 def test_handle_results_uses_session(tmp_path):
     """handle_results appends entry to the provided ScanSession."""
     from src.core.scan_session import ScanSession
