@@ -42,6 +42,15 @@ def test_normalize_timeout_seconds_negative_clamps_to_one():
     assert constants.normalize_timeout_seconds(-3, 5) == 1
 
 
+def test_normalize_timeout_seconds_non_finite_returns_default():
+    """Non-finite floats (inf/nan) raise OverflowError/ValueError in ``int()``.
+
+    The defensive boundary must fall back to the default, not propagate.
+    """
+    assert constants.normalize_timeout_seconds(float("inf"), 5) == 5
+    assert constants.normalize_timeout_seconds(float("nan"), 5) == 5
+
+
 def test_config_defaults_match_constants():
     """Config defaults use seconds matching the constants."""
     config_path = os.path.join(

@@ -39,19 +39,71 @@ class _GLibError(Exception):
     MagicMock string paths being written to the filesystem."""
 
 
-def _ensure_gi_stubs():
+class _FakeAdwWindow:
+    """Real class so ``Adw.ApplicationWindow`` can be used as a base class by
+    ``src.gui.app.NudityDetectorWindow``."""
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+
+class _FakeAdwApplication:
+    """Real class so ``Adw.Application`` can be used as a base class by
+    ``src.gui.app.NudityDetectorApp``."""
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+
+def _pin_real_classes(gi_modules):
+    """Re-pin the members the gui modules need to be real Python classes.
+
+    Args:
+        gi_modules: Mapping of ``sys.modules``-style gi module names to module objects.
+
+    Returns:
+        None. Mutates the supplied module objects in place.
+    """
+    pins = {
+        "GObject": {"Object": _GObjectBase, "GObject": _GObjectBase},
+        "GLib": {"Error": _GLibError},
+        "Gtk": {"INVALID_LIST_POSITION": 4294967295},
+        "Adw": {"ApplicationWindow": _FakeAdwWindow, "Application": _FakeAdwApplication},
+    }
+    repo_mod = gi_modules.get("gi.repository")
+    for short_name, attributes in pins.items():
+        module = gi_modules.get(f"gi.repository.{short_name}")
+        if module is not None:
+            for attribute, value in attributes.items():
+                setattr(module, attribute, value)
+        # A partial stub set may expose the module only as a ``gi.repository``
+        # attribute (or only in ``sys.modules``) — pin both views.
+        attached = getattr(repo_mod, short_name, None) if repo_mod is not None else None
+        if attached is not None and attached is not module:
+            for attribute, value in attributes.items():
+                setattr(attached, attribute, value)
+
+
+def ensure_gi_stubs():
+    """Install (or repair) the complete gi/GTK stub set in ``sys.modules``.
+
+    Idempotent: safe to call repeatedly and safe to call after another test
+    module has installed a partial or MagicMock-only stub set. Every member the
+    gui modules subclass, catch, or compare is pinned to a real Python class or
+    value so import order cannot corrupt the stubs.
+
+    Returns:
+        None.
+    """
+    existing = {name: sys.modules.get(name) for name in (
+        "gi", "gi.repository", "gi.repository.Gtk", "gi.repository.Adw",
+        "gi.repository.GLib", "gi.repository.GObject", "gi.repository.Gio",
+        "gi.repository.Gdk", "gi.repository.GdkPixbuf",
+    )}
     if "gi" in sys.modules:
-        # Another module may already have installed stubs (or a partial set);
-        # re-pin the members the gui modules depend on being real classes.
-        gobject_mod = sys.modules.get("gi.repository.GObject")
-        if gobject_mod is not None:
-            gobject_mod.Object = _GObjectBase
-        glib_mod = sys.modules.get("gi.repository.GLib")
-        if glib_mod is not None:
-            glib_mod.Error = _GLibError
-        gtk_mod = sys.modules.get("gi.repository.Gtk")
-        if gtk_mod is not None:
-            gtk_mod.INVALID_LIST_POSITION = 4294967295
+        # Another module already installed stubs (possibly the real gi, via
+        # send2trash, possibly a partial set) — repair the members we need.
+        _pin_real_classes(existing)
         return
 
     gi_mod = types.ModuleType("gi")
@@ -59,12 +111,9 @@ def _ensure_gi_stubs():
     repo_mod = types.ModuleType("gi.repository")
 
     gtk_mod = MagicMock()
-    gtk_mod.INVALID_LIST_POSITION = 4294967295
     adw_mod = MagicMock()
     glib_mod = MagicMock()
-    glib_mod.Error = _GLibError
     gobject_mod = MagicMock()
-    gobject_mod.Object = _GObjectBase
     gio_mod = MagicMock()
     gdk_mod = MagicMock()
     gdkpixbuf_mod = MagicMock()
@@ -88,8 +137,13 @@ def _ensure_gi_stubs():
     sys.modules["gi.repository.Gdk"] = gdk_mod
     sys.modules["gi.repository.GdkPixbuf"] = gdkpixbuf_mod
 
+    _pin_real_classes({name: sys.modules[name] for name in existing})
 
-_ensure_gi_stubs()
+
+# Backwards-compatible private alias for existing test modules.
+_ensure_gi_stubs = ensure_gi_stubs
+
+ensure_gi_stubs()
 sys.modules.setdefault("nudenet", MagicMock())
 
 

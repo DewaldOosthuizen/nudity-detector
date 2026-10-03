@@ -265,12 +265,17 @@ def normalize_timeout_seconds(value, default_seconds):
 
     Returns:
         Timeout in whole seconds, always >= 1.
+
+    Raises:
+        Nothing — invalid values (including non-finite floats) fall back to
+        ``default_seconds``.
     """
     if value is None:
         return default_seconds
     try:
         numeric = int(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
+        # OverflowError: int(float('inf')) / int(float('nan')) raise it.
         return default_seconds
     if numeric >= LEGACY_TIMEOUT_MS_THRESHOLD:
         numeric = int(milliseconds_to_seconds(numeric) + 0.5)
@@ -306,3 +311,4 @@ TREEVIEW_SELECTED_FOREGROUND = 'panel'
 # Scan Progress
 # ============================================================================
 SCAN_PROGRESS_UPDATE_INTERVAL = 100  # Flush UI results every N files processed
+

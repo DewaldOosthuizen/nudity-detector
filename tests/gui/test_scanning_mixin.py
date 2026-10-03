@@ -64,6 +64,7 @@ sys.modules.setdefault("nudenet", MagicMock())
 from src.core import constants  # noqa: E402
 from src.core.scan_session import ScanSession  # noqa: E402
 from src.gui.scanning import ScanningMixin  # noqa: E402
+from tests.conftest import ensure_gi_stubs  # noqa: E402
 
 
 def _make_win(**extra):
@@ -561,80 +562,36 @@ class TestScanningMixinStartScanning:
 # ---------------------------------------------------------------------------
 
 def _load_nudity_window_class():
-    """Import ``NudityDetectorWindow`` from ``src.gui.app`` with clean gi stubs.
+    """Import ``NudityDetectorWindow`` from ``src.gui.app`` using the shared stubs.
 
-    ``src.gui.app`` defines ``NudityDetectorWindow(..., Adw.ApplicationWindow)``,
-    so importing it needs ``Adw.ApplicationWindow``/``Adw.Application`` to be real
-    classes and ``GObject.Object`` to be a real class. That is not guaranteed here:
-    ``src/core/utils.py`` imports ``send2trash``, which imports the *real*
-    ``gi.repository`` when a core test is collected first (pytest collects
-    alphabetically), and the sibling gui stubs then leave it in a corrupted state.
-
-    The import is therefore performed lazily, after (re)installing a complete,
-    self-contained stub set for ``gi`` and its submodules, so this module collects
-    and passes regardless of test-collection order.
+    ``src.gui.app`` subclasses ``Adw.ApplicationWindow``/``Adw.Application``, so
+    the gi stubs installed by ``tests/conftest.py`` (which pin those to real
+    classes) are repaired before the import. Repairing via the shared helper
+    keeps a single source of truth for the stub set instead of duplicating it
+    here.
     """
-    class _GObjectBase:
-        def __init__(self, *a, **kw):
-            pass
-
-    class _FakeAdwWindow:
-        def __init__(self, *a, **kw):
-            pass
-
-    class _FakeAdwApplication:
-        def __init__(self, *a, **kw):
-            pass
-
-    gi_mod = types.ModuleType("gi")
-    gi_mod.require_version = MagicMock()
-    repo_mod = types.ModuleType("gi.repository")
-
-    adw_mod = MagicMock()
-    adw_mod.ApplicationWindow = _FakeAdwWindow
-    adw_mod.Application = _FakeAdwApplication
-    gtk_mod = MagicMock()
-    gtk_mod.INVALID_LIST_POSITION = 4294967295
-    gobject_mod = MagicMock()
-    gobject_mod.Object = _GObjectBase
-    glib_mod = MagicMock()
-
-    class _GLibError(Exception):
-        pass
-
-    glib_mod.Error = _GLibError
-    gio_mod = MagicMock()
-    gdk_mod = MagicMock()
-    gdkpixbuf_mod = MagicMock()
-
-    gi_mod.repository = repo_mod
-    repo_mod.Adw = adw_mod
-    repo_mod.Gtk = gtk_mod
-    repo_mod.GObject = gobject_mod
-    repo_mod.GLib = glib_mod
-    repo_mod.Gio = gio_mod
-    repo_mod.Gdk = gdk_mod
-    repo_mod.GdkPixbuf = gdkpixbuf_mod
-
-    stubs = {
-        "gi": gi_mod,
-        "gi.repository": repo_mod,
-        "gi.repository.Adw": adw_mod,
-        "gi.repository.Gtk": gtk_mod,
-        "gi.repository.GObject": gobject_mod,
-        "gi.repository.GLib": glib_mod,
-        "gi.repository.Gio": gio_mod,
-        "gi.repository.Gdk": gdk_mod,
-        "gi.repository.GdkPixbuf": gdkpixbuf_mod,
-    }
-    sys.modules.update(stubs)
-
+    ensure_gi_stubs()
     from src.gui.app import NudityDetectorWindow  # noqa: E402
     return NudityDetectorWindow
 
 
 class TestTimeoutUnits:
     """The GUI accessors are the unit boundary: they must return whole seconds."""
+
+    def test_shared_gi_stubs_pin_adw_base_classes(self):
+        """``ensure_gi_stubs`` is the single stub source of truth.
+
+        A MagicMock-only Adw stub (as installed by sibling test modules) must be
+        repaired to a real class, otherwise ``src.gui.app`` cannot be imported.
+        """
+        adw_mod = sys.modules["gi.repository.Adw"]
+        try:
+            adw_mod.ApplicationWindow = MagicMock()
+            ensure_gi_stubs()
+            assert isinstance(adw_mod.ApplicationWindow, type)
+            assert issubclass(adw_mod.ApplicationWindow, object)
+        finally:
+            ensure_gi_stubs()
 
     def test_accessor_worker_timeout_returns_seconds(self):
         window_cls = _load_nudity_window_class()
@@ -706,3 +663,4 @@ class TestTimeoutUnits:
             classify_image(str(img))
         # detect_with_timeout(detector, file_path, timeout_seconds)
         assert mock_detect.call_args.args[2] == 60
+

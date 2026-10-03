@@ -43,9 +43,11 @@ def normalize_timeout_seconds(value, default_seconds): ...
 
 `normalize_timeout_seconds(value, default_seconds)` returns whole seconds,
 always `>= 1`; it falls back to `default_seconds` on `None`/`TypeError`/
-`ValueError`, and converts any value `>= LEGACY_TIMEOUT_MS_THRESHOLD` as a
-legacy millisecond value. `WORKER_THREAD_TIMEOUT = 5` and `DETECT_TIMEOUT = 60`
-remain the single source of truth for the defaults, in seconds.
+`ValueError`/`OverflowError` (the last covers non-finite floats such as
+`float('inf')`, which `int()` rejects), and converts any value
+`>= LEGACY_TIMEOUT_MS_THRESHOLD` as a legacy millisecond value.
+`WORKER_THREAD_TIMEOUT = 5` and `DETECT_TIMEOUT = 60` remain the single source
+of truth for the defaults, in seconds.
 
 The GUI accessors `_get_worker_thread_timeout()` and `_get_detect_timeout()` in
 `src/gui/app.py` are the **documented, single unit boundary**: every configured
