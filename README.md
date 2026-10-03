@@ -158,6 +158,10 @@ Two detector backends are available:
 ## Configuration
 
 The Nudity Detector application has a single configuration surface: `config/app_config.json`.
+That file is created by the app on first run and is **not tracked in git** — it also
+holds mutable user state (`theme`, `model`, `last_source_folder`), so tracking it would leave
+every working tree permanently dirty. The documented defaults live in the immutable fixture
+`tests/fixtures/app_config.default.json`.
 No environment-variable overrides are supported — there is no `python-dotenv` or `os.environ`
 usage anywhere in the codebase. `.env.example` is a plain-text reference table documenting all
 `app_config.json` keys, their code-default constants (where applicable), and default values; it
@@ -193,7 +197,7 @@ seconds in `config/app_config.json`, matching the constants in
 
 `nudenet_worker_thread_timeout` and `helloz_nsfw_worker_thread_timeout` are
 **not read by any code** (no `src/` references) and are retained only as
-reference entries; their removal is recommended as a separate cleanup.
+reference entries; their removal is tracked in issue #104.
 
 Migration note (issue #91): if your existing `config/app_config.json` still
 contains the old millisecond values `worker_thread_timeout: 250` or
@@ -201,6 +205,12 @@ contains the old millisecond values `worker_thread_timeout: 250` or
 is **not** auto-migrated because it is ambiguous — it is both the former
 millisecond default and a legal 250-second value — so re-check your timeout
 values after upgrading.
+
+Values `>= 1000` are auto-converted from milliseconds to seconds (round-half-up),
+and every such conversion is logged as a WARNING naming the key. Note that this
+also means a deliberately large seconds value (e.g. `detect_timeout: 3600`) is
+interpreted as milliseconds and converted — lower such values below 1000 to keep
+them in seconds.
 
 Five keys have no corresponding constant in `src/core/constants.py` and are read
 directly from `config/app_config.json` at runtime:

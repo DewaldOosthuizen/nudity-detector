@@ -238,9 +238,15 @@ DETECT_TIMEOUT = 60  # seconds for individual detections
 # Threading — Timeout Units
 # ============================================================================
 MILLISECONDS_PER_SECOND = 1000
-# Any configured timeout at or above this bound cannot be a valid seconds value
-# (the GUI caps timeouts at 300 s for workers and 600 s for detection), so it is
-# treated as a legacy millisecond value and converted.
+# Any configured timeout at or above this bound cannot be produced by the GUI
+# (its spin buttons cap timeouts at 300 s for workers and 600 s for detection), so
+# it is treated as a legacy millisecond value and converted.
+#
+# KNOWN LIMITATION (ADD-007): nothing enforces those caps on the config path, so a
+# legitimate seconds value >= 1000 (e.g. detect_timeout 3600 for a large video on
+# a slow machine) is reinterpreted as milliseconds and divided by 1000. The
+# heuristic is a guess about units, so the conversion is always logged at WARNING
+# level via ``normalize_timeout_seconds`` — the operator can see the rewrite.
 LEGACY_TIMEOUT_MS_THRESHOLD = 1000
 
 
@@ -256,30 +262,53 @@ def milliseconds_to_seconds(milliseconds):
     return milliseconds / MILLISECONDS_PER_SECOND
 
 
-def normalize_timeout_seconds(value, default_seconds):
+def normalize_timeout_seconds(value, default_seconds, name=None):
     """Normalize a configured timeout value to whole seconds for the threading API.
+
+    This is the single unit boundary for timeout values (ADD-007). Values at or
+    above ``LEGACY_TIMEOUT_MS_THRESHOLD`` are interpreted as legacy millisecond
+    values and converted; everything else is treated as seconds.
 
     Args:
         value: Raw timeout value read from config (seconds, or a legacy millisecond value).
         default_seconds: Fallback value in seconds when value is missing or invalid.
+        name: Optional name of the setting, used only to make log messages
+            actionable. Purely diagnostic.
 
     Returns:
         Timeout in whole seconds, always >= 1.
 
     Raises:
         Nothing — invalid values (including non-finite floats) fall back to
-        ``default_seconds``.
+        ``default_seconds``. Every fallback and every millisecond conversion is
+        logged at WARNING level so an unparseable or mis-united value is visible
+        in the log rather than silently presenting as a default.
     """
+    label = name or 'timeout'
     if value is None:
+        # Absent key is normal on a fresh install, not a defect — do not warn.
+        logger.debug("%s is not configured; using default of %s seconds", label, default_seconds)
         return default_seconds
     try:
         numeric = int(value)
     except (TypeError, ValueError, OverflowError):
         # OverflowError: int(float('inf')) / int(float('nan')) raise it.
+        logger.warning(
+            "%s value %r is not a valid number; using default of %s seconds",
+            label, value, default_seconds,
+        )
         return default_seconds
     if numeric >= LEGACY_TIMEOUT_MS_THRESHOLD:
-        numeric = int(milliseconds_to_seconds(numeric) + 0.5)
+        converted = int(milliseconds_to_seconds(numeric) + 0.5)
+        logger.warning(
+            "%s value %s is at or above the legacy millisecond threshold of %s; "
+            "treating it as milliseconds and converting to %s seconds. Timeout keys are "
+            "stored in seconds — if %s is genuinely a seconds value, lower it below %s.",
+            label, numeric, LEGACY_TIMEOUT_MS_THRESHOLD, converted, label, LEGACY_TIMEOUT_MS_THRESHOLD,
+        )
+        numeric = converted
     return max(1, numeric)
+
 
 # ============================================================================
 # System Directories (Safety)
@@ -311,4 +340,3 @@ TREEVIEW_SELECTED_FOREGROUND = 'panel'
 # Scan Progress
 # ============================================================================
 SCAN_PROGRESS_UPDATE_INTERVAL = 100  # Flush UI results every N files processed
-

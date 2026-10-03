@@ -132,8 +132,7 @@ dmypy.json
 # App specific folder
 samples/
 reports/
-config/*
-!config/app_config.json
+config/
 
 MagicMock/
 # BEGIN workspace-orchestrator

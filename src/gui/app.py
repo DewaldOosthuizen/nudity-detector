@@ -73,10 +73,10 @@ class NudityDetectorWindow(
         except (ValueError, TypeError):
             self._worker_thread_count = constants.WORKER_THREAD_COUNT
         self._worker_thread_timeout = constants.normalize_timeout_seconds(
-            cfg.get('worker_thread_timeout'), constants.WORKER_THREAD_TIMEOUT
+            cfg.get('worker_thread_timeout'), constants.WORKER_THREAD_TIMEOUT, name='worker_thread_timeout'
         )
         self._detect_timeout = constants.normalize_timeout_seconds(
-            cfg.get('detect_timeout'), constants.DETECT_TIMEOUT
+            cfg.get('detect_timeout'), constants.DETECT_TIMEOUT, name='detect_timeout'
         )
         try:
             self._video_frame_rate = max(1, int(cfg.get('video_frame_rate', constants.VIDEO_FRAME_RATE)))
@@ -791,13 +791,17 @@ class NudityDetectorWindow(
 
         Delegates unit normalization to ``constants.normalize_timeout_seconds`` so
         the value handed to ``threading.Thread.join(timeout=...)`` is always in
-        whole seconds (the threading API unit).
+        whole seconds (the threading API unit). An unparseable widget value falls
+        back to ``constants.WORKER_THREAD_TIMEOUT`` and is logged as a warning
+        rather than presenting silently.
 
         Returns:
             Timeout in seconds, always >= 1.
         """
         return constants.normalize_timeout_seconds(
-            self.worker_thread_timeout_spin.get_value(), constants.WORKER_THREAD_TIMEOUT
+            self.worker_thread_timeout_spin.get_value(),
+            constants.WORKER_THREAD_TIMEOUT,
+            name='worker_thread_timeout_spin',
         )
 
     def _get_detect_timeout(self) -> int:
@@ -805,13 +809,17 @@ class NudityDetectorWindow(
 
         Delegates unit normalization to ``constants.normalize_timeout_seconds`` so
         the value handed to ``detect_with_timeout(..., timeout_seconds=...)`` is
-        always in whole seconds.
+        always in whole seconds. An unparseable widget value falls back to
+        ``constants.DETECT_TIMEOUT`` and is logged as a warning rather than
+        presenting silently.
 
         Returns:
             Timeout in seconds, always >= 1.
         """
         return constants.normalize_timeout_seconds(
-            self.detect_timeout_spin.get_value(), constants.DETECT_TIMEOUT
+            self.detect_timeout_spin.get_value(),
+            constants.DETECT_TIMEOUT,
+            name='detect_timeout_spin',
         )
 
     def _get_helloz_nsfw_host(self) -> str:

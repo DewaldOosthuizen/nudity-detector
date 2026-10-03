@@ -19,10 +19,23 @@ from unittest.mock import MagicMock
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # gi / GTK stubs (idempotent) — must run before any src import
 # ---------------------------------------------------------------------------
+# Names of every gi module the gui code touches. Single source of truth: the stub
+# installer populates sys.modules from this tuple and the real-class pinning reads
+# the same tuple back, so the two views can never drift apart.
+STUBBED_GI_MODULES = (
+    "gi", "gi.repository", "gi.repository.Gtk", "gi.repository.Adw",
+    "gi.repository.GLib", "gi.repository.GObject", "gi.repository.Gio",
+    "gi.repository.Gdk", "gi.repository.GdkPixbuf",
+)
+
+# Marks the stub modules this conftest owns, so we never patch a real PyGObject
+# module that some third-party import (send2trash) pulled in.
+_STUB_MARKER = "__nudity_detector_gi_stub__"
+
+
 class _GObjectBase:
     """Real Python class so ``GObject.Object`` subclasses (ResultItem,
     ScanRunItem) can be defined regardless of which test file runs first."""
@@ -55,14 +68,55 @@ class _FakeAdwApplication:
         pass
 
 
+def _is_our_stub(module):
+    """Return whether the given module object is a stub owned by this conftest.
+
+    Only stub-owned modules may ever be patched. Real PyGObject modules (pulled in
+    transitively by ``send2trash``) are left untouched — globally overwriting a
+    third-party library from a test fixture makes the suite order-dependent and
+    would silently fake out ``send2trash`` itself.
+
+    Args:
+        module: A module object, or None.
+
+    Returns:
+        True if the module carries this conftest's stub marker.
+    """
+    return module is not None and getattr(module, _STUB_MARKER, False) is True
+
+
+def _is_real_gi(module):
+    """Return whether the module object is the genuine PyGObject ``gi`` package.
+
+    Genuine modules are file-backed packages; anything a test installs is either
+    a ``types.ModuleType`` stub without a real ``__file__`` or a ``MagicMock``.
+    This distinction decides whether we may repair the module in place.
+
+    Args:
+        module: A module object, or None.
+
+    Returns:
+        True if the module looks like the real PyGObject package.
+    """
+    if module is None or _is_our_stub(module):
+        return False
+    if isinstance(module, MagicMock):
+        return False
+    # A genuine package/module always has a real filesystem origin.
+    return bool(getattr(module, "__file__", None))
+
+
 def _pin_real_classes(gi_modules):
-    """Re-pin the members the gui modules need to be real Python classes.
+    """Pin the members the gui modules need to real Python classes.
+
+    Only modules owned by this conftest's stub set are mutated; the real
+    PyGObject modules, if any are loaded, are left exactly as they are.
 
     Args:
         gi_modules: Mapping of ``sys.modules``-style gi module names to module objects.
 
     Returns:
-        None. Mutates the supplied module objects in place.
+        None. Mutates the supplied stub-owned module objects in place.
     """
     pins = {
         "GObject": {"Object": _GObjectBase, "GObject": _GObjectBase},
@@ -73,15 +127,26 @@ def _pin_real_classes(gi_modules):
     repo_mod = gi_modules.get("gi.repository")
     for short_name, attributes in pins.items():
         module = gi_modules.get(f"gi.repository.{short_name}")
-        if module is not None:
+        if _is_our_stub(module):
             for attribute, value in attributes.items():
                 setattr(module, attribute, value)
         # A partial stub set may expose the module only as a ``gi.repository``
-        # attribute (or only in ``sys.modules``) — pin both views.
+        # attribute (or only in ``sys.modules``) — pin both stub-owned views.
         attached = getattr(repo_mod, short_name, None) if repo_mod is not None else None
-        if attached is not None and attached is not module:
+        if attached is not None and attached is not module and _is_our_stub(attached):
             for attribute, value in attributes.items():
                 setattr(attached, attribute, value)
+
+    # A sibling test module may have installed its own, unmarked stub set (which
+    # is MagicMock-based and lacks the real base classes). Those are test-owned
+    # fakes, not a third-party library, so repairing them is safe — and required,
+    # because ``src.gui.app`` subclasses ``Adw.ApplicationWindow``.
+    if not _is_real_gi(gi_modules.get("gi")):
+        for short_name, attributes in pins.items():
+            module = gi_modules.get(f"gi.repository.{short_name}")
+            if module is not None and not _is_our_stub(module):
+                for attribute, value in attributes.items():
+                    setattr(module, attribute, value)
 
 
 def ensure_gi_stubs():
@@ -92,18 +157,27 @@ def ensure_gi_stubs():
     gui modules subclass, catch, or compare is pinned to a real Python class or
     value so import order cannot corrupt the stubs.
 
+    If the *real* PyGObject is already loaded (e.g. imported transitively by
+    ``send2trash`` before this conftest ran), this function deliberately leaves
+    the real modules alone rather than overwriting a third-party library's
+    attributes for the rest of the session. The gui modules under test do not
+    subclass GTK types in that scenario, because the root conftest runs before
+    any ``src`` import and therefore wins the race.
+
     Returns:
         None.
     """
-    existing = {name: sys.modules.get(name) for name in (
-        "gi", "gi.repository", "gi.repository.Gtk", "gi.repository.Adw",
-        "gi.repository.GLib", "gi.repository.GObject", "gi.repository.Gio",
-        "gi.repository.Gdk", "gi.repository.GdkPixbuf",
-    )}
-    if "gi" in sys.modules:
-        # Another module already installed stubs (possibly the real gi, via
-        # send2trash, possibly a partial set) — repair the members we need.
-        _pin_real_classes(existing)
+    already_present = "gi" in sys.modules
+    if already_present and _is_real_gi(sys.modules["gi"]):
+        # The genuine PyGObject is loaded (e.g. pulled in by send2trash). Leave a
+        # third-party library's attributes untouched rather than faking them out.
+        return
+
+    if already_present:
+        # A stub set is already installed — ours or a sibling's. Repair the members
+        # in place instead of rebuilding, so modules other test modules already hold
+        # references to keep working.
+        _pin_real_classes({name: sys.modules.get(name) for name in STUBBED_GI_MODULES})
         return
 
     gi_mod = types.ModuleType("gi")
@@ -137,7 +211,12 @@ def ensure_gi_stubs():
     sys.modules["gi.repository.Gdk"] = gdk_mod
     sys.modules["gi.repository.GdkPixbuf"] = gdkpixbuf_mod
 
-    _pin_real_classes({name: sys.modules[name] for name in existing})
+    # Mark the stub modules we own so later calls can distinguish them from real gi.
+    for name in STUBBED_GI_MODULES:
+        setattr(sys.modules[name], _STUB_MARKER, True)
+
+    # Build the module map from the same tuple used for installation.
+    _pin_real_classes({name: sys.modules[name] for name in STUBBED_GI_MODULES})
 
 
 # Backwards-compatible private alias for existing test modules.

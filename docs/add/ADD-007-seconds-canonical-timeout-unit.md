@@ -38,16 +38,30 @@ MILLISECONDS_PER_SECOND = 1000
 LEGACY_TIMEOUT_MS_THRESHOLD = 1000
 
 def milliseconds_to_seconds(milliseconds): ...
-def normalize_timeout_seconds(value, default_seconds): ...
+def normalize_timeout_seconds(value, default_seconds, name=None): ...
 ```
 
-`normalize_timeout_seconds(value, default_seconds)` returns whole seconds,
-always `>= 1`; it falls back to `default_seconds` on `None`/`TypeError`/
+`normalize_timeout_seconds(value, default_seconds, name=None)` returns whole
+seconds, always `>= 1`; it falls back to `default_seconds` on `None`/`TypeError`/
 `ValueError`/`OverflowError` (the last covers non-finite floats such as
 `float('inf')`, which `int()` rejects), and converts any value
 `>= LEGACY_TIMEOUT_MS_THRESHOLD` as a legacy millisecond value.
 `WORKER_THREAD_TIMEOUT = 5` and `DETECT_TIMEOUT = 60` remain the single source
 of truth for the defaults, in seconds.
+
+**The heuristic is logged, never silent.** A unit guess that is wrong is worse
+than no guess, so every millisecond conversion and every invalid-value fallback
+emits a `logger.warning` naming the setting (`name=`), telling the operator
+exactly which key was rewritten and to what. An absent key logs at DEBUG only —
+a missing key is normal on a fresh install, not a defect. `None` handling stays
+debug-level so the common "no config file yet" path produces no warning noise.
+
+**The runtime config is not committed.** `config/app_config.json` also carries
+mutable user state (`theme`, `model`, `last_source_folder`), so tracking it would
+leave every user's working tree permanently dirty and create a merge hotspot.
+The documented defaults are therefore asserted against the immutable fixture
+`tests/fixtures/app_config.default.json`, keeping shipped defaults and runtime
+state as separate concerns.
 
 The GUI accessors `_get_worker_thread_timeout()` and `_get_detect_timeout()` in
 `src/gui/app.py` are the **documented, single unit boundary**: every configured
@@ -56,8 +70,9 @@ reaches the threading API. The spin-button labels already read
 `Thread Timeout (s)` / `Detect Timeout (s)`, so the accessors make that "s" true
 by construction.
 
-The shipped `config/app_config.json`, the `.env.example` reference table, and
-the `README.md` config table were corrected to the seconds defaults.
+The `tests/fixtures/app_config.default.json` reference file, the `.env.example`
+reference table, and the `README.md` config table were corrected to the seconds
+defaults.
 
 **Migration is manual for the ambiguous value `250`.** Runtime auto-migration is
 deliberately *not* applied to `250`, because `250` is both the former
@@ -101,8 +116,21 @@ behaviour.
   `.env.example`.
 - `normalize_timeout_seconds()` accepts a plain int; it does not carry the unit
   in the type. The naming (`*_seconds`) and the docstrings are the guard.
+- **The `>= 1000` heuristic can misfire on the config path.** Nothing enforces
+  the GUI's spin-button caps when a value comes straight from
+  `config/app_config.json`, so a legitimate seconds value such as
+  `detect_timeout: 3600` (large video on a slow machine) is read as 3600 ms and
+  converted to `4` seconds — which would time out on nearly every file, the exact
+  failure class this ADD set out to eliminate. The heuristic is retained because
+  it rescues the far more common case of a leftover millisecond value, but it is
+  no longer silent: the conversion emits a WARNING naming the key and the
+  rewritten value, and the boundary is documented in `src/core/constants.py`. A
+  fully explicit unit (e.g. `*_seconds` key names or a `timeout_unit` field) is
+  the durable fix and is left for a future change.
 
 **Follow-up (out of scope here):** `nudenet_worker_thread_timeout` and
 `helloz_nsfw_worker_thread_timeout` are not read by any code (no `src/`
 references). Their documentation unit was corrected for consistency but their
-removal is a separate cleanup.
+removal is a separate cleanup, tracked as **issue #104** ("Remove dead timeout
+config keys"). The keys are retained here so this PR stays scoped to the unit
+mismatch.

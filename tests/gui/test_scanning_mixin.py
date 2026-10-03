@@ -593,6 +593,37 @@ class TestTimeoutUnits:
         finally:
             ensure_gi_stubs()
 
+    def test_ensure_gi_stubs_does_not_mutate_real_gi_modules(self):
+        """``ensure_gi_stubs`` must never overwrite the genuine PyGObject modules.
+
+        A real, file-backed ``gi`` module (as ``send2trash`` imports transitively)
+        must be left untouched: globally faking a third-party library from a
+        fixture would silently break ``send2trash`` and make the suite
+        order-dependent.
+        """
+        fake_real_gi = types.ModuleType("gi")
+        fake_real_gi.__file__ = "/usr/lib/python3/dist-packages/gi/__init__.py"
+        fake_real_adw = types.ModuleType("gi.repository.Adw")
+        fake_real_adw.__file__ = "/usr/lib/python3/dist-packages/gi/repository/Adw.py"
+        sentinel = object()
+        setattr(fake_real_adw, "ApplicationWindow", sentinel)
+
+        saved = {name: sys.modules.get(name) for name in ("gi", "gi.repository.Adw")}
+        try:
+            sys.modules["gi"] = fake_real_gi
+            sys.modules["gi.repository.Adw"] = fake_real_adw
+            ensure_gi_stubs()
+            # Untouched: the sentinel survives and no stub base class was grafted on.
+            assert fake_real_adw.ApplicationWindow is sentinel
+            assert sys.modules["gi"] is fake_real_gi
+        finally:
+            for name, module in saved.items():
+                if module is None:
+                    sys.modules.pop(name, None)
+                else:
+                    sys.modules[name] = module
+            ensure_gi_stubs()
+
     def test_accessor_worker_timeout_returns_seconds(self):
         window_cls = _load_nudity_window_class()
         win = MagicMock()
