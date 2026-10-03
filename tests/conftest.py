@@ -35,6 +35,11 @@ STUBBED_GI_MODULES = (
 # module that some third-party import (send2trash) pulled in.
 _STUB_MARKER = "__nudity_detector_gi_stub__"
 
+# Records the ``__file__`` of any genuine PyGObject detected while the stubs were
+# being installed. ``ensure_gi_stubs`` refuses to fake a real third-party library,
+# so this is how the gui test session learns that it may be exercising real GTK.
+REAL_GI_DETECTED = []
+
 
 class _GObjectBase:
     """Real Python class so ``GObject.Object`` subclasses (ResultItem,
@@ -42,9 +47,6 @@ class _GObjectBase:
 
     def __init__(self, *args, **kwargs):
         pass
-
-    def __init_subclass__(cls, **kwargs):
-        super().__init_subclass__(**kwargs)
 
 
 class _GLibError(Exception):
@@ -171,6 +173,9 @@ def ensure_gi_stubs():
     if already_present and _is_real_gi(sys.modules["gi"]):
         # The genuine PyGObject is loaded (e.g. pulled in by send2trash). Leave a
         # third-party library's attributes untouched rather than faking them out.
+        # This is a real problem for the gui tests, which would then subclass and
+        # construct genuine GTK types while appearing to pass — so make it loud.
+        REAL_GI_DETECTED.append(sys.modules["gi"].__file__)
         return
 
     if already_present:

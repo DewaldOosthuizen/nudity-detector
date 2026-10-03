@@ -237,77 +237,110 @@ DETECT_TIMEOUT = 60  # seconds for individual detections
 # ============================================================================
 # Threading — Timeout Units
 # ============================================================================
+# Conversion factor used ONLY by the one-time config migration in
+# src/core/config_migration.py. It is a plain conversion factor, deliberately
+# unrelated to any unit-detection bound: since ADD-007 the unit is never guessed
+# from the magnitude of a value, it is stated by the config schema version.
 MILLISECONDS_PER_SECOND = 1000
-# Any configured timeout at or above this bound cannot be produced by the GUI
-# (its spin buttons cap timeouts at 300 s for workers and 600 s for detection), so
-# it is treated as a legacy millisecond value and converted.
-#
-# KNOWN LIMITATION (ADD-007): nothing enforces those caps on the config path, so a
-# legitimate seconds value >= 1000 (e.g. detect_timeout 3600 for a large video on
-# a slow machine) is reinterpreted as milliseconds and divided by 1000. The
-# heuristic is a guess about units, so the conversion is always logged at WARNING
-# level via ``normalize_timeout_seconds`` — the operator can see the rewrite.
-LEGACY_TIMEOUT_MS_THRESHOLD = 1000
+
+# Bumped whenever the meaning (not merely the value) of a config key changes.
+# Version 1: timeout keys were milliseconds (the defect in issue #91).
+# Version 2: all timeout keys are seconds. ``migrate_config`` converts 1 -> 2 once.
+CONFIG_VERSION = 2
+CONFIG_VERSION_KEY = 'config_version'
+
+# Keys whose unit changed in CONFIG_VERSION 2: legacy_key -> seconds_key.
+LEGACY_MILLISECOND_TIMEOUT_KEYS = {
+    'worker_thread_timeout': 'worker_thread_timeout_seconds',
+    'detect_timeout': 'detect_timeout_seconds',
+}
+
+# Values smaller than this cannot be honoured as seconds: a legacy millisecond
+# value below 500 ms rounds to 0 s, which would make every detection time out
+# immediately. Such a value is replaced by the key's constant default instead.
+MIN_MIGRATABLE_SECONDS = 1
 
 
-def milliseconds_to_seconds(milliseconds):
-    """Convert a timeout expressed in milliseconds to seconds.
+def normalize_positive_int(value, default, name=None, min_value=1):
+    """Coerce a possibly-invalid configured scalar to an integer at or above a bound.
 
-    Args:
-        milliseconds: Timeout value in milliseconds.
-
-    Returns:
-        The equivalent timeout in seconds.
-    """
-    return milliseconds / MILLISECONDS_PER_SECOND
-
-
-def normalize_timeout_seconds(value, default_seconds, name=None):
-    """Normalize a configured timeout value to whole seconds for the threading API.
-
-    This is the single unit boundary for timeout values (ADD-007). Values at or
-    above ``LEGACY_TIMEOUT_MS_THRESHOLD`` are interpreted as legacy millisecond
-    values and converted; everything else is treated as seconds.
+    The single implementation of "config scalar -> safe positive int" used by every
+    numeric config read (ADD-007). Previously each call site hand-rolled its own
+    ``try: max(1, int(...)) except (ValueError, TypeError)`` block, so the same
+    coercion had several implementations with inconsistent logging policies.
 
     Args:
-        value: Raw timeout value read from config (seconds, or a legacy millisecond value).
-        default_seconds: Fallback value in seconds when value is missing or invalid.
-        name: Optional name of the setting, used only to make log messages
-            actionable. Purely diagnostic.
+        value: Raw configured value; may be None, a numeric string, a bool, or garbage.
+        default: Fallback used when the value is absent or unparseable. It is
+            itself clamped to ``min_value`` so the documented lower bound holds.
+        name: Optional setting name, used only to make log messages actionable.
+        min_value: Lower bound applied to the parsed value (inclusive).
 
     Returns:
-        Timeout in whole seconds, always >= 1.
+        An int >= ``min_value``.
 
     Raises:
-        Nothing — invalid values (including non-finite floats) fall back to
-        ``default_seconds``. Every fallback and every millisecond conversion is
-        logged at WARNING level so an unparseable or mis-united value is visible
-        in the log rather than silently presenting as a default.
+        Nothing. ``bool`` is rejected explicitly (a JSON ``true`` in a numeric key
+        is a user error, not the value 1) and ``None`` is treated as "not configured"
+        at DEBUG level, because a missing key is normal on a fresh install. Every
+        other rewrite is logged at WARNING level so no config error is silent.
     """
-    label = name or 'timeout'
+    label = name or 'value'
     if value is None:
         # Absent key is normal on a fresh install, not a defect — do not warn.
-        logger.debug("%s is not configured; using default of %s seconds", label, default_seconds)
-        return default_seconds
+        logger.debug("%s is not configured; using default of %s", label, default)
+        return max(min_value, int(default))
+    if isinstance(value, bool):
+        logger.warning(
+            "%s value %r is a boolean, not a number; using default of %s",
+            label, value, default,
+        )
+        return max(min_value, int(default))
     try:
         numeric = int(value)
     except (TypeError, ValueError, OverflowError):
         # OverflowError: int(float('inf')) / int(float('nan')) raise it.
         logger.warning(
-            "%s value %r is not a valid number; using default of %s seconds",
-            label, value, default_seconds,
+            "%s value %r is not a valid number; using default of %s",
+            label, value, default,
         )
-        return default_seconds
-    if numeric >= LEGACY_TIMEOUT_MS_THRESHOLD:
-        converted = int(milliseconds_to_seconds(numeric) + 0.5)
+        return max(min_value, int(default))
+    if numeric < min_value:
         logger.warning(
-            "%s value %s is at or above the legacy millisecond threshold of %s; "
-            "treating it as milliseconds and converting to %s seconds. Timeout keys are "
-            "stored in seconds — if %s is genuinely a seconds value, lower it below %s.",
-            label, numeric, LEGACY_TIMEOUT_MS_THRESHOLD, converted, label, LEGACY_TIMEOUT_MS_THRESHOLD,
+            "%s value %s is below the minimum of %s; using %s",
+            label, numeric, min_value, min_value,
         )
-        numeric = converted
-    return max(1, numeric)
+        return min_value
+    return numeric
+
+
+def normalize_timeout_seconds(value, default_seconds, name=None):
+    """Normalize a configured timeout value to whole seconds for the threading API.
+
+    This is the single unit boundary for timeout values (ADD-007). The value is
+    *already in seconds*: legacy millisecond configs are converted once,
+    deterministically, by :func:`src.core.config_migration.migrate_config` at load
+    time. No unit is guessed from the magnitude of the value, so a legitimate large
+    timeout such as ``detect_timeout: 3600`` is honoured as 3600 seconds.
+
+    Args:
+        value: Raw timeout value in seconds (post-migration).
+        default_seconds: Fallback value in seconds when value is missing or invalid.
+        name: Optional name of the setting, used only to make log messages
+            actionable. Purely diagnostic.
+
+    Returns:
+        Timeout in whole seconds, always >= 1 — including when ``default_seconds``
+        is returned, so the documented guarantee is enforced by the code and not
+        merely by today's constant values.
+
+    Raises:
+        Nothing — invalid values (non-finite floats, booleans, non-numeric strings)
+        fall back to ``default_seconds``, and every fallback and clamp is logged at
+        WARNING level so an unparseable or out-of-range value is visible in the log
+        rather than silently presenting as a default.
+    """
+    return normalize_positive_int(value, default_seconds, name=name, min_value=1)
 
 
 # ============================================================================

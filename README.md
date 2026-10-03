@@ -167,56 +167,70 @@ usage anywhere in the codebase. `.env.example` is a plain-text reference table d
 `app_config.json` keys, their code-default constants (where applicable), and default values; it
 is not an env-var template.
 
-All 18 keys in `config/app_config.json`:
+All 19 keys in `config/app_config.json`:
 
 | Key | Default | Constant (src/core/constants.py) | Scope |
 |-----|---------|----------------------------------|-------|
+| `config_version` | `2` | `CONFIG_VERSION` | app-wide |
 | `theme` | `"dark"` | `THEME_DARK` | app-wide |
 | `model` | `"helloz_nsfw"` | *no constant* | app-wide |
 | `threshold_percent` | `60.0` | `DEFAULT_THRESHOLD_PERCENT` | app-wide |
-| `last_source_folder` | `"/home/dewald/Pictures"` | *no constant* | app-wide |
+| `last_source_folder` | `""` | *no constant* | app-wide |
 | `progress_update_interval` | `100` | `SCAN_PROGRESS_UPDATE_INTERVAL` | app-wide |
 | `video_frame_rate` | `10` | `VIDEO_FRAME_RATE` (code default: 5) | app-wide |
-| `worker_thread_count` | `10` | *no constant* | app-wide |
-| `worker_thread_timeout` | `5` | `WORKER_THREAD_TIMEOUT` | app-wide |
+| `worker_thread_count` | `10` | `WORKER_THREAD_COUNT` | app-wide |
+| `worker_thread_timeout_seconds` | `5` | `WORKER_THREAD_TIMEOUT` | app-wide |
 | `nudenet_worker_thread_count` | `4` | *no constant* | app-wide |
 | `nudenet_worker_thread_timeout` | `10` | *no constant* | app-wide |
 | `helloz_nsfw_worker_thread_count` | `20` | *no constant* | Helloz-NSFW |
 | `helloz_nsfw_worker_thread_timeout` | `35` | *no constant* | Helloz-NSFW |
-| `detect_timeout` | `60` | `DETECT_TIMEOUT` | app-wide |
+| `detect_timeout_seconds` | `60` | `DETECT_TIMEOUT` | app-wide |
 | `helloz_nsfw_host` | `"localhost"` | `HELLOZ_NSFW_HOST` | Helloz-NSFW |
 | `helloz_nsfw_port` | `6086` | `HELLOZ_NSFW_PORT` | Helloz-NSFW |
 | `helloz_nsfw_api_endpoint` | `"/api/upload_check"` | `HELLOZ_NSFW_API_ENDPOINT` | Helloz-NSFW |
 | `helloz_nsfw_request_timeout` | `300` | `HELLOZ_NSFW_REQUEST_TIMEOUT` (code default: 30 s) | Helloz-NSFW |
 | `helloz_nsfw_health_check_timeout` | `5` | `HELLOZ_NSFW_HEALTH_CHECK_TIMEOUT` | Helloz-NSFW |
 
-Note on units: all timeout keys (`worker_thread_timeout`, `detect_timeout`,
-`helloz_nsfw_request_timeout`, `helloz_nsfw_health_check_timeout`) are stored in
-seconds in `config/app_config.json`, matching the constants in
-`src/core/constants.py` and the `threading` API.
+Note on units: the `_seconds` suffix is the unit declaration. All timeout values are
+stored in **seconds**, matching the constants in `src/core/constants.py` and the
+`threading` API. No value is ever re-interpreted on the strength of its magnitude, so
+`detect_timeout_seconds: 3600` means one hour, as written.
 
 `nudenet_worker_thread_timeout` and `helloz_nsfw_worker_thread_timeout` are
 **not read by any code** (no `src/` references) and are retained only as
 reference entries; their removal is tracked in issue #104.
 
-Migration note (issue #91): if your existing `config/app_config.json` still
-contains the old millisecond values `worker_thread_timeout: 250` or
-`detect_timeout: 250`, change them to `5` and `60` respectively. The value `250`
-is **not** auto-migrated because it is ambiguous — it is both the former
-millisecond default and a legal 250-second value — so re-check your timeout
-values after upgrading.
+### Automatic migration (issue #91)
 
-Values `>= 1000` are auto-converted from milliseconds to seconds (round-half-up),
-and every such conversion is logged as a WARNING naming the key. Note that this
-also means a deliberately large seconds value (e.g. `detect_timeout: 3600`) is
-interpreted as milliseconds and converted — lower such values below 1000 to keep
-them in seconds.
+The config carries a `config_version`. Before version 2 the two timeout keys were
+named `worker_thread_timeout` / `detect_timeout` and held **milliseconds** — which is
+what produced the reported 250-second hangs on the values the project shipped.
 
-Five keys have no corresponding constant in `src/core/constants.py` and are read
-directly from `config/app_config.json` at runtime:
+On startup, `src/core/config_migration.py` converts any pre-version-2 config once,
+deterministically:
+
+- A legacy value of at least one second (`>= 1000` ms) is converted ms → s,
+  round-half-up (`2500` → `3`).
+- A legacy value below one second — including the shipped `250` — becomes the code
+  default (`5` s / `60` s). 250 ms is 0.25 s, which no whole-second timeout can
+  express and which would time out on essentially every file.
+- The file is rewritten with the `_seconds` key names and `config_version: 2`, so the
+  conversion never runs twice.
+
+Every rewrite is logged at WARNING level **and** written to the on-screen activity log,
+naming the key and both the old and new value. Re-check your timeout values once after
+upgrading; the log tells you exactly what changed.
+
+Five config entries have no corresponding constant in `src/core/constants.py` and are
+read directly from `config/app_config.json` at runtime:
 `last_source_folder`, `nudenet_worker_thread_count`,
 `nudenet_worker_thread_timeout`, `helloz_nsfw_worker_thread_count`, and
 `helloz_nsfw_worker_thread_timeout`.
+
+Every other numeric config value is coerced by
+`constants.normalize_positive_int` / `constants.normalize_timeout_seconds`: an
+unparseable, boolean, or out-of-range value falls back to the constant default and is
+logged at WARNING level, so no config error is applied silently.
 
 Startup validation: if `config/app_config.json` is missing or contains invalid JSON,
 `_load_helloz_config` in `src/core/constants.py` logs a `WARNING` and falls back to

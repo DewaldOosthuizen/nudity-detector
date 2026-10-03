@@ -4,6 +4,7 @@
 |------------|--------------------------------|
 | Status     | Accepted                       |
 | Date       | 2026-10-02 17:37               |
+| Revised    | 2026-10-03 11:20               |
 | Author     | Dewald Oosthuizen              |
 | Relates to | ADD-005, ADD-006               |
 
@@ -30,56 +31,91 @@ invisible to the type system and to the tests (which mocked the accessors).
 
 ## Decision
 
-**Seconds is the single canonical timeout unit end to end.** The unit boundary
-lives in the core layer, in `src/core/constants.py`:
+**Seconds is the single canonical timeout unit end to end, and the unit is
+*stated*, never guessed.** Two mechanisms carry that:
 
-```python
-MILLISECONDS_PER_SECOND = 1000
-LEGACY_TIMEOUT_MS_THRESHOLD = 1000
+### 1. Explicit units in the key names
 
-def milliseconds_to_seconds(milliseconds): ...
-def normalize_timeout_seconds(value, default_seconds, name=None): ...
-```
+The two timeout keys are renamed to `worker_thread_timeout_seconds` and
+`detect_timeout_seconds`. The `_seconds` suffix is a machine-readable unit
+declaration in a JSON file, which is exactly where a magnitude heuristic does not
+belong. `normalize_timeout_seconds(value, default_seconds, name=None)` coerces a
+value that is already known to be in seconds; it makes no attempt to infer a unit.
+It returns whole seconds, always `>= 1` (the fallback is clamped too, so the
+guarantee is enforced by the code rather than by today's constant values), falls
+back to `default_seconds` on `None`/`TypeError`/`ValueError`/`OverflowError` (the
+last covers non-finite floats such as `float('inf')`, which `int()` rejects), and
+rejects `bool` explicitly — a JSON `true` in a timeout key is a user error, not
+the value 1.
 
-`normalize_timeout_seconds(value, default_seconds, name=None)` returns whole
-seconds, always `>= 1`; it falls back to `default_seconds` on `None`/`TypeError`/
-`ValueError`/`OverflowError` (the last covers non-finite floats such as
-`float('inf')`, which `int()` rejects), and converts any value
-`>= LEGACY_TIMEOUT_MS_THRESHOLD` as a legacy millisecond value.
-`WORKER_THREAD_TIMEOUT = 5` and `DETECT_TIMEOUT = 60` remain the single source
-of truth for the defaults, in seconds.
+### 2. A one-time deterministic migration, gated on `config_version`
 
-**The heuristic is logged, never silent.** A unit guess that is wrong is worse
-than no guess, so every millisecond conversion and every invalid-value fallback
-emits a `logger.warning` naming the setting (`name=`), telling the operator
-exactly which key was rewritten and to what. An absent key logs at DEBUG only —
-a missing key is normal on a fresh install, not a defect. `None` handling stays
-debug-level so the common "no config file yet" path produces no warning noise.
+The config carries a `config_version` field (`CONFIG_VERSION = 2`). A config
+without one, or below 2, predates the seconds contract and is converted **once**
+by `src/core/config_migration.py`:
 
-**The runtime config is not committed.** `config/app_config.json` also carries
-mutable user state (`theme`, `model`, `last_source_folder`), so tracking it would
-leave every user's working tree permanently dirty and create a merge hotspot.
-The documented defaults are therefore asserted against the immutable fixture
-`tests/fixtures/app_config.default.json`, keeping shipped defaults and runtime
-state as separate concerns.
+- a legacy millisecond value `>= 1000` converts ms → s, round-half-up
+  (`2500` → `3`);
+- a legacy value below one second — **including the shipped `250`** — becomes the
+  key's constant default (`5` s / `60` s);
+- the file is rewritten with the `_seconds` key names and `config_version: 2`, so
+  the conversion never runs twice; the migration is idempotent.
+
+`250` is the crux of issue #91, so it deserves the reasoning stated plainly. The
+first revision of this ADD deliberately excluded it as "ambiguous", on the grounds
+that 250 is both the former millisecond default and a legal seconds value. That
+reasoning was wrong on the merits: `250` is the value *this project shipped*, and
+the entire issue is that shipping it produced a 250-second freeze. Excluding the
+one value every affected user actually has, in favour of protecting a 250-second
+worker join timeout that nobody plausibly configured, fixes nobody. In a config
+whose declared version says the values are milliseconds there is no ambiguity to
+preserve — the version *is* the answer. Resolving `250` by its version rather than
+its magnitude is exactly what makes the conversion deterministic.
+
+The sub-second fallback is likewise principled, not a fudge: 250 ms is 0.25 s,
+which no whole-second timeout can express, and a 0.25 s detection timeout would
+time out on essentially every file. `WORKER_THREAD_TIMEOUT` / `DETECT_TIMEOUT` are
+the correct destination for a value that cannot be honoured.
+
+### 3. Rewrites are visible in the GUI, not only in the log
+
+A unit rewrite the user never sees is a rewrite they cannot correct. Every
+migration and every coercion failure is logged at WARNING level naming the key,
+and the migration notes are additionally written to the on-screen activity log
+(`NudityDetectorWindow._announce_config_migration`). The GUI user reads the
+activity log, not the Python logger.
+
+### 4. One coercion implementation, one logging policy
+
+`constants.normalize_positive_int(value, default, name=None, min_value=1)` is the
+single implementation of "config scalar → safe positive int". Every numeric config
+read — `worker_thread_count`, `video_frame_rate`, `progress_update_interval`,
+`helloz_nsfw_port`, and all four timeouts — routes through it, in both `__init__`
+and the widget accessors. Previously the same coercion was hand-rolled as
+`try: max(1, int(...)) except (ValueError, TypeError)` in six places, some of which
+logged and some of which did not. The policy is now uniform: absent → DEBUG (a
+missing key is normal on a fresh install, not a defect); unparseable, boolean, or
+below-minimum → WARNING naming the key.
+
+### 5. The runtime config is not committed
+
+`config/app_config.json` carries mutable user state (`theme`, `model`,
+`last_source_folder`), so tracking it would leave every user's working tree
+permanently dirty and create a merge hotspot. It is removed from the index and
+covered by the existing `config/` entry in `.gitignore`. The documented defaults
+are asserted against the immutable fixture `tests/fixtures/app_config.default.json`,
+which is parametrised against `constants.py` so every constant-backed key — not
+just the two timeout keys — fails on drift.
 
 The GUI accessors `_get_worker_thread_timeout()` and `_get_detect_timeout()` in
-`src/gui/app.py` are the **documented, single unit boundary**: every configured
-or spin-button value passes through `normalize_timeout_seconds()` before it
-reaches the threading API. The spin-button labels already read
-`Thread Timeout (s)` / `Detect Timeout (s)`, so the accessors make that "s" true
-by construction.
+`src/gui/app.py` remain the **documented unit boundary**: every configured or
+spin-button value passes through `normalize_timeout_seconds()` before it reaches
+the threading API. The spin-button labels already read `Thread Timeout (s)` /
+`Detect Timeout (s)`, so the accessors make that "s" true by construction.
 
 The `tests/fixtures/app_config.default.json` reference file, the `.env.example`
 reference table, and the `README.md` config table were corrected to the seconds
-defaults.
-
-**Migration is manual for the ambiguous value `250`.** Runtime auto-migration is
-deliberately *not* applied to `250`, because `250` is both the former
-millisecond default and a legal seconds value (the worker spin button accepts up
-to 300 s); converting it automatically would silently change a legitimate
-250-second configuration. Only unambiguously millisecond-scale values
-(`>= 1000`, which the GUI cannot produce) are auto-converted.
+defaults and the new key names.
 
 ---
 
@@ -87,7 +123,8 @@ to 300 s); converting it automatically would silently change a legitimate
 
 | Option | Description | Verdict |
 |--------|-------------|---------|
-| **Seconds everywhere** (current) | Matches the `threading` API and the existing `constants` defaults; one unit end to end; whole seconds fit the GUI spin buttons (1 s minimum) | **Accepted** |
+| **Explicit units + one-time versioned migration** (current) | Matches the `threading` API and the existing `constants` defaults; the unit is declared, not inferred; existing installs are repaired deterministically, `250` included; no value can be silently reinterpreted | **Accepted** |
+| Per-read magnitude heuristic (`>= 1000` means ms) | No schema change — but it cannot repair `250` (the value actually shipped) and it silently rewrites legitimate large seconds values: `detect_timeout: 3600` became `4`, so a working config starts failing fast. A heuristic is the wrong mechanism for a machine-read file | Rejected |
 | Keep milliseconds, convert in GUI | Preserves the old ms contract — but the GUI must display milliseconds (worse UX), two units coexist, and a 1 s-minimum spin button cannot represent `250 ms` anyway | Rejected |
 | Type-safe wrapper (`timedelta` / `NewType`) | Removes ambiguity entirely — but adds ceremony to a small codebase and does not fit the plain-int config surface | Rejected |
 
@@ -101,32 +138,32 @@ behaviour.
 ## Consequences
 
 **Positive:**
-- One unit (seconds) across config, constants, GUI, and the `threading` API —
-  the mismatch cannot silently recur.
-- The unit boundary is explicit, named, documented, and covered by unit tests
-  (`tests/core/test_timeout_units_issue91.py`) plus GUI-boundary regression
-  tests (`tests/gui/test_scanning_mixin.py::TestTimeoutUnits`).
-- Legacy millisecond configs (`>= 1000`) are auto-normalized, so a config set to
-  e.g. `2500` yields `3` seconds rather than a 2500-second freeze.
+- One unit (seconds) across config, constants, GUI, and the `threading` API — the
+  mismatch cannot silently recur.
+- The unit is declared in the key name and the config version, so no code path
+  guesses a unit from a value's magnitude. `detect_timeout_seconds: 3600` means
+  one hour.
+- **Existing installations are repaired.** A config still holding the shipped
+  `worker_thread_timeout: 250` / `detect_timeout: 250` migrates to 5 s / 60 s on
+  first launch and is rewritten on disk — the remedy is the upgrade, not a README
+  footnote.
+- One coercion implementation with one logging policy, so no numeric config read
+  can fail silently.
+- Covered by unit and migration tests (`tests/core/test_timeout_units_issue91.py`)
+  and by GUI-boundary regression tests that drive the real `__init__` config path
+  (`tests/gui/test_scanning_mixin.py::TestTimeoutUnits`).
 
 **Negative / Trade-offs:**
-- A user who customised `worker_thread_timeout: 250` or `detect_timeout: 250`
-  must update those values to `5` and `60` manually; `250` is ambiguous and is
-  therefore not auto-migrated. This is documented in `README.md` and
-  `.env.example`.
-- `normalize_timeout_seconds()` accepts a plain int; it does not carry the unit
-  in the type. The naming (`*_seconds`) and the docstrings are the guard.
-- **The `>= 1000` heuristic can misfire on the config path.** Nothing enforces
-  the GUI's spin-button caps when a value comes straight from
-  `config/app_config.json`, so a legitimate seconds value such as
-  `detect_timeout: 3600` (large video on a slow machine) is read as 3600 ms and
-  converted to `4` seconds — which would time out on nearly every file, the exact
-  failure class this ADD set out to eliminate. The heuristic is retained because
-  it rescues the far more common case of a leftover millisecond value, but it is
-  no longer silent: the conversion emits a WARNING naming the key and the
-  rewritten value, and the boundary is documented in `src/core/constants.py`. A
-  fully explicit unit (e.g. `*_seconds` key names or a `timeout_unit` field) is
-  the durable fix and is left for a future change.
+- The two timeout keys are renamed. Any tooling or hand-edit referencing
+  `worker_thread_timeout` / `detect_timeout` must be updated; the automatic
+  migration covers the app's own config file, not external scripts.
+- `normalize_positive_int` / `normalize_timeout_seconds` accept a plain int; they
+  do not carry the unit in the type. The `_seconds` key suffix and the docstrings
+  are the guard.
+- The operator must still review their timeout values once after upgrading; the
+  migration reports every rewrite rather than assuming intent.
+- `_save_config` writes only the keys the GUI owns, so a hand-added key in
+  `config/app_config.json` is dropped on the next save. This predates ADD-007.
 
 **Follow-up (out of scope here):** `nudenet_worker_thread_timeout` and
 `helloz_nsfw_worker_thread_timeout` are not read by any code (no `src/`

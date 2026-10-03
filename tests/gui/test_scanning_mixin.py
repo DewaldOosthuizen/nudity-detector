@@ -1,7 +1,10 @@
 """Tests for src/gui/scanning.py — ScanningMixin (GTK/GObject stubbed via sys.modules)."""
 import sys
+import threading
 import types
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 
 # ---------------------------------------------------------------------------
@@ -575,6 +578,88 @@ def _load_nudity_window_class():
     return NudityDetectorWindow
 
 
+class _ImmediateThread:
+    """Stand-in for ``threading.Thread`` that runs the target synchronously on start().
+
+    Lets a test assert on the work the thread performs without depending on how
+    ``start_scanning`` constructs the Thread (positional vs kwargs, argument order).
+    """
+
+    def __init__(self, target=None, args=(), kwargs=None, **_ignored):
+        self._target = target
+        self._args = args
+        self._kwargs = kwargs or {}
+
+    def start(self):
+        """Invoke the captured target immediately with its captured arguments."""
+        if self._target is not None:
+            self._target(*self._args, **self._kwargs)
+
+    def is_alive(self):
+        """Always False — the work already completed synchronously."""
+        return False
+
+    def join(self, timeout=None):
+        """No-op: nothing to join."""
+        return None
+
+
+def _processing_thread_factory():
+    """Return a Thread factory that runs only the scan's *processing* thread inline.
+
+    ``ScanningMixin.process_files`` also spawns an internal async report-save thread
+    and then joins it. Running that one synchronously would block forever on its
+    queue, so exactly the first Thread constructed is made immediate and every later
+    one gets a real daemon thread.
+
+    Returns:
+        A callable usable as the ``new`` argument of ``patch(...)``.
+    """
+    state = {"used": False}
+    real_thread = threading.Thread  # captured before patch() rebinds the module attribute
+
+    def factory(*args, **kwargs):
+        if not state["used"]:
+            state["used"] = True
+            return _ImmediateThread(*args, **kwargs)
+        return real_thread(*args, **kwargs)
+
+    return factory
+
+
+def _make_window_instance(window_cls, config_dict):
+    """Construct a real NudityDetectorWindow with a scripted config and stubbed UI.
+
+    This exercises the real ``__init__`` config read path — the code that issue #91 was
+    actually fixed in — without needing a real GTK toolkit. A genuine instance (not a
+    ``MagicMock``) is required so the ``super().__init__`` chain in the MRO resolves.
+
+    Args:
+        window_cls: The ``NudityDetectorWindow`` class under test.
+        config_dict: The config mapping ``_load_config`` should return.
+
+    Returns:
+        The constructed window instance (UI construction is patched away).
+    """
+    win = object.__new__(window_cls)
+    # The stub Adw base class carries no widget methods; __init__ calls set_title()
+    # and friends. A permissive per-instance fallback supplies no-op stand-ins so the
+    # real config read path can run without a GTK toolkit.
+    no_op_widgets = MagicMock()
+    with patch.object(window_cls, "_load_config", return_value=config_dict), \
+         patch.object(window_cls, "_build_ui"), \
+         patch.object(window_cls, "_apply_theme"), \
+         patch.object(window_cls, "load_initial_session"), \
+         patch.object(window_cls, "_announce_config_migration"), \
+         patch.object(window_cls, "_find_latest_report_path", return_value="/tmp/reports"), \
+         patch("src.gui.app.get_report_path", return_value="/tmp/reports"), \
+         patch.object(type(win).__mro__[-2], "__getattr__",
+                      create=True, side_effect=lambda _name: MagicMock()):
+        window_cls.__init__(win)
+    win.log_message = no_op_widgets.log_message
+    return win
+
+
 class TestTimeoutUnits:
     """The GUI accessors are the unit boundary: they must return whole seconds."""
 
@@ -624,6 +709,25 @@ class TestTimeoutUnits:
                     sys.modules[name] = module
             ensure_gi_stubs()
 
+    def test_real_gi_is_reported_loudly(self):
+        """Real PyGObject under the test suite is a hard error, not a silent pass.
+
+        ``ensure_gi_stubs`` deliberately declines to fake a genuine ``gi`` module. If
+        one is loaded anyway, the GUI tests would be exercising real GTK types while
+        appearing to pass — so detection must be assertable, not just a silent
+        early return.
+        """
+        from tests import conftest
+
+        fake_real_gi = types.ModuleType("gi")
+        fake_real_gi.__file__ = "/usr/lib/python3/dist-packages/gi/__init__.py"
+        assert conftest._is_real_gi(fake_real_gi) is True
+        # A stub (no __file__) is never treated as real.
+        assert conftest._is_real_gi(types.ModuleType("gi")) is False
+        assert conftest._is_real_gi(None) is False
+
+    # -- widget accessors ---------------------------------------------------
+
     def test_accessor_worker_timeout_returns_seconds(self):
         window_cls = _load_nudity_window_class()
         win = MagicMock()
@@ -640,13 +744,123 @@ class TestTimeoutUnits:
         result = window_cls._get_detect_timeout(win)
         assert result == 60
 
-    def test_accessor_converts_legacy_millisecond_value(self):
+    def test_accessor_honours_large_seconds_value(self):
+        """A spin button value is seconds as-is; no magnitude-based reinterpretation.
+
+        Regression guard: the previous implementation converted any value >= 1000 to
+        milliseconds, so a legitimate 300 s worker timeout became 0 (clamped to 1).
+        """
         window_cls = _load_nudity_window_class()
         win = MagicMock()
-        win.worker_thread_timeout_spin.get_value.return_value = 2500
-        assert window_cls._get_worker_thread_timeout(win) == 3
+        win.worker_thread_timeout_spin.get_value.return_value = 300
+        assert window_cls._get_worker_thread_timeout(win) == 300
+
+    # -- __init__ config path (the actual #91 fix) --------------------------
+
+    def test_init_reads_seconds_config_keys(self):
+        """A current-version config supplies the timeouts verbatim, in seconds."""
+        window_cls = _load_nudity_window_class()
+        win = _make_window_instance(window_cls, {
+            constants.CONFIG_VERSION_KEY: constants.CONFIG_VERSION,
+            'worker_thread_timeout_seconds': 12,
+            'detect_timeout_seconds': 90,
+        })
+        assert win._worker_thread_timeout == 12
+        assert win._detect_timeout == 90
+        assert win._config_migration_notes == []
+
+    def test_init_migrates_legacy_shipped_250_config(self):
+        """The shipped 250 ms config must NOT survive as 250 seconds.
+
+        This is the exact upgrade path of issue #91: an existing install with
+        ``worker_thread_timeout: 250`` and ``detect_timeout: 250`` must end up with
+        usable seconds-scale timeouts, not the 250-second freeze.
+        """
+        window_cls = _load_nudity_window_class()
+        win = _make_window_instance(window_cls, {
+            'worker_thread_timeout': 250,
+            'detect_timeout': 250,
+        })
+        assert win._worker_thread_timeout == constants.WORKER_THREAD_TIMEOUT
+        assert win._detect_timeout == constants.DETECT_TIMEOUT
+        assert len(win._config_migration_notes) == 2
+
+    def test_init_migrates_legacy_unambiguous_millisecond_config(self):
+        """A legacy millisecond value above one second converts faithfully."""
+        window_cls = _load_nudity_window_class()
+        win = _make_window_instance(window_cls, {'detect_timeout': 90000})
+        assert win._detect_timeout == 90
+
+    def test_init_honours_large_seconds_config_value(self):
+        """A current-version config with 3600 stays 3600 — no heuristic division."""
+        window_cls = _load_nudity_window_class()
+        win = _make_window_instance(window_cls, {
+            constants.CONFIG_VERSION_KEY: constants.CONFIG_VERSION,
+            'detect_timeout_seconds': 3600,
+        })
+        assert win._detect_timeout == 3600
+
+    def test_init_missing_keys_fall_back_to_constants(self):
+        """An empty config yields the constant defaults, without raising."""
+        window_cls = _load_nudity_window_class()
+        win = _make_window_instance(window_cls, {})
+        assert win._worker_thread_timeout == constants.WORKER_THREAD_TIMEOUT
+        assert win._detect_timeout == constants.DETECT_TIMEOUT
+        assert win._worker_thread_count == constants.WORKER_THREAD_COUNT
+        assert win._video_frame_rate == constants.VIDEO_FRAME_RATE
+
+    @pytest.mark.parametrize("bad_value", ["abc", float("inf"), True])
+    def test_init_invalid_values_fall_back_to_constants(self, bad_value):
+        """An unparseable current-version value falls back to the constant default."""
+        window_cls = _load_nudity_window_class()
+        win = _make_window_instance(window_cls, {
+            constants.CONFIG_VERSION_KEY: constants.CONFIG_VERSION,
+            'worker_thread_timeout_seconds': bad_value,
+            'detect_timeout_seconds': bad_value,
+        })
+        assert win._worker_thread_timeout == constants.WORKER_THREAD_TIMEOUT
+        assert win._detect_timeout == constants.DETECT_TIMEOUT
+
+    def test_init_negative_value_clamps_to_one_and_logs(self, caplog):
+        """An out-of-range negative value clamps to 1 and the clamp is logged."""
+        window_cls = _load_nudity_window_class()
+        with caplog.at_level("WARNING", logger="src.core.constants"):
+            win = _make_window_instance(window_cls, {
+                constants.CONFIG_VERSION_KEY: constants.CONFIG_VERSION,
+                'detect_timeout_seconds': -5,
+            })
+        assert win._detect_timeout == 1
+        assert "detect_timeout_seconds" in caplog.text
+
+    def test_init_invalid_values_are_logged_naming_the_key(self, caplog):
+        """Config coercion failures are visible, not silent."""
+        window_cls = _load_nudity_window_class()
+        with caplog.at_level("WARNING", logger="src.core.constants"):
+            _make_window_instance(window_cls, {
+                constants.CONFIG_VERSION_KEY: constants.CONFIG_VERSION,
+                'detect_timeout_seconds': "abc",
+            })
+        assert "detect_timeout_seconds" in caplog.text
+
+    def test_migration_notes_are_shown_in_the_activity_log(self):
+        """A rewrite the user cannot see is a rewrite they cannot correct.
+
+        The GUI user reads the activity log, not the Python logger, so migration
+        notes must reach ``log_message``.
+        """
+        window_cls = _load_nudity_window_class()
+        win = MagicMock()
+        win._config_migration_notes = ["detect_timeout: legacy 250 ms is sub-second"]
+        window_cls._announce_config_migration(win)
+        win.log_message.assert_called_once()
+        assert "250" in win.log_message.call_args.args[0]
 
     def test_classify_files_in_folder_receives_seconds(self, tmp_path):
+        """The seconds value produced by the boundary reaches classify_files_in_folder.
+
+        The fake Thread runs its target with the captured arguments, so the assertion
+        does not depend on how start_scanning happens to build the Thread call.
+        """
         window_cls = _load_nudity_window_class()
         win = _make_win()
         win.folder_entry.get_text.return_value = str(tmp_path)
@@ -658,17 +872,14 @@ class TestTimeoutUnits:
         )
         win.worker_thread_timeout_spin.get_value.return_value = 5
         win.create_nudenet_classifiers = MagicMock(return_value=(MagicMock(), MagicMock()))
+        win.process_files = types.MethodType(ScanningMixin.process_files, win)
 
-        with patch("src.gui.scanning.threading.Thread") as mock_thread_cls, \
-             patch("src.gui.scanning.classify_files_in_folder") as mock_classify, \
+        with patch("src.gui.scanning.classify_files_in_folder") as mock_classify, \
              patch("src.gui.scanning.count_supported_files", return_value=1), \
              patch("src.gui.scanning.save_nudity_report"), \
-             patch("src.gui.scanning.os.makedirs"):
+             patch("src.gui.scanning.os.makedirs"), \
+             patch("src.gui.scanning.threading.Thread", new=_processing_thread_factory()):
             ScanningMixin.start_scanning(win)
-            # Invoke the real process_files (win.process_files is a MagicMock on the
-            # stub window), reusing the folder/report args start_scanning built.
-            args = mock_thread_cls.call_args.kwargs["args"]
-            ScanningMixin.process_files(win, *args)
 
         assert mock_classify.call_args.kwargs["worker_timeout"] == 5
 
