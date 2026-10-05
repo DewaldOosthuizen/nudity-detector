@@ -46,15 +46,27 @@ class NudityDetectorWindow(
         self.set_size_request(constants.GUI_WINDOW_MIN_WIDTH, constants.GUI_WINDOW_MIN_HEIGHT)
 
         cfg = self._load_config()
+        # One-time unit migration (ADD-007): a config written before CONFIG_VERSION 2
+        # carries its timeouts in milliseconds. Migrate before any read so the unit
+        # boundary below only ever sees seconds, and so an existing install is repaired
+        # rather than left with the shipped 250-second timeouts. The on-disk rewrite is
+        # persisted here, so the conversion is recorded once and does not depend on the
+        # user happening to change a setting; notes cover every rewrite *and* every
+        # failure to read/persist the file, so a stale on-disk config is never silent.
+        # An empty ``cfg`` means ``_load_config`` already found the file missing or
+        # unreadable, so it is re-read here to tell the user which of the two it was
+        # (and to record the reason in the activity log).
+        cfg, self._config_migration_notes = config_migration.migrate_config_file(
+            constants.CONFIG_DIR, constants.CONFIG_FILE_NAME, cfg=cfg or None,
+        )
+        # A right-unit / wrong-magnitude value (e.g. 300 s where the code default is
+        # 30 s) is legitimate for a hand-tuned setting, so it is never rewritten — but
+        # the user is told, per ADD-007: a change they never see is one they cannot correct.
+        self._config_divergence_notes = constants.log_config_default_divergences(cfg)
         self._model = cfg.get('model', constants.MODEL_NUDENET)
         self._folder = cfg.get('last_source_folder', '')
         self._theme_mode = cfg.get('theme', constants.THEME_SYSTEM)
         self._threshold = float(cfg.get('threshold_percent', constants.DEFAULT_THRESHOLD_PERCENT))
-        # One-time unit migration: a config written before ADD-007 carries its
-        # timeouts in milliseconds. Migrate before any read so the unit boundary
-        # below only ever sees seconds, and so an existing install is repaired
-        # rather than left with the shipped 250-second timeouts.
-        cfg, self._config_migration_notes = config_migration.migrate_config(cfg)
         self._progress_interval = constants.normalize_positive_int(
             cfg.get('progress_update_interval'), constants.SCAN_PROGRESS_UPDATE_INTERVAL, name='progress_update_interval'
         )
@@ -64,12 +76,14 @@ class NudityDetectorWindow(
         )
         self._helloz_nsfw_api_endpoint = cfg.get('helloz_nsfw_api_endpoint', constants.HELLOZ_NSFW_API_ENDPOINT)
         self._helloz_nsfw_request_timeout = constants.normalize_timeout_seconds(
-            cfg.get('helloz_nsfw_request_timeout'), constants.HELLOZ_NSFW_REQUEST_TIMEOUT, name='helloz_nsfw_request_timeout'
+            cfg.get('helloz_nsfw_request_timeout_seconds'),
+            constants.HELLOZ_NSFW_REQUEST_TIMEOUT,
+            name='helloz_nsfw_request_timeout_seconds',
         )
         self._helloz_nsfw_health_check_timeout = constants.normalize_timeout_seconds(
-            cfg.get('helloz_nsfw_health_check_timeout'),
+            cfg.get('helloz_nsfw_health_check_timeout_seconds'),
             constants.HELLOZ_NSFW_HEALTH_CHECK_TIMEOUT,
-            name='helloz_nsfw_health_check_timeout',
+            name='helloz_nsfw_health_check_timeout_seconds',
         )
         self._worker_thread_count = constants.normalize_positive_int(
             cfg.get('worker_thread_count'), constants.WORKER_THREAD_COUNT, name='worker_thread_count'
@@ -102,16 +116,21 @@ class NudityDetectorWindow(
         self._announce_config_migration()
 
     def _announce_config_migration(self):
-        """Show any config-migration rewrites in the on-screen activity log.
+        """Show config-migration rewrites and failures in the on-screen activity log.
 
-        A unit rewrite the user never sees is a rewrite they cannot correct. The
-        migration is logged at WARNING level, but the GUI user reads the activity
-        log, not the Python logger, so the notes are surfaced there too.
+        A unit rewrite the user never sees is a rewrite they cannot correct, and a
+        config file that could not be migrated or persisted is exactly the state
+        where the user most needs to be told the on-disk file is stale. Both are
+        logged by ``config_migration``, but the GUI user reads the activity log, not
+        the Python logger, so the notes are surfaced there too.
 
         Returns:
-            None. No-op when the config needed no migration.
+            None. No-op when the config needed no migration and diverged from no
+            constant default.
         """
         for note in self._config_migration_notes:
+            self.log_message(f'Config: {note}', level='warning')
+        for note in self._config_divergence_notes:
             self.log_message(f'Config: {note}', level='warning')
 
     # ------------------------------------------------------------------
@@ -782,8 +801,8 @@ class NudityDetectorWindow(
                 'helloz_nsfw_host': self._get_helloz_nsfw_host(),
                 'helloz_nsfw_port': self._get_helloz_nsfw_port(),
                 'helloz_nsfw_api_endpoint': self._get_helloz_nsfw_api_endpoint(),
-                'helloz_nsfw_request_timeout': self._get_helloz_nsfw_request_timeout(),
-                'helloz_nsfw_health_check_timeout': self._get_helloz_nsfw_health_check_timeout(),
+                'helloz_nsfw_request_timeout_seconds': self._get_helloz_nsfw_request_timeout(),
+                'helloz_nsfw_health_check_timeout_seconds': self._get_helloz_nsfw_health_check_timeout(),
             }
             with open(config_path, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=2)

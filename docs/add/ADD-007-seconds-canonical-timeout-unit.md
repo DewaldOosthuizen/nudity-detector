@@ -4,7 +4,7 @@
 |------------|--------------------------------|
 | Status     | Accepted                       |
 | Date       | 2026-10-02 17:37               |
-| Revised    | 2026-10-03 11:20               |
+| Revised    | 2026-10-05 06:10               |
 | Author     | Dewald Oosthuizen              |
 | Relates to | ADD-005, ADD-006               |
 
@@ -58,8 +58,34 @@ by `src/core/config_migration.py`:
   (`2500` → `3`);
 - a legacy value below one second — **including the shipped `250`** — becomes the
   key's constant default (`5` s / `60` s);
-- the file is rewritten with the `_seconds` key names and `config_version: 2`, so
-  the conversion never runs twice; the migration is idempotent.
+- the file is rewritten with the `_seconds` key names and `config_version: 2`, so the
+  conversion never runs twice; the migration is idempotent.
+
+**Every timeout key is migrated, not just the two that were in milliseconds.** Four
+keys — `helloz_nsfw_request_timeout`, `helloz_nsfw_health_check_timeout`,
+`nudenet_worker_thread_timeout`, `helloz_nsfw_worker_thread_timeout` — already held
+seconds but carried no suffix. Renaming them in the same versioned migration keeps the
+premise of this ADD true: the `_seconds` suffix is a reliable unit marker, not a
+convention honoured by some keys. Their values are **not** converted — only the key
+name changes, so a `helloz_nsfw_request_timeout: 300` stays 300 s rather than becoming
+0.3 s. The first revision of this ADD left them unsuffixed; that was the "half-renamed
+schema" that made the central claim only half true.
+
+**An existing `*_seconds` value always wins.** A partially applied upgrade or a restored
+backup can hold both spellings of a key. The suffixed key is the one that states its
+unit, so the migration drops the legacy key and keeps the explicit value, emitting a
+change note that says so. Overwriting a user's hand-edited `detect_timeout_seconds: 120`
+with a converted legacy value was the one irreversible data path in the PR, and the
+direction of that loss was not recoverable from the log.
+
+**The rewrite is persisted at startup, atomically.** `migrate_config_file()` is called
+from `NudityDetectorWindow.__init__`, so the on-disk file carries the migrated key names
+and the version stamp immediately — the guarantee is the upgrade, not an unrelated
+`_save_config` the user may never trigger. The write goes to a sibling temp file and is
+moved over the target with `os.replace`: the config file is the user's only copy of
+their theme, model and last source folder as well as their timeouts, so it must never
+be left as a partial JSON document by a crash or a full disk. The written file ends with
+a newline.
 
 `250` is the crux of issue #91, so it deserves the reasoning stated plainly. The
 first revision of this ADD deliberately excluded it as "ambiguous", on the grounds
@@ -85,7 +111,24 @@ and the migration notes are additionally written to the on-screen activity log
 (`NudityDetectorWindow._announce_config_migration`). The GUI user reads the
 activity log, not the Python logger.
 
-### 4. One coercion implementation, one logging policy
+### 4. Config and constants agree on the shipped default, and divergence is visible
+
+Normalizing the *type* of a value does nothing about a value that is the right unit and
+the wrong magnitude. `helloz_nsfw_request_timeout: 300` shipped against a 30 s constant
+and `video_frame_rate: 10` against a 5 s one; both were accepted silently, so "the
+mismatch cannot silently recur" was only true for units. Two changes close that:
+
+- the shipped defaults (`.env.example` and `tests/fixtures/app_config.default.json`) now
+  equal their constants, so config and code agree on day one; and
+- `constants.log_config_default_divergences` logs a WARNING naming any key whose
+  configured value differs from its constant default and returns that description for
+  the activity log. The value is **never** rewritten — a hand-tuned timeout is
+  legitimate — but the user is told, per section 3.
+
+`CONFIG_DEFAULT_ALIGNMENT` enumerates the aligned keys, so the fixture test
+`test_shipped_defaults_equal_constants` fails on any future drift.
+
+### 5. One coercion implementation, one logging policy
 
 `constants.normalize_positive_int(value, default, name=None, min_value=1)` is the
 single implementation of "config scalar → safe positive int". Every numeric config
@@ -97,7 +140,7 @@ logged and some of which did not. The policy is now uniform: absent → DEBUG (a
 missing key is normal on a fresh install, not a defect); unparseable, boolean, or
 below-minimum → WARNING naming the key.
 
-### 5. The runtime config is not committed
+### 6. The runtime config is not committed
 
 `config/app_config.json` carries mutable user state (`theme`, `model`,
 `last_source_folder`), so tracking it would leave every user's working tree
@@ -149,9 +192,12 @@ behaviour.
   footnote.
 - One coercion implementation with one logging policy, so no numeric config read
   can fail silently.
+- **Every** timeout key states its unit in its name; there is no bare `*_timeout` key,
+  so the suffix can be relied on by the next reader.
 - Covered by unit and migration tests (`tests/core/test_timeout_units_issue91.py`)
   and by GUI-boundary regression tests that drive the real `__init__` config path
-  (`tests/gui/test_scanning_mixin.py::TestTimeoutUnits`).
+  (`tests/gui/test_scanning_mixin.py::TestTimeoutUnits`), including the on-disk rewrite
+  at startup.
 
 **Negative / Trade-offs:**
 - The two timeout keys are renamed. Any tooling or hand-edit referencing
@@ -162,12 +208,14 @@ behaviour.
   are the guard.
 - The operator must still review their timeout values once after upgrading; the
   migration reports every rewrite rather than assuming intent.
+- A configured value that differs from its constant default now produces a WARNING on
+  every launch. That is intentional — silence was the defect — but a deliberately
+  hand-tuned timeout will be reported each time rather than once.
 - `_save_config` writes only the keys the GUI owns, so a hand-added key in
   `config/app_config.json` is dropped on the next save. This predates ADD-007.
 
-**Follow-up (out of scope here):** `nudenet_worker_thread_timeout` and
-`helloz_nsfw_worker_thread_timeout` are not read by any code (no `src/`
-references). Their documentation unit was corrected for consistency but their
-removal is a separate cleanup, tracked as **issue #104** ("Remove dead timeout
-config keys"). The keys are retained here so this PR stays scoped to the unit
-mismatch.
+**Follow-up (out of scope here):** `nudenet_worker_thread_timeout_seconds` and
+`helloz_nsfw_worker_thread_timeout_seconds` are renamed by the migration for
+consistency but are still not read by any code (no `src/` references). Their removal
+is a separate cleanup, tracked as **issue #104** ("Remove dead timeout config keys").
+The keys are retained here so this PR stays scoped to the unit mismatch.

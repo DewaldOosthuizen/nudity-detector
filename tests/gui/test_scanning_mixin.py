@@ -1,4 +1,5 @@
 """Tests for src/gui/scanning.py — ScanningMixin (GTK/GObject stubbed via sys.modules)."""
+import json
 import sys
 import threading
 import types
@@ -643,8 +644,12 @@ def _make_window_instance(window_cls, config_dict):
     """
     win = object.__new__(window_cls)
     # The stub Adw base class carries no widget methods; __init__ calls set_title()
-    # and friends. A permissive per-instance fallback supplies no-op stand-ins so the
-    # real config read path can run without a GTK toolkit.
+    # and friends. A permissive per-instance fallback supplies no-op stand-ins so
+    # the real config read path can run without a GTK toolkit.
+    # The startup migration persists the rewritten config; _write_config is
+    # redirected so the suite never touches the developer's real
+    # config/app_config.json. The on-disk rewrite itself is covered in
+    # tests/core/test_timeout_units_issue91.py.
     no_op_widgets = MagicMock()
     with patch.object(window_cls, "_load_config", return_value=config_dict), \
          patch.object(window_cls, "_build_ui"), \
@@ -653,6 +658,7 @@ def _make_window_instance(window_cls, config_dict):
          patch.object(window_cls, "_announce_config_migration"), \
          patch.object(window_cls, "_find_latest_report_path", return_value="/tmp/reports"), \
          patch("src.gui.app.get_report_path", return_value="/tmp/reports"), \
+         patch("src.core.config_migration._write_config"), \
          patch.object(type(win).__mro__[-2], "__getattr__",
                       create=True, side_effect=lambda _name: MagicMock()):
         window_cls.__init__(win)
@@ -768,6 +774,9 @@ class TestTimeoutUnits:
         assert win._worker_thread_timeout == 12
         assert win._detect_timeout == 90
         assert win._config_migration_notes == []
+        # 12 and 90 are honoured verbatim, but both differ from the code defaults,
+        # so the user is told about them (ADD-007: no silent divergence).
+        assert len(win._config_divergence_notes) == 2
 
     def test_init_migrates_legacy_shipped_250_config(self):
         """The shipped 250 ms config must NOT survive as 250 seconds.
@@ -851,9 +860,99 @@ class TestTimeoutUnits:
         window_cls = _load_nudity_window_class()
         win = MagicMock()
         win._config_migration_notes = ["detect_timeout: legacy 250 ms is sub-second"]
+        win._config_divergence_notes = []
         window_cls._announce_config_migration(win)
         win.log_message.assert_called_once()
         assert "250" in win.log_message.call_args.args[0]
+
+    def test_divergence_notes_are_shown_in_the_activity_log(self):
+        """A right-unit / wrong-magnitude value is surfaced to the user too.
+
+        Per ADD-007 the user must be told their 300 s request timeout differs
+        from the 30 s code default, even though the configured value is honoured.
+        """
+        window_cls = _load_nudity_window_class()
+        win = MagicMock()
+        win._config_migration_notes = []
+        win._config_divergence_notes = ["helloz_nsfw_request_timeout_seconds: 300 vs 30"]
+        window_cls._announce_config_migration(win)
+        win.log_message.assert_called_once()
+        assert "300" in win.log_message.call_args.args[0]
+
+    def test_init_reports_config_constant_divergence(self):
+        """A 300 s request timeout against a 30 s constant is recorded as a note."""
+        window_cls = _load_nudity_window_class()
+        win = _make_window_instance(window_cls, {
+            constants.CONFIG_VERSION_KEY: constants.CONFIG_VERSION,
+            'helloz_nsfw_request_timeout_seconds': 300,
+        })
+        # The configured value is still honoured — only the divergence is reported.
+        assert win._helloz_nsfw_request_timeout == 300
+        assert len(win._config_divergence_notes) == 1
+        assert "helloz_nsfw_request_timeout_seconds" in win._config_divergence_notes[0]
+
+    def test_init_persists_the_migration_on_startup(self, tmp_path):
+        """The startup path rewrites the on-disk config, not just the in-memory dict.
+
+        Regression guard for the documented "rewritten on disk, never re-migrated"
+        guarantee: a user who upgrades and never touches a setting must still get
+        a repaired config file rather than a legacy one.
+        """
+        window_cls = _load_nudity_window_class()
+        config_path = tmp_path / constants.CONFIG_FILE_NAME
+        config_path.write_text(json.dumps({'worker_thread_timeout': 250, 'detect_timeout': 250}))
+
+        win = object.__new__(window_cls)
+        no_op_widgets = MagicMock()
+        with patch("src.core.constants.CONFIG_DIR", str(tmp_path)), \
+             patch.object(window_cls, "_load_config", return_value=json.loads(config_path.read_text())), \
+             patch.object(window_cls, "_build_ui"), \
+             patch.object(window_cls, "_apply_theme"), \
+             patch.object(window_cls, "load_initial_session"), \
+             patch.object(window_cls, "_announce_config_migration"), \
+             patch.object(window_cls, "_find_latest_report_path", return_value="/tmp/reports"), \
+             patch("src.gui.app.get_report_path", return_value="/tmp/reports"), \
+             patch.object(type(win).__mro__[-2], "__getattr__",
+                          create=True, side_effect=lambda _name: MagicMock()):
+            window_cls.__init__(win)
+        win.log_message = no_op_widgets.log_message
+
+        persisted = json.loads(config_path.read_text())
+        assert persisted['worker_thread_timeout_seconds'] == constants.WORKER_THREAD_TIMEOUT
+        assert persisted['detect_timeout_seconds'] == constants.DETECT_TIMEOUT
+        assert persisted[constants.CONFIG_VERSION_KEY] == constants.CONFIG_VERSION
+        assert 'worker_thread_timeout' not in persisted
+        assert win._worker_thread_timeout == constants.WORKER_THREAD_TIMEOUT
+
+    def test_init_renames_unsuffixed_timeout_keys_on_startup(self, tmp_path):
+        """A pre-ADD-007 ``helloz_nsfw_request_timeout`` is renamed, not converted.
+
+        The value already held seconds, so the migration must not turn 300 s into
+        0.3 s; the key simply gains the suffix that states its unit.
+        """
+        window_cls = _load_nudity_window_class()
+        config_path = tmp_path / constants.CONFIG_FILE_NAME
+        config_path.write_text(json.dumps({'helloz_nsfw_request_timeout': 300}))
+
+        win = object.__new__(window_cls)
+        no_op_widgets = MagicMock()
+        with patch("src.core.constants.CONFIG_DIR", str(tmp_path)), \
+             patch.object(window_cls, "_load_config", return_value=json.loads(config_path.read_text())), \
+             patch.object(window_cls, "_build_ui"), \
+             patch.object(window_cls, "_apply_theme"), \
+             patch.object(window_cls, "load_initial_session"), \
+             patch.object(window_cls, "_announce_config_migration"), \
+             patch.object(window_cls, "_find_latest_report_path", return_value="/tmp/reports"), \
+             patch("src.gui.app.get_report_path", return_value="/tmp/reports"), \
+             patch.object(type(win).__mro__[-2], "__getattr__",
+                          create=True, side_effect=lambda _name: MagicMock()):
+            window_cls.__init__(win)
+        win.log_message = no_op_widgets.log_message
+
+        assert win._helloz_nsfw_request_timeout == 300
+        persisted = json.loads(config_path.read_text())
+        assert persisted['helloz_nsfw_request_timeout_seconds'] == 300
+        assert 'helloz_nsfw_request_timeout' not in persisted
 
     def test_classify_files_in_folder_receives_seconds(self, tmp_path):
         """The seconds value produced by the boundary reaches classify_files_in_folder.

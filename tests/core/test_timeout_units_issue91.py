@@ -294,7 +294,7 @@ def test_migrate_config_file_rewrites_disk_and_is_one_time(tmp_path):
     config_path = tmp_path / "app_config.json"
     config_path.write_text(json.dumps({'worker_thread_timeout': 250, 'detect_timeout': 250}))
 
-    changes = config_migration.migrate_config_file(str(tmp_path), "app_config.json")
+    _, changes = config_migration.migrate_config_file(str(tmp_path), "app_config.json")
     assert len(changes) == 2
     persisted = json.loads(config_path.read_text())
     assert persisted['worker_thread_timeout_seconds'] == constants.WORKER_THREAD_TIMEOUT
@@ -303,21 +303,38 @@ def test_migrate_config_file_rewrites_disk_and_is_one_time(tmp_path):
 
     # Second run: the file is already stamped, so nothing is rewritten.
     before = config_path.read_text()
-    assert config_migration.migrate_config_file(str(tmp_path), "app_config.json") == []
+    migrated, changes = config_migration.migrate_config_file(str(tmp_path), "app_config.json")
+    assert changes == []
+    assert migrated == persisted
     assert config_path.read_text() == before
 
 
-def test_migrate_config_file_tolerates_missing_and_invalid_files(tmp_path):
-    """A missing or malformed config must not stop the app from starting."""
-    assert config_migration.migrate_config_file(str(tmp_path), "absent.json") == []
+def test_migrate_config_file_tolerates_missing_file(tmp_path):
+    """A missing config must not stop the app from starting (normal first run)."""
+    migrated, notes = config_migration.migrate_config_file(str(tmp_path), "absent.json")
+    assert migrated == {}
+    assert notes == []
 
+
+def test_migrate_config_file_tolerates_invalid_files(tmp_path, caplog):
+    """A malformed config degrades to a note, never an exception.
+
+    The app falls back to built-in defaults; the note tells the user why.
+    """
     bad = tmp_path / "bad.json"
     bad.write_text("{not json")
-    assert config_migration.migrate_config_file(str(tmp_path), "bad.json") == []
+    with caplog.at_level("WARNING", logger="src.core.config_migration"):
+        migrated, notes = config_migration.migrate_config_file(str(tmp_path), "bad.json")
+    assert migrated == {}
+    assert notes and "could not be read" in notes[0]
+    assert "Could not read" in caplog.text
 
     not_object = tmp_path / "list.json"
     not_object.write_text("[1, 2, 3]")
-    assert config_migration.migrate_config_file(str(tmp_path), "list.json") == []
+    with caplog.at_level("WARNING", logger="src.core.config_migration"):
+        migrated, notes = config_migration.migrate_config_file(str(tmp_path), "list.json")
+    assert migrated == {}
+    assert notes and "not a JSON object" in notes[0]
 
 
 def test_migrate_config_file_stamps_version_when_no_keys_to_convert(tmp_path):
@@ -326,8 +343,10 @@ def test_migrate_config_file_stamps_version_when_no_keys_to_convert(tmp_path):
     config_path = tmp_path / "app_config.json"
     config_path.write_text(json.dumps({'theme': 'dark'}))
 
-    assert config_migration.migrate_config_file(str(tmp_path), "app_config.json") == []
+    migrated, changes = config_migration.migrate_config_file(str(tmp_path), "app_config.json")
+    assert changes == []
     persisted = json.loads(config_path.read_text())
+    assert migrated == persisted
     assert persisted[constants.CONFIG_VERSION_KEY] == constants.CONFIG_VERSION
     assert persisted['theme'] == 'dark'
 
@@ -336,28 +355,219 @@ def test_migrate_config_file_survives_unwritable_file(tmp_path, caplog):
     """A config that cannot be rewritten must not prevent the app from starting.
 
     The in-memory defaults still apply, so a permissions problem degrades to a
-    warning rather than an exception.
+    warning rather than an exception. The failure is also *returned* as a note so
+    the GUI can announce that the on-disk file is stale.
     """
     config_path = tmp_path / "app_config.json"
     config_path.write_text(json.dumps({'detect_timeout': 250}))
 
     with patch("src.core.config_migration._write_config", side_effect=OSError("read-only")):
         with caplog.at_level("WARNING", logger="src.core.config_migration"):
-            changes = config_migration.migrate_config_file(str(tmp_path), "app_config.json")
+            _, changes = config_migration.migrate_config_file(str(tmp_path), "app_config.json")
 
-    assert len(changes) == 1  # the migration still ran in memory
+    assert len(changes) == 2  # the rewrite itself, plus the persistence-failure note
+    assert "could not be rewritten" in changes[-1]
     assert "Could not persist migrated config" in caplog.text
 
 
-def test_migrate_config_file_survives_unstampable_file(tmp_path, caplog):
-    """A key-less legacy config that cannot be stamped warns instead of raising."""
-    config_path = tmp_path / "app_config.json"
-    config_path.write_text(json.dumps({'theme': 'dark'}))
+def test_migrate_config_file_reports_unreadable_file(tmp_path):
+    """An unreadable config returns a note, so the user learns the file is stale."""
+    bad = tmp_path / "bad.json"
+    bad.write_text("{not json")
 
-    with patch("src.core.config_migration._write_config", side_effect=OSError("read-only")):
-        with caplog.at_level("WARNING", logger="src.core.config_migration"):
-            assert config_migration.migrate_config_file(str(tmp_path), "app_config.json") == []
-    assert "Could not stamp config version" in caplog.text
+    _, notes = config_migration.migrate_config_file(str(tmp_path), "bad.json")
+    assert notes, "an unreadable config must produce a user-visible note"
+    assert "could not be read" in notes[0]
+
+
+def test_migrate_config_file_reports_non_object_config(tmp_path):
+    """A non-object JSON config is reported rather than silently ignored."""
+    not_object = tmp_path / "list.json"
+    not_object.write_text("[1, 2, 3]")
+
+    _, notes = config_migration.migrate_config_file(str(tmp_path), "list.json")
+    assert notes and "not a JSON object" in notes[0]
+
+
+# ---------------------------------------------------------------------------
+# Migration must never silently discard an explicit *_seconds value
+# ---------------------------------------------------------------------------
+
+def test_migrate_config_keeps_existing_seconds_value_when_both_keys_present():
+    """A hand-added ``*_seconds`` value wins over the legacy millisecond key.
+
+    A partially applied upgrade or a restored backup can hold both spellings. The
+    ``*_seconds`` key is the one that states its unit, so overwriting it with a
+    converted legacy value would be an unrecoverable loss.
+    """
+    migrated, changes = config_migration.migrate_config({
+        'detect_timeout': 250, 'detect_timeout_seconds': 120,
+    })
+    assert migrated['detect_timeout_seconds'] == 120
+    assert 'detect_timeout' not in migrated
+    assert len(changes) == 1
+    assert "kept the existing detect_timeout_seconds=120" in changes[0]
+
+
+def test_migrate_config_keeps_existing_seconds_value_on_disk(tmp_path):
+    """The on-disk path keeps the explicit seconds value too, and stays stamped."""
+    config_path = tmp_path / "app_config.json"
+    config_path.write_text(json.dumps({'detect_timeout': 250, 'detect_timeout_seconds': 120}))
+
+    _, _ = config_migration.migrate_config_file(str(tmp_path), "app_config.json")
+    persisted = json.loads(config_path.read_text())
+    assert persisted['detect_timeout_seconds'] == 120
+    assert 'detect_timeout' not in persisted
+    assert persisted[constants.CONFIG_VERSION_KEY] == constants.CONFIG_VERSION
+
+
+# ---------------------------------------------------------------------------
+# Rename-only keys: the unit was already seconds
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("legacy_key", sorted(constants.RENAMED_TIMEOUT_KEYS))
+def test_migrate_config_renames_timeout_keys_without_converting(legacy_key):
+    """A key that already held seconds is renamed, never converted.
+
+    Converting these would silently turn a 300 s request timeout into 0.3 s.
+    """
+    seconds_key = constants.RENAMED_TIMEOUT_KEYS[legacy_key]
+    migrated, changes = config_migration.migrate_config({legacy_key: 300})
+    assert migrated[seconds_key] == 300
+    assert legacy_key not in migrated
+    assert len(changes) == 1
+    assert "renamed to" in changes[0]
+
+
+def test_migrate_config_keeps_existing_seconds_value_on_rename():
+    """When both spellings of a renamed key exist, the suffixed one is kept."""
+    migrated, changes = config_migration.migrate_config({
+        'helloz_nsfw_request_timeout': 300,
+        'helloz_nsfw_request_timeout_seconds': 45,
+    })
+    assert migrated['helloz_nsfw_request_timeout_seconds'] == 45
+    assert 'helloz_nsfw_request_timeout' not in migrated
+    assert "kept the existing" in changes[0]
+
+
+def test_migrate_config_file_renames_on_disk(tmp_path):
+    """The on-disk rewrite performs the rename too."""
+    config_path = tmp_path / "app_config.json"
+    config_path.write_text(json.dumps({'helloz_nsfw_request_timeout': 300}))
+
+    _, _ = config_migration.migrate_config_file(str(tmp_path), "app_config.json")
+    persisted = json.loads(config_path.read_text())
+    assert persisted['helloz_nsfw_request_timeout_seconds'] == 300
+    assert 'helloz_nsfw_request_timeout' not in persisted
+
+
+# ---------------------------------------------------------------------------
+# Logging policy and atomic persistence
+# ---------------------------------------------------------------------------
+
+def test_migrate_config_does_not_warn_when_nothing_to_migrate(caplog):
+    """A config with no legacy keys must not emit a misleading migration WARNING.
+
+    Regression guard: the summary warning fired unconditionally, so every first
+    run of a clean install told the user to review keys that were never present.
+    """
+    with caplog.at_level("WARNING", logger="src.core.config_migration"):
+        config_migration.migrate_config({'theme': 'dark'})
+    assert caplog.text == ""
+
+
+def test_migrate_config_warns_summary_only_on_real_change(caplog):
+    """The summary warning still fires when something was actually rewritten."""
+    with caplog.at_level("WARNING", logger="src.core.config_migration"):
+        config_migration.migrate_config({'detect_timeout': 250})
+    assert "Config migrated to version" in caplog.text
+
+
+def test_write_config_is_atomic_and_ends_with_newline(tmp_path):
+    """The rewrite must not truncate the user's only config file, and must end
+    with a newline for POSIX tooling."""
+    target = tmp_path / "app_config.json"
+    target.write_text('{"theme": "dark"}')
+
+    config_migration._write_config(str(target), {'theme': 'light'})
+
+    assert target.read_text().endswith('\n')
+    assert json.loads(target.read_text()) == {'theme': 'light'}
+    # No temp files left behind.
+    assert [p.name for p in tmp_path.iterdir()] == ['app_config.json']
+
+
+def test_write_config_leaves_no_temp_file_on_failure(tmp_path):
+    """A failed write leaves the original file intact and no debris behind."""
+    target = tmp_path / "app_config.json"
+    target.write_text('{"theme": "dark"}')
+
+    with patch("src.core.config_migration.json.dump", side_effect=OSError("disk full")):
+        with pytest.raises(OSError):
+            config_migration._write_config(str(target), {'theme': 'light'})
+
+    assert target.read_text() == '{"theme": "dark"}'
+    assert [p.name for p in tmp_path.iterdir()] == ['app_config.json']
+
+
+def test_migrate_config_file_defaults_to_constants_paths():
+    """The default arguments come from constants.py, not a duplicated literal."""
+    assert config_migration.CONFIG_DIR == constants.CONFIG_DIR
+    assert config_migration.CONFIG_FILE_NAME == constants.CONFIG_FILE_NAME
+
+
+def test_legacy_key_rename_and_default_are_one_mapping():
+    """The rename and its fallback default cannot drift apart.
+
+    AGENTS.md §C: the mapping and its defaults live together in constants.py, so a
+    new legacy key cannot be added with a rename but no fallback (or vice versa).
+    """
+    for legacy_key, entry in constants.LEGACY_MILLISECOND_TIMEOUT_KEYS.items():
+        seconds_key, fallback = entry
+        assert seconds_key.endswith('_seconds')
+        assert fallback >= constants.MIN_MIGRATABLE_SECONDS
+
+
+# ---------------------------------------------------------------------------
+# Config/constant default divergence
+# ---------------------------------------------------------------------------
+
+def test_shipped_defaults_equal_constants():
+    """Every constant-backed shipped default equals its constant.
+
+    Guards the ``helloz_nsfw_request_timeout: 300`` / ``video_frame_rate: 10``
+    mismatches against 30 s and 5: config and code must agree on day one.
+    """
+    cfg = _load_default_config()
+    for key, default in constants.CONFIG_DEFAULT_ALIGNMENT.items():
+        assert cfg[key] == default, f"shipped default for {key} diverges from constants.py"
+
+
+def test_log_config_default_divergences_reports_mismatch(caplog):
+    """A right-unit / wrong-magnitude value is reported, never rewritten."""
+    with caplog.at_level("WARNING", logger="src.core.constants"):
+        divergences = constants.log_config_default_divergences({
+            'helloz_nsfw_request_timeout_seconds': 300,
+        })
+    assert len(divergences) == 1
+    assert "helloz_nsfw_request_timeout_seconds" in divergences[0]
+    assert "300" in divergences[0]
+    assert "Config value divergence" in caplog.text
+
+
+def test_log_config_default_divergences_is_quiet_when_aligned(caplog):
+    """An aligned config produces no divergence note."""
+    with caplog.at_level("WARNING", logger="src.core.constants"):
+        divergences = constants.log_config_default_divergences({
+            'helloz_nsfw_request_timeout_seconds': constants.HELLOZ_NSFW_REQUEST_TIMEOUT,
+        })
+    assert divergences == []
+    assert caplog.text == ""
+
+
+def test_log_config_default_divergences_ignores_absent_keys():
+    """A key the config does not set is not a divergence."""
+    assert constants.log_config_default_divergences({}) == []
 
 
 # ---------------------------------------------------------------------------
@@ -371,21 +581,25 @@ FIXTURE_CONSTANT_KEYS = [
     ("theme", constants.THEME_DARK),
     ("threshold_percent", constants.DEFAULT_THRESHOLD_PERCENT),
     ("progress_update_interval", constants.SCAN_PROGRESS_UPDATE_INTERVAL),
+    ("video_frame_rate", constants.VIDEO_FRAME_RATE),
     ("worker_thread_count", constants.WORKER_THREAD_COUNT),
     ("worker_thread_timeout_seconds", constants.WORKER_THREAD_TIMEOUT),
     ("detect_timeout_seconds", constants.DETECT_TIMEOUT),
     ("helloz_nsfw_host", constants.HELLOZ_NSFW_HOST),
     ("helloz_nsfw_port", constants.HELLOZ_NSFW_PORT),
     ("helloz_nsfw_api_endpoint", constants.HELLOZ_NSFW_API_ENDPOINT),
+    ("helloz_nsfw_request_timeout_seconds", constants.HELLOZ_NSFW_REQUEST_TIMEOUT),
+    ("helloz_nsfw_health_check_timeout_seconds", constants.HELLOZ_NSFW_HEALTH_CHECK_TIMEOUT),
 ]
 
 # Keys present in the fixture that are not backed by a constant.
 FIXTURE_NON_CONSTANT_KEYS = {
     "config_version", "model", "last_source_folder",
     # Dead keys retained as reference only; removal tracked in issue #104.
-    "video_frame_rate", "nudenet_worker_thread_count", "nudenet_worker_thread_timeout",
-    "helloz_nsfw_worker_thread_count", "helloz_nsfw_worker_thread_timeout",
-    "helloz_nsfw_request_timeout", "helloz_nsfw_health_check_timeout",
+    "nudenet_worker_thread_count",
+    "helloz_nsfw_worker_thread_count",
+    "nudenet_worker_thread_timeout_seconds",
+    "helloz_nsfw_worker_thread_timeout_seconds",
 }
 
 
@@ -413,10 +627,23 @@ def test_fixture_migrates_cleanly():
 
 
 def test_legacy_millisecond_key_names_are_absent_from_fixture():
-    """The fixture must not ship the pre-migration key names."""
+    """The fixture must not ship any pre-migration key name."""
     cfg = _load_default_config()
     for legacy_key in constants.LEGACY_MILLISECOND_TIMEOUT_KEYS:
         assert legacy_key not in cfg
+    for legacy_key in constants.RENAMED_TIMEOUT_KEYS:
+        assert legacy_key not in cfg
+
+
+def test_fixture_timeout_keys_all_declare_their_unit():
+    """Every fixture key whose name ends in ``_timeout`` must state its unit.
+
+    The whole premise of ADD-007 is that the suffix is the unit declaration; a
+    bare ``*_timeout`` key would make the suffix an unreliable marker again.
+    """
+    for key in _load_default_config():
+        if key.endswith('_timeout'):
+            pytest.fail(f"fixture key {key} does not state its unit; expected a *_timeout_seconds name")
 
 
 def test_fixture_only_contains_known_keys():

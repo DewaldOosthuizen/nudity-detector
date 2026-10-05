@@ -249,11 +249,40 @@ MILLISECONDS_PER_SECOND = 1000
 CONFIG_VERSION = 2
 CONFIG_VERSION_KEY = 'config_version'
 
-# Keys whose unit changed in CONFIG_VERSION 2: legacy_key -> seconds_key.
+# Keys whose unit changed in CONFIG_VERSION 2, mapping
+# legacy_key -> (seconds_key, fallback_seconds). The rename and the fallback live
+# in one mapping so they cannot drift apart. ``fallback_seconds`` is used when the
+# legacy millisecond value cannot be honoured as whole seconds.
 LEGACY_MILLISECOND_TIMEOUT_KEYS = {
-    'worker_thread_timeout': 'worker_thread_timeout_seconds',
-    'detect_timeout': 'detect_timeout_seconds',
+    'worker_thread_timeout': ('worker_thread_timeout_seconds', WORKER_THREAD_TIMEOUT),
+    'detect_timeout': ('detect_timeout_seconds', DETECT_TIMEOUT),
 }
+
+# Timeout keys renamed in CONFIG_VERSION 2 purely so their key name states the
+# unit. These already held seconds before ADD-007 and still do, so the migration
+# renames them without converting the value — leaving them unsuffixed would keep
+# the suffix an unreliable unit marker, which is the ambiguity ADD-007 removes.
+RENAMED_TIMEOUT_KEYS = {
+    'helloz_nsfw_request_timeout': 'helloz_nsfw_request_timeout_seconds',
+    'helloz_nsfw_health_check_timeout': 'helloz_nsfw_health_check_timeout_seconds',
+    'nudenet_worker_thread_timeout': 'nudenet_worker_thread_timeout_seconds',
+    'helloz_nsfw_worker_thread_timeout': 'helloz_nsfw_worker_thread_timeout_seconds',
+}
+
+# Constant-backed config keys whose *shipped* default must equal the constant, so
+# config and code agree on day one. A configured value is honoured as written
+# (only its type is coerced); a divergence between the shipped default and the
+# constant is what silently handed users a 300 s request timeout where the code
+# default is 30 s, so it is logged at WARNING on startup.
+CONFIG_DEFAULT_ALIGNMENT = {
+    'video_frame_rate': VIDEO_FRAME_RATE,
+    'worker_thread_count': WORKER_THREAD_COUNT,
+    'worker_thread_timeout_seconds': WORKER_THREAD_TIMEOUT,
+    'detect_timeout_seconds': DETECT_TIMEOUT,
+    'helloz_nsfw_request_timeout_seconds': HELLOZ_NSFW_REQUEST_TIMEOUT,
+    'helloz_nsfw_health_check_timeout_seconds': HELLOZ_NSFW_HEALTH_CHECK_TIMEOUT,
+}
+
 
 # Values smaller than this cannot be honoured as seconds: a legacy millisecond
 # value below 500 ms rounds to 0 s, which would make every detection time out
@@ -341,6 +370,40 @@ def normalize_timeout_seconds(value, default_seconds, name=None):
         rather than silently presenting as a default.
     """
     return normalize_positive_int(value, default_seconds, name=name, min_value=1)
+
+
+def log_config_default_divergences(cfg, expectations=None):
+    """Warn about config keys whose configured value differs from its constant default.
+
+    ADD-007 removed the *unit* mismatch, but it cannot detect a value that is the
+    right unit and the wrong magnitude relative to the constant — the constant is
+    not consulted once the key is present. A divergent value is legitimate for a
+    hand-tuned setting, so it is never rewritten; the user is only told, per
+    ADD-007's own argument that a change the user never sees is a change they
+    cannot correct.
+
+    Args:
+        cfg: Loaded config mapping.
+        expectations: Mapping of key -> constant default. Defaults to
+            :data:`CONFIG_DEFAULT_ALIGNMENT`.
+
+    Returns:
+        List of human-readable descriptions of every divergence found.
+    """
+    expected_defaults = CONFIG_DEFAULT_ALIGNMENT if expectations is None else expectations
+    divergences = []
+    for key, default in expected_defaults.items():
+        if key not in cfg:
+            continue
+        configured = normalize_positive_int(cfg.get(key), default, name=key)
+        if configured != default:
+            description = (
+                f"{key}: configured value {configured} differs from the code default of "
+                f"{default}; the configured value is used"
+            )
+            logger.warning("Config value divergence: %s", description)
+            divergences.append(description)
+    return divergences
 
 
 # ============================================================================

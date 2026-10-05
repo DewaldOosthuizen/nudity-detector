@@ -13,35 +13,35 @@ milliseconds or seconds from the magnitude of the value (``>= 1000`` meant
 The unit is now *stated* instead of guessed. The config carries a
 ``config_version`` field; a config without it (or below
 :data:`src.core.constants.CONFIG_VERSION`) predates the seconds contract, so its
-legacy millisecond timeout keys are converted once, deterministically, on load and
-the file is stamped with the current version. Subsequent loads take the seconds
-branch and no value is ever re-interpreted.
+legacy timeout keys are converted once, deterministically, and the file is
+rewritten with the current key names and version. Subsequent loads take the
+seconds branch and no value is ever re-interpreted.
 
-This module is pure: it takes a dict and returns a new dict plus a list of
-human-readable change descriptions. The caller decides whether to persist.
+Two entry points:
+
+* :func:`migrate_config` — pure; migrates a loaded dict and returns the new dict
+  plus human-readable change descriptions.
+* :func:`migrate_config_file` — reads the on-disk config, migrates it and persists
+  the rewrite atomically, so the conversion is recorded on disk once and never
+  depends on the user happening to change a setting in the GUI.
 """
 import json
 import logging
 import os
+import tempfile
 
 from .constants import (
+    CONFIG_DIR,
+    CONFIG_FILE_NAME,
     CONFIG_VERSION,
     CONFIG_VERSION_KEY,
-    DETECT_TIMEOUT,
     LEGACY_MILLISECOND_TIMEOUT_KEYS,
     MILLISECONDS_PER_SECOND,
     MIN_MIGRATABLE_SECONDS,
-    WORKER_THREAD_TIMEOUT,
+    RENAMED_TIMEOUT_KEYS,
 )
 
 logger = logging.getLogger(__name__)
-
-# The seconds default each legacy millisecond key migrates to when it cannot be
-# converted faithfully (sub-second value, or unparseable value).
-LEGACY_KEY_DEFAULTS = {
-    'worker_thread_timeout': WORKER_THREAD_TIMEOUT,
-    'detect_timeout': DETECT_TIMEOUT,
-}
 
 
 def config_version(cfg):
@@ -94,7 +94,7 @@ def _convert_milliseconds_to_seconds(raw_value, default_seconds, key):
         key: Legacy key name, used for the change description and log message.
 
     Returns:
-        Tuple of (seconds_value, change_description_or_None).
+        Tuple of (seconds_value, change_description).
     """
     if isinstance(raw_value, bool):
         return default_seconds, f"{key}: boolean {raw_value!r} replaced with {default_seconds} s"
@@ -110,6 +110,58 @@ def _convert_milliseconds_to_seconds(raw_value, default_seconds, key):
             f"{key}: legacy {milliseconds} ms is sub-second, replaced with {default_seconds} s",
         )
     return seconds, f"{key}: legacy {milliseconds} ms migrated to {seconds} s"
+
+
+def _migrate_millisecond_keys(migrated, changes):
+    """Convert every legacy millisecond timeout key in ``migrated`` to seconds.
+
+    A hand-edited or partially-updated config can carry both spellings of a key.
+    The ``*_seconds`` key is then authoritative — it is the one that states its
+    unit — so the legacy key is dropped and the existing value kept rather than
+    silently overwritten.
+
+    Args:
+        migrated: Config mapping being built; mutated in place.
+        changes: List of change descriptions appended to in place.
+    """
+    for legacy_key, (seconds_key, default_seconds) in LEGACY_MILLISECOND_TIMEOUT_KEYS.items():
+        if legacy_key not in migrated:
+            # A config may legitimately omit the key; the constant default applies.
+            continue
+        raw_value = migrated.pop(legacy_key)
+        if seconds_key in migrated:
+            changes.append(
+                f"{legacy_key}: legacy millisecond key dropped; kept the existing "
+                f"{seconds_key}={migrated[seconds_key]} s"
+            )
+            continue
+        seconds, description = _convert_milliseconds_to_seconds(raw_value, default_seconds, legacy_key)
+        migrated[seconds_key] = seconds
+        changes.append(description)
+
+
+def _rename_timeout_keys(migrated, changes):
+    """Rename timeout keys that already held seconds but lacked the unit suffix.
+
+    These keys were read as seconds before ADD-007 (and still are), so this is a
+    pure rename: no value is converted, only the key name changes to state the
+    unit that was always true.
+
+    Args:
+        migrated: Config mapping being built; mutated in place.
+        changes: List of change descriptions appended to in place.
+    """
+    for legacy_key, seconds_key in RENAMED_TIMEOUT_KEYS.items():
+        if legacy_key not in migrated:
+            continue
+        value = migrated.pop(legacy_key)
+        if seconds_key in migrated:
+            changes.append(
+                f"{legacy_key}: dropped; kept the existing {seconds_key}={migrated[seconds_key]} s"
+            )
+            continue
+        migrated[seconds_key] = value
+        changes.append(f"{legacy_key}: renamed to {seconds_key} (value unchanged, already in seconds)")
 
 
 def migrate_config(cfg):
@@ -133,78 +185,36 @@ def migrate_config(cfg):
     migrated = {key: value for key, value in cfg.items() if key != CONFIG_VERSION_KEY}
     changes = []
 
-    for legacy_key, seconds_key in LEGACY_MILLISECOND_TIMEOUT_KEYS.items():
-        if legacy_key not in migrated:
-            # A config may legitimately omit the key; the constant default applies.
-            continue
-        raw_value = migrated.pop(legacy_key)
-        seconds, description = _convert_milliseconds_to_seconds(
-            raw_value, LEGACY_KEY_DEFAULTS[legacy_key], legacy_key,
-        )
-        migrated[seconds_key] = seconds
-        changes.append(description)
+    _migrate_millisecond_keys(migrated, changes)
+    _rename_timeout_keys(migrated, changes)
 
     migrated[CONFIG_VERSION_KEY] = CONFIG_VERSION
     for description in changes:
         logger.warning("Config migration: %s", description)
-    logger.warning(
-        "Config migrated to version %s (timeouts are now in seconds). Review %s in "
-        "config/%s before relying on the migrated values.",
-        CONFIG_VERSION, ' and '.join(LEGACY_MILLISECOND_TIMEOUT_KEYS.values()), 'app_config.json',
-    )
+    if changes:
+        # WARNING only when something was actually rewritten: the whole argument
+        # of ADD-007 is that a rewrite the user cannot see is a rewrite they
+        # cannot correct. A fresh install has nothing to rewrite.
+        logger.warning(
+            "Config migrated to version %s (timeout keys now state their unit in "
+            "seconds). Review them in %s before relying on the migrated values.",
+            CONFIG_VERSION, os.path.join(CONFIG_DIR, CONFIG_FILE_NAME),
+        )
+    else:
+        logger.debug(
+            "Config contains no legacy timeout keys; stamped with version %s", CONFIG_VERSION,
+        )
     return migrated, changes
 
 
-def migrate_config_file(config_dir, config_file_name):
-    """Migrate the on-disk config file in place, if it needs migration.
-
-    Used by the GUI on startup so the conversion happens once rather than on every
-    read. Failures (missing file, unreadable, unwritable directory) are logged and
-    swallowed: a config that cannot be persisted must still start the application,
-    which will fall back to the in-memory defaults.
-
-    Args:
-        config_dir: Directory holding the config file.
-        config_file_name: File name of the config file.
-
-    Returns:
-        List of change descriptions performed; empty when nothing was migrated or
-        the file could not be read.
-    """
-    config_path = os.path.join(config_dir, config_file_name)
-    if not os.path.exists(config_path):
-        return []
-    try:
-        with open(config_path, 'r', encoding='utf-8') as handle:
-            cfg = json.load(handle)
-    except (OSError, ValueError) as exc:
-        logger.warning("Could not read %s for migration (%s); using defaults", config_path, exc)
-        return []
-    if not isinstance(cfg, dict):
-        logger.warning("%s is not a JSON object; skipping config migration", config_path)
-        return []
-
-    migrated, changes = migrate_config(cfg)
-    if not changes:
-        # Nothing was rewritten, but stamp the version so the legacy branch is
-        # never evaluated again for this file.
-        if config_version(cfg) >= CONFIG_VERSION:
-            return []
-        try:
-            _write_config(config_path, migrated)
-        except OSError as exc:
-            logger.warning("Could not stamp config version in %s (%s)", config_path, exc)
-        return []
-
-    try:
-        _write_config(config_path, migrated)
-    except OSError as exc:
-        logger.warning("Could not persist migrated config to %s (%s)", config_path, exc)
-    return changes
-
-
 def _write_config(config_path, data):
-    """Write ``data`` as formatted JSON to ``config_path``.
+    """Write ``data`` as formatted JSON to ``config_path``, atomically.
+
+    The config file is the user's only copy of their settings (theme, model, last
+    source folder as well as timeouts), so it is never truncated in place: the
+    JSON is streamed to a sibling temp file in the same directory and then moved
+    over the target with :func:`os.replace`, which is atomic on POSIX and stays
+    on the same filesystem.
 
     Args:
         config_path: Destination path.
@@ -213,5 +223,74 @@ def _write_config(config_path, data):
     Raises:
         OSError: If the file cannot be written.
     """
-    with open(config_path, 'w', encoding='utf-8') as handle:
-        json.dump(data, handle, indent=2)
+    directory = os.path.dirname(config_path) or '.'
+    descriptor, temp_path = tempfile.mkstemp(dir=directory, prefix='.app_config.', suffix='.tmp')
+    try:
+        with os.fdopen(descriptor, 'w', encoding='utf-8') as handle:
+            json.dump(data, handle, indent=2)
+            handle.write('\n')
+        os.replace(temp_path, config_path)
+    except BaseException:
+        # Never leave a partial temp file behind on failure.
+        try:
+            os.unlink(temp_path)
+        except OSError:
+            pass
+        raise
+
+
+def migrate_config_file(config_dir=None, config_file_name=None, cfg=None):
+    """Migrate the on-disk config file in place, if it needs migration.
+
+    Called on GUI startup so the conversion is persisted once, rather than being
+    re-derived on every launch and only reaching disk when the user next saves a
+    setting. Failures are logged *and* returned as note strings so the caller can
+    surface them in the activity log: a config that cannot be read or rewritten is
+    exactly the state where the user most needs to be told the file is stale.
+
+    Args:
+        config_dir: Directory holding the config file. Defaults to
+            :data:`src.core.constants.CONFIG_DIR`.
+        config_file_name: File name of the config file. Defaults to
+            :data:`src.core.constants.CONFIG_FILE_NAME`.
+        cfg: Already-loaded config mapping, when the caller has read the file
+            itself. Passing it avoids a second read of the same file and keeps the
+            migrated result consistent with what the caller is about to use. When
+            None the file is read from disk.
+
+    Returns:
+        Tuple of ``(migrated_cfg, notes)``. ``migrated_cfg`` is the dict the caller
+        should read settings from; it is empty when the file could not be read.
+        ``notes`` holds one entry per rewrite plus an entry naming the file
+        whenever it could not be read, migrated or persisted. Both are empty when
+        the file is absent and empty when it is already at the current version.
+    """
+    config_path = os.path.join(config_dir or CONFIG_DIR, config_file_name or CONFIG_FILE_NAME)
+    if cfg is None:
+        try:
+            with open(config_path, 'r', encoding='utf-8') as handle:
+                cfg = json.load(handle)
+        except FileNotFoundError:
+            # A fresh install has no config yet; the app writes one on first save.
+            return {}, []
+        except (OSError, ValueError) as exc:
+            logger.warning("Could not read %s for migration (%s); using defaults", config_path, exc)
+            return {}, [f"{config_path} could not be read for migration ({exc}); the file is left as-is"]
+    if not isinstance(cfg, dict):
+        logger.warning("%s is not a JSON object; skipping config migration", config_path)
+        return {}, [f"{config_path} is not a JSON object; it is ignored and will be retried on every start"]
+
+    migrated, changes = migrate_config(cfg)
+    if not changes and config_version(cfg) >= CONFIG_VERSION:
+        return dict(cfg), []
+
+    try:
+        _write_config(config_path, migrated)
+    except OSError as exc:
+        # Note is returned, not just logged: the on-disk and in-memory views now
+        # diverge and the user must be told (ADD-007 section 3).
+        logger.warning("Could not persist migrated config to %s (%s)", config_path, exc)
+        return migrated, changes + [
+            f"{config_path} could not be rewritten ({exc}); the migration will be re-applied on every start"
+        ]
+    return migrated, changes

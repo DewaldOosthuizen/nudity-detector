@@ -5,17 +5,17 @@
   "threshold_percent": 60.0,
   "last_source_folder": "",
   "progress_update_interval": 100,
-  "video_frame_rate": 10,
+  "video_frame_rate": 5,
   "worker_thread_count": 10,
   "worker_thread_timeout_seconds": 5,
   "nudenet_worker_thread_count": 4,
-  "nudenet_worker_thread_timeout": 10,
+  "nudenet_worker_thread_timeout_seconds": 10,
   "helloz_nsfw_worker_thread_count": 20,
-  "helloz_nsfw_worker_thread_timeout": 35,
+  "helloz_nsfw_worker_thread_timeout_seconds": 35,
   "detect_timeout_seconds": 60,
   "helloz_nsfw_host": "localhost",
   "helloz_nsfw_port": 6086,
   "helloz_nsfw_api_endpoint": "/api/upload_check",
-  "helloz_nsfw_request_timeout": 300,
-  "helloz_nsfw_health_check_timeout": 5
+  "helloz_nsfw_request_timeout_seconds": 30,
+  "helloz_nsfw_health_check_timeout_seconds": 5
 }
