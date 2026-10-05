@@ -205,6 +205,18 @@ reference entries: `nudenet_worker_thread_count`,
 and `constants.DEAD_CONFIG_KEYS` is the single source of that list — a test greps
 `src/` for every shipped key, so a key cannot be documented as live without a reader.
 
+Because no code reads them, the two dead `*_worker_thread_timeout` keys are **not**
+renamed by the migration: there is no value in flight whose unit needs restating, and
+no code path ever established their pre-rename unit, so renaming them forward would
+rest on an assumption no test can verify. Issue #104 deletes them instead.
+
+The "retained as reference" state describes the *shipped defaults* in `.env.example`
+and `tests/fixtures/app_config.default.json` only. A config written by the GUI
+(`_save_config`, run on quit and on every theme change) contains just the 15 live
+keys, so the four dead entries are **dropped from your own
+`config/app_config.json` on the first save** — the shipped tables are the reference,
+not a promise about the file on disk.
+
 Only `worker_thread_count` is read for the worker pool; the per-detector counts above
 are inert.
 
@@ -224,9 +236,8 @@ deterministically:
   values that round to 0 s: 250 ms is 0.25 s and 700 ms is 0.7 s, neither of which is
   a usable whole-second timeout, and rounding either up to 1 s would time out on
   essentially every file.
-- Four keys that already held seconds but lacked the suffix
-  (`helloz_nsfw_request_timeout`, `helloz_nsfw_health_check_timeout`,
-  `nudenet_worker_thread_timeout`, `helloz_nsfw_worker_thread_timeout`) are **renamed**
+- Two keys that already held seconds but lacked the suffix
+  (`helloz_nsfw_request_timeout`, `helloz_nsfw_health_check_timeout`) are **renamed**
   with their values untouched — the unit was always seconds for those keys.
 - When a config carries *both* spellings of a key, the `_seconds` value is authoritative:
   the legacy key is dropped and the explicit value kept, never overwritten.
@@ -246,10 +257,11 @@ both sets (`FIXTURE_NON_CONSTANT_KEYS` / `constants.DEAD_CONFIG_KEYS`) so the
 classification cannot drift.
 
 Every numeric config value — in `__init__` and in every widget accessor — is coerced by
-`constants.normalize_positive_int` / `constants.normalize_timeout_seconds`: an
+`constants.normalize_positive_int` / `constants.normalize_timeout_seconds`, and the
+one float key (`threshold_percent`) by `constants.normalize_threshold_percent`: an
 unparseable, boolean, or out-of-range value falls back to the constant default (or is
 clamped to the documented bound) and is logged at WARNING level, so no config error is
-applied silently.
+applied silently — and none of them can abort startup.
 
 Supported ranges: `helloz_nsfw_port` is clamped to `1..65535`, and the timeout keys to
 their `TIMEOUT_MAX_SECONDS` bound (`worker_thread_timeout_seconds` and

@@ -28,6 +28,7 @@ Two entry points:
 import json
 import logging
 import os
+import stat
 import tempfile
 
 from .constants import (
@@ -224,8 +225,10 @@ def write_config(config_path, data):
     neither can truncate the user's only config file. The config file is the user's
     only copy of their settings (theme, model, last source folder as well as
     timeouts), so it is never written in place: the JSON is streamed to a sibling
-    temp file in the same directory and then moved over the target with
+    temp file and then moved over the target with
     :func:`os.replace`, which is atomic on POSIX and stays on the same filesystem.
+    The replacement also preserves the target's permissions: an atomic write
+    changes the file's *contents*, never its mode.
 
     Args:
         config_path: Destination path.
@@ -235,8 +238,19 @@ def write_config(config_path, data):
         OSError: If the file cannot be written.
     """
     directory = os.path.dirname(config_path) or '.'
+    # ``tempfile.mkstemp`` always creates 0600. Installing that file with
+    # ``os.replace`` would silently narrow an existing, group- or world-readable
+    # config to owner-only, which is a permissions regression this write has no
+    # business causing: the file's contents may change, its mode must not. So the
+    # existing mode is carried over, and a brand-new file gets the process umask
+    # applied (what ``open(path, 'w')`` would have produced).
+    try:
+        existing_mode = stat.S_IMODE(os.stat(config_path).st_mode)
+    except OSError:
+        existing_mode = 0o666 & ~_current_umask()
     descriptor, temp_path = tempfile.mkstemp(dir=directory, prefix='.app_config.', suffix='.tmp')
     try:
+        os.chmod(temp_path, existing_mode)
         with os.fdopen(descriptor, 'w', encoding='utf-8') as handle:
             json.dump(data, handle, indent=2)
             handle.write('\n')
@@ -248,6 +262,22 @@ def write_config(config_path, data):
         except OSError:
             pass
         raise
+
+
+def _current_umask():
+    """Return the process umask without leaving it changed.
+
+    ``os.umask`` has no getter, so the value is read by setting it to itself and
+    restoring it immediately. This is not thread-safe in principle, but the
+    alternative — creating the file and then widening it by a fixed offset from
+    the mkstemp 0600 — cannot express a restrictive umask at all.
+
+    Returns:
+        The current umask as an int.
+    """
+    mask = os.umask(0)
+    os.umask(mask)
+    return mask
 
 
 def migrate_config_file(config_dir=None, config_file_name=None, cfg=None):

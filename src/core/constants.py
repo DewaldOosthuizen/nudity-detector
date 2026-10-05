@@ -262,11 +262,19 @@ LEGACY_MILLISECOND_TIMEOUT_KEYS = {
 # unit. These already held seconds before ADD-007 and still do, so the migration
 # renames them without converting the value — leaving them unsuffixed would keep
 # the suffix an unreliable unit marker, which is the ambiguity ADD-007 removes.
+#
+# Only keys with a reader belong here: the rename exists so the *value the app
+# uses* states its unit, and a key nothing reads has no established unit to
+# preserve. ``nudenet_worker_thread_timeout`` and
+# ``helloz_nsfw_worker_thread_timeout`` are deliberately NOT listed even though
+# they would fit mechanically — this PR's own tests classify them as dead (see
+# :data:`DEAD_CONFIG_KEYS`), so migrating them would spend a schema-version bump
+# and a user-facing change note to rewrite a value nothing consumes, on the
+# unverifiable premise that their pre-rename unit "was always seconds". They are
+# removed by issue #104 rather than renamed forward here.
 RENAMED_TIMEOUT_KEYS = {
     'helloz_nsfw_request_timeout': 'helloz_nsfw_request_timeout_seconds',
     'helloz_nsfw_health_check_timeout': 'helloz_nsfw_health_check_timeout_seconds',
-    'nudenet_worker_thread_timeout': 'nudenet_worker_thread_timeout_seconds',
-    'helloz_nsfw_worker_thread_timeout': 'helloz_nsfw_worker_thread_timeout_seconds',
 }
 
 # Constant-backed config keys whose *shipped* default must equal the constant, so
@@ -437,6 +445,86 @@ def normalize_timeout_seconds(value, default_seconds, name=None, max_seconds=Non
     return normalize_positive_int(
         value, default_seconds, name=name, min_value=1, max_value=max_seconds,
     )
+
+
+def normalize_threshold_percent(value, default=None, name=None):
+    """Coerce a possibly-invalid ``threshold_percent`` to a float percentage.
+
+    The sibling of :func:`normalize_positive_int` for the one numeric config key
+    that is a float rather than a count. It closes the same hole for the same
+    reason (ADD-007): a raw ``float(cfg.get('threshold_percent', ...))`` lets a
+    hand-edited ``"abc"``, ``true`` or ``{}`` raise out of the window constructor,
+    so the application never starts — a config error that is not merely applied
+    silently but fatal.
+
+    Args:
+        value: Raw configured value; may be None, a numeric string, a bool, or garbage.
+        default: Fallback in percent when the value is absent or unparseable.
+            Defaults to :data:`DEFAULT_THRESHOLD_PERCENT`.
+        name: Optional setting name, used only to make log messages actionable.
+
+    Returns:
+        A float within ``[MIN_THRESHOLD_PERCENT, MAX_THRESHOLD_PERCENT]``.
+
+    Raises:
+        Nothing. ``bool`` is rejected explicitly (a JSON ``true`` in a numeric key
+        is a user error, not the value 1.0), ``None`` is treated as "not configured"
+        at DEBUG level, and every other rewrite is logged at WARNING so no config
+        error is silent.
+    """
+    label = name or 'threshold_percent'
+    fallback = DEFAULT_THRESHOLD_PERCENT if default is None else default
+    if value is None:
+        logger.debug("%s is not configured; using default of %s", label, fallback)
+        return _clamp_threshold(fallback, fallback, label)
+    if isinstance(value, bool):
+        logger.warning(
+            "%s value %r is a boolean, not a number; using default of %s",
+            label, value, fallback,
+        )
+        return _clamp_threshold(fallback, fallback, label)
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError, OverflowError):
+        # OverflowError: float of a huge Decimal/int can raise it.
+        logger.warning(
+            "%s value %r is not a valid number; using default of %s",
+            label, value, fallback,
+        )
+        return _clamp_threshold(fallback, fallback, label)
+    if numeric != numeric or numeric in (float('inf'), float('-inf')):
+        # NaN fails every comparison below, so it must be rejected explicitly.
+        logger.warning("%s value %r is not finite; using default of %s", label, value, fallback)
+        return _clamp_threshold(fallback, fallback, label)
+    if numeric < MIN_THRESHOLD_PERCENT or numeric > MAX_THRESHOLD_PERCENT:
+        clamped = min(MAX_THRESHOLD_PERCENT, max(MIN_THRESHOLD_PERCENT, numeric))
+        logger.warning(
+            "%s value %s is outside the supported range %s-%s; using %s",
+            label, numeric, MIN_THRESHOLD_PERCENT, MAX_THRESHOLD_PERCENT, clamped,
+        )
+        return clamped
+    return numeric
+
+
+def _clamp_threshold(value, fallback, label):
+    """Clamp ``value`` into the threshold range, falling back when out of range.
+
+    Args:
+        value: Candidate percentage.
+        fallback: Value to use when ``value`` is itself out of range.
+        label: Setting name, used only for the WARNING message.
+
+    Returns:
+        A float within ``[MIN_THRESHOLD_PERCENT, MAX_THRESHOLD_PERCENT]``.
+    """
+    if MIN_THRESHOLD_PERCENT <= value <= MAX_THRESHOLD_PERCENT:
+        return float(value)
+    clamped_fallback = min(MAX_THRESHOLD_PERCENT, max(MIN_THRESHOLD_PERCENT, fallback))
+    logger.warning(
+        "%s default of %s is itself outside the supported range %s-%s; using %s",
+        label, value, MIN_THRESHOLD_PERCENT, MAX_THRESHOLD_PERCENT, clamped_fallback,
+    )
+    return clamped_fallback
 
 
 def log_config_default_divergences(cfg, expectations=None):

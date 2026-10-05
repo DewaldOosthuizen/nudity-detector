@@ -10,6 +10,7 @@ Two layers are covered:
 import json
 import os
 import re
+import stat
 from unittest.mock import patch
 
 import pytest
@@ -909,3 +910,158 @@ def test_constants_are_seconds_scale():
     assert constants.DETECT_TIMEOUT == 60
     assert constants.HELLOZ_NSFW_REQUEST_TIMEOUT == 30
     assert constants.HELLOZ_NSFW_HEALTH_CHECK_TIMEOUT == 5
+
+
+# ---------------------------------------------------------------------------
+# threshold_percent — the float config key must not be able to abort startup
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("bad_value", ["abc", True, {}, [], float("nan"), float("inf"), float("-inf")])
+def test_normalize_threshold_percent_falls_back_for_unusable_values(bad_value, caplog):
+    """An unusable threshold never raises; it falls back and is named in the log.
+
+    Regression guard: ``float(cfg.get('threshold_percent', ...))`` in the window
+    constructor raised for every one of these, so the app never started.
+    """
+    with caplog.at_level("WARNING", logger="src.core.constants"):
+        result = constants.normalize_threshold_percent(bad_value)
+    assert result == constants.DEFAULT_THRESHOLD_PERCENT
+    assert "threshold_percent" in caplog.text
+
+
+def test_normalize_threshold_percent_uses_default_when_absent(caplog):
+    """A missing key is normal, not a defect: DEBUG at most, never WARNING."""
+    with caplog.at_level("WARNING", logger="src.core.constants"):
+        assert constants.normalize_threshold_percent(None) == constants.DEFAULT_THRESHOLD_PERCENT
+    assert caplog.text == ""
+
+
+@pytest.mark.parametrize(
+    "raw, expected",
+    [(150.0, constants.MAX_THRESHOLD_PERCENT), (-5.0, constants.MIN_THRESHOLD_PERCENT)],
+)
+def test_normalize_threshold_percent_clamps_out_of_range(raw, expected, caplog):
+    """An out-of-range percentage is clamped into the supported band and logged."""
+    with caplog.at_level("WARNING", logger="src.core.constants"):
+        assert constants.normalize_threshold_percent(raw) == expected
+    assert "threshold_percent" in caplog.text
+    assert str(raw) in caplog.text
+
+
+def test_normalize_threshold_percent_passes_valid_values_through():
+    """A valid value, including a numeric string, is honoured as written."""
+    assert constants.normalize_threshold_percent(42.5) == 42.5
+    assert constants.normalize_threshold_percent("42.5") == 42.5
+    assert constants.normalize_threshold_percent(0) == 0.0
+    assert constants.normalize_threshold_percent(100) == 100.0
+
+
+def test_normalize_threshold_percent_clamps_an_out_of_range_default(caplog):
+    """Even the fallback is clamped, so the bound holds by code, not by convention."""
+    with caplog.at_level("WARNING", logger="src.core.constants"):
+        result = constants.normalize_threshold_percent("abc", 500.0)
+    assert result == constants.MAX_THRESHOLD_PERCENT
+    assert "threshold_percent" in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# write_config — an atomic write must change contents, never the file's mode
+# ---------------------------------------------------------------------------
+
+def test_write_config_preserves_existing_file_permissions(tmp_path):
+    """Replacing an existing config must not narrow it to the mkstemp 0600.
+
+    Regression guard: ``tempfile.mkstemp`` always creates 0600, so ``os.replace``
+    silently downgraded a group- or world-readable config to owner-only.
+    """
+    config_path = tmp_path / "app_config.json"
+    config_path.write_text('{"theme": "dark"}\n', encoding="utf-8")
+    os.chmod(config_path, 0o644)
+
+    config_migration.write_config(str(config_path), {"theme": "light"})
+
+    assert stat.S_IMODE(os.stat(config_path).st_mode) == 0o644
+    assert json.loads(config_path.read_text(encoding="utf-8")) == {"theme": "light"}
+
+
+def test_write_config_new_file_respects_the_process_umask(tmp_path):
+    """A brand-new config gets the umask-derived mode, not a hardcoded 0600."""
+    previous = os.umask(0o022)
+    try:
+        config_migration.write_config(str(tmp_path / "new.json"), {"theme": "dark"})
+    finally:
+        os.umask(previous)
+    assert stat.S_IMODE(os.stat(tmp_path / "new.json").st_mode) == 0o644
+
+
+def test_migration_on_disk_preserves_file_permissions(tmp_path):
+    """The startup rewrite keeps the user's file mode end to end."""
+    config_path = tmp_path / "app_config.json"
+    config_path.write_text(json.dumps({"worker_thread_timeout": 250}), encoding="utf-8")
+    os.chmod(config_path, 0o640)
+
+    config_migration.migrate_config_file(str(tmp_path), "app_config.json")
+
+    assert stat.S_IMODE(os.stat(config_path).st_mode) == 0o640
+    assert json.loads(config_path.read_text(encoding="utf-8"))["worker_thread_timeout_seconds"] == 5
+
+
+# ---------------------------------------------------------------------------
+# The dead per-detector timeout keys are not renamed by the migration
+# ---------------------------------------------------------------------------
+
+def _read_src_file(relative_path):
+    """Return the text of a file under ``src/``.
+
+    Args:
+        relative_path: Path relative to the ``src/`` root, e.g. ``gui/app.py``.
+
+    Returns:
+        The file's contents as a single string.
+    """
+    src_root = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "src",
+    )
+    with open(os.path.join(src_root, relative_path), encoding="utf-8") as handle:
+        return handle.read()
+
+
+@pytest.mark.parametrize(
+    "legacy_key",
+    ["nudenet_worker_thread_timeout", "helloz_nsfw_worker_thread_timeout"],
+)
+def test_migration_leaves_dead_timeout_keys_untouched(legacy_key):
+    """Renaming a key nothing reads has no reader to benefit and no unit to preserve.
+
+    These two keys are classified dead by ``DEAD_CONFIG_KEYS``; issue #104 deletes
+    them. The migration must not spend a schema-version bump and a user-facing
+    change note rewriting them.
+    """
+    assert legacy_key not in constants.RENAMED_TIMEOUT_KEYS
+    assert legacy_key not in constants.DEAD_CONFIG_KEYS  # dead under the *new* name
+    cfg = {legacy_key: 10, "worker_thread_timeout": 2500}
+    migrated, changes = config_migration.migrate_config(cfg)
+    assert legacy_key in migrated, "a dead key must survive untouched, not be renamed"
+    assert migrated["worker_thread_timeout_seconds"] == 3
+    assert not any(legacy_key in change for change in changes)
+
+
+# ---------------------------------------------------------------------------
+# Wiring guards — the normalizers must actually be the read path
+# ---------------------------------------------------------------------------
+
+def test_window_constructor_cannot_raise_on_a_threshold_value():
+    """``NudityDetectorWindow.__init__`` must not call ``float()`` on the threshold.
+
+    The regression this guards: ``float(cfg.get('threshold_percent', ...))`` raised
+    out of the constructor for ``"abc"``, ``true`` or ``{}``, so the app never
+    started. Asserted on the source because constructing the real GTK window is not
+    possible in a headless test run.
+    """
+    app_source = _read_src_file(os.path.join("gui", "app.py"))
+    raw_reads = re.findall(r"float\(\s*cfg\.get\(\s*['\"]threshold_percent['\"]", app_source)
+    assert raw_reads == [], (
+        "threshold_percent must be read via constants.normalize_threshold_percent, "
+        "not a bare float(): an unparseable value would abort window construction"
+    )
+    assert "normalize_threshold_percent" in app_source

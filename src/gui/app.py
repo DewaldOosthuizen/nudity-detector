@@ -74,7 +74,12 @@ class NudityDetectorWindow(
         self._model = cfg.get('model', constants.MODEL_NUDENET)
         self._folder = cfg.get('last_source_folder', '')
         self._theme_mode = cfg.get('theme', constants.THEME_SYSTEM)
-        self._threshold = float(cfg.get('threshold_percent', constants.DEFAULT_THRESHOLD_PERCENT))
+        # Routed through ``constants.normalize_threshold_percent`` like every other
+        # numeric config read (ADD-007 §5): a hand-edited ``"abc"`` or ``true`` here
+        # used to raise out of the constructor, so the app never started.
+        self._threshold = constants.normalize_threshold_percent(
+            cfg.get('threshold_percent'), constants.DEFAULT_THRESHOLD_PERCENT, name='threshold_percent',
+        )
         self._progress_interval = constants.normalize_positive_int(
             cfg.get('progress_update_interval'), constants.SCAN_PROGRESS_UPDATE_INTERVAL, name='progress_update_interval'
         )

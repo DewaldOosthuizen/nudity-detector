@@ -64,15 +64,22 @@ by `src/core/config_migration.py`:
 - the file is rewritten with the `_seconds` key names and `config_version: 2`, so the
   conversion never runs twice; the migration is idempotent.
 
-**Every timeout key is migrated, not just the two that were in milliseconds.** Four
-keys — `helloz_nsfw_request_timeout`, `helloz_nsfw_health_check_timeout`,
-`nudenet_worker_thread_timeout`, `helloz_nsfw_worker_thread_timeout` — already held
-seconds but carried no suffix. Renaming them in the same versioned migration keeps the
-premise of this ADD true: the `_seconds` suffix is a reliable unit marker, not a
-convention honoured by some keys. Their values are **not** converted — only the key
-name changes, so a `helloz_nsfw_request_timeout: 300` stays 300 s rather than becoming
-0.3 s. The first revision of this ADD left them unsuffixed; that was the "half-renamed
-schema" that made the central claim only half true.
+**Every timeout key a reader touches is migrated, not just the two that were in
+milliseconds.** Two keys — `helloz_nsfw_request_timeout` and
+`helloz_nsfw_health_check_timeout` — already held seconds but carried no suffix.
+Renaming them in the same versioned migration keeps the premise of this ADD true for
+every key the app actually consumes: the `_seconds` suffix is a reliable unit marker,
+not a convention honoured by some keys. Their values are **not** converted — only the
+key name changes, so a `helloz_nsfw_request_timeout: 300` stays 300 s rather than
+becoming 0.3 s. The first revision of this ADD left them unsuffixed; that was the
+"half-renamed schema" that made the central claim only half true.
+
+`nudenet_worker_thread_timeout` and `helloz_nsfw_worker_thread_timeout` were in that
+list in the second revision and are now **excluded**: this PR's own tests classify both
+as dead (no `src/` reader). Renaming a key exists to make the unit of a value the app
+uses unambiguous; a key nothing reads has no such value, and no code path ever
+established its pre-rename unit, so the justification was unfalsifiable. Issue #104
+deletes them.
 
 **An existing `*_seconds` value always wins.** A partially applied upgrade or a restored
 backup can hold both spellings of a key. The suffixed key is the one that states its
@@ -266,8 +273,31 @@ behaviour.
 - `_save_config` writes only the keys the GUI owns, so a hand-added key in
   `config/app_config.json` is dropped on the next save. This predates ADD-007.
 
+The float config key `threshold_percent` is coerced by
+`constants.normalize_threshold_percent`, the float sibling of `normalize_positive_int`.
+It was previously a raw `float(cfg.get('threshold_percent', ...))` in the window
+constructor, so a hand-edited `"abc"`, `true` or `{}` raised out of
+`NudityDetectorWindow.__init__` and the application never started: the one config error
+ADD-007's coercion policy was supposed to eliminate was fatal rather than merely silent.
+A right hand-edited value is legitimate — but it is never applied silently, because
+every rewrite is named in a log record.
+
+The write also preserves the target file's permissions. `tempfile.mkstemp` creates
+0600, so installing the temp file with `os.replace` would otherwise quietly narrow a
+pre-existing group- or world-readable config to owner-only — a change to the file's
+*mode* that this write has no mandate to make. An existing mode is carried across; a
+new file gets the process umask, which is what the previous `open(path, 'w')` writer
+produced.
+
 **Follow-up (out of scope here):** `nudenet_worker_thread_timeout_seconds` and
-`helloz_nsfw_worker_thread_timeout_seconds` are renamed by the migration for
-consistency but are still not read by any code (no `src/` references). Their removal
-is a separate cleanup, tracked as **issue #104** ("Remove dead timeout config keys").
-The keys are retained here so this PR stays scoped to the unit mismatch.
+`helloz_nsfw_worker_thread_timeout_seconds` ship in the reference tables but are read
+by no code, so the migration does **not** rename them. Their earlier `*_seconds` names
+were introduced by this PR; renaming a key forward would spend a schema-version bump and
+a user-facing change note to rewrite a value nothing consumes, on the premise that the
+old key's unit "was always seconds" — a premise no code path can establish, because
+nothing ever read it. They are deleted by **issue #104** ("Remove dead timeout config
+keys") rather than migrated.
+
+Note also that `_save_config` writes only the 15 live keys, so those reference entries
+exist in `.env.example` and `tests/fixtures/app_config.default.json` but are dropped
+from a user's own `config/app_config.json` on its first save.
