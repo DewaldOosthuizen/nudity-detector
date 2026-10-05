@@ -284,13 +284,46 @@ CONFIG_DEFAULT_ALIGNMENT = {
 }
 
 
-# Values smaller than this cannot be honoured as seconds: a legacy millisecond
-# value below 500 ms rounds to 0 s, which would make every detection time out
-# immediately. Such a value is replaced by the key's constant default instead.
+# Smallest whole-second timeout the migration will ever emit. A legacy millisecond
+# value below one second (``MILLISECONDS_PER_SECOND``) is not migrated by arithmetic
+# at all — it is replaced by the key's constant default, because 0.25 s expressed
+# in whole seconds is not a usable timeout. ``MIN_MIGRATABLE_SECONDS`` documents
+# that floor so a mapping entry cannot declare a fallback below it.
 MIN_MIGRATABLE_SECONDS = 1
 
+# Upper bounds accepted for timeout settings, in seconds. They are the documented
+# supported range: the GUI spin buttons are built with these as their ``upper`` so
+# a value the config path accepts is never silently truncated by Gtk, and a
+# configured value beyond the bound is clamped with a WARNING that names the key,
+# the configured value and the applied maximum (ADD-007).
+WORKER_THREAD_TIMEOUT_MAX_SECONDS = 86400  # 24 hours
+DETECT_TIMEOUT_MAX_SECONDS = 86400  # 24 hours
+HELLOZ_NSFW_REQUEST_TIMEOUT_MAX_SECONDS = 3600  # 1 hour
+HELLOZ_NSFW_HEALTH_CHECK_TIMEOUT_MAX_SECONDS = 3600  # 1 hour
 
-def normalize_positive_int(value, default, name=None, min_value=1):
+TIMEOUT_MAX_SECONDS = {
+    'worker_thread_timeout_seconds': WORKER_THREAD_TIMEOUT_MAX_SECONDS,
+    'detect_timeout_seconds': DETECT_TIMEOUT_MAX_SECONDS,
+    'helloz_nsfw_request_timeout_seconds': HELLOZ_NSFW_REQUEST_TIMEOUT_MAX_SECONDS,
+    'helloz_nsfw_health_check_timeout_seconds': HELLOZ_NSFW_HEALTH_CHECK_TIMEOUT_MAX_SECONDS,
+}
+
+# Highest legal TCP port, used as the upper bound of the port accessor.
+MAX_PORT = 65535
+
+# Config keys that no code under ``src/`` reads. They are retained in the shipped
+# defaults as a reference table only; their removal is tracked in issue #104.
+# Kept here so the documentation, the reference fixture and the test that greps
+# ``src/`` for a reader cannot disagree about which keys are dead.
+DEAD_CONFIG_KEYS = frozenset({
+    'nudenet_worker_thread_count',
+    'helloz_nsfw_worker_thread_count',
+    'nudenet_worker_thread_timeout_seconds',
+    'helloz_nsfw_worker_thread_timeout_seconds',
+})
+
+
+def normalize_positive_int(value, default, name=None, min_value=1, max_value=None, quiet=False):
     """Coerce a possibly-invalid configured scalar to an integer at or above a bound.
 
     The single implementation of "config scalar -> safe positive int" used by every
@@ -304,9 +337,16 @@ def normalize_positive_int(value, default, name=None, min_value=1):
             itself clamped to ``min_value`` so the documented lower bound holds.
         name: Optional setting name, used only to make log messages actionable.
         min_value: Lower bound applied to the parsed value (inclusive).
+        max_value: Optional upper bound applied to the parsed value (inclusive).
+            A value above it is clamped down and the clamp is logged, naming the key,
+            the configured value and the applied maximum, so a truncation is never
+            silent.
+        quiet: Suppress the value-coercion log records. Used by callers that only
+            want the coerced value (such as the divergence pass) and delegate the
+            reporting to a single read path.
 
     Returns:
-        An int >= ``min_value``.
+        An int within ``[min_value, max_value]`` (``max_value`` when given).
 
     Raises:
         Nothing. ``bool`` is rejected explicitly (a JSON ``true`` in a numeric key
@@ -315,48 +355,71 @@ def normalize_positive_int(value, default, name=None, min_value=1):
         other rewrite is logged at WARNING level so no config error is silent.
     """
     label = name or 'value'
+
+    def _warn(message, *args):
+        if not quiet:
+            logger.warning(message, *args)
+
+    def _debug(message, *args):
+        if not quiet:
+            logger.debug(message, *args)
+
+    def _fallback():
+        return max(min_value, int(default))
+
     if value is None:
         # Absent key is normal on a fresh install, not a defect — do not warn.
-        logger.debug("%s is not configured; using default of %s", label, default)
-        return max(min_value, int(default))
+        _debug("%s is not configured; using default of %s", label, default)
+        return _fallback()
     if isinstance(value, bool):
-        logger.warning(
+        _warn(
             "%s value %r is a boolean, not a number; using default of %s",
             label, value, default,
         )
-        return max(min_value, int(default))
+        return _fallback()
     try:
         numeric = int(value)
     except (TypeError, ValueError, OverflowError):
         # OverflowError: int(float('inf')) / int(float('nan')) raise it.
-        logger.warning(
+        _warn(
             "%s value %r is not a valid number; using default of %s",
             label, value, default,
         )
-        return max(min_value, int(default))
+        return _fallback()
     if numeric < min_value:
-        logger.warning(
+        _warn(
             "%s value %s is below the minimum of %s; using %s",
             label, numeric, min_value, min_value,
         )
         return min_value
+    if max_value is not None and numeric > max_value:
+        _warn(
+            "%s value %s is above the supported maximum of %s; using %s",
+            label, numeric, max_value, max_value,
+        )
+        return max_value
     return numeric
 
 
-def normalize_timeout_seconds(value, default_seconds, name=None):
+def normalize_timeout_seconds(value, default_seconds, name=None, max_seconds=None):
     """Normalize a configured timeout value to whole seconds for the threading API.
 
     This is the single unit boundary for timeout values (ADD-007). The value is
     *already in seconds*: legacy millisecond configs are converted once,
     deterministically, by :func:`src.core.config_migration.migrate_config` at load
     time. No unit is guessed from the magnitude of the value, so a legitimate large
-    timeout such as ``detect_timeout: 3600`` is honoured as 3600 seconds.
+    timeout such as ``detect_timeout_seconds: 3600`` is honoured as 3600 seconds.
 
     Args:
         value: Raw timeout value in seconds (post-migration).
         default_seconds: Fallback value in seconds when value is missing or invalid.
         name: Optional name of the setting, used only to make log messages
             actionable. Purely diagnostic.
+        max_seconds: Optional supported upper bound, in seconds. A configured value
+            above it is clamped down and logged, naming the key, the configured
+            value and the applied maximum, so the truncation is visible rather than
+            silent. Defaults to the per-key bound in :data:`TIMEOUT_MAX_SECONDS`
+            when ``name`` names a known timeout key.
 
     Returns:
         Timeout in whole seconds, always >= 1 — including when ``default_seconds``
@@ -369,7 +432,11 @@ def normalize_timeout_seconds(value, default_seconds, name=None):
         WARNING level so an unparseable or out-of-range value is visible in the log
         rather than silently presenting as a default.
     """
-    return normalize_positive_int(value, default_seconds, name=name, min_value=1)
+    if max_seconds is None and name in TIMEOUT_MAX_SECONDS:
+        max_seconds = TIMEOUT_MAX_SECONDS[name]
+    return normalize_positive_int(
+        value, default_seconds, name=name, min_value=1, max_value=max_seconds,
+    )
 
 
 def log_config_default_divergences(cfg, expectations=None):
@@ -395,7 +462,10 @@ def log_config_default_divergences(cfg, expectations=None):
     for key, default in expected_defaults.items():
         if key not in cfg:
             continue
-        configured = normalize_positive_int(cfg.get(key), default, name=key)
+        # quiet=True: this pass reports *divergences* only. Value-coercion
+        # warnings are the single read path's job, so an unparseable value yields
+        # one WARNING naming the key, not two that look like separate problems.
+        configured = normalize_positive_int(cfg.get(key), default, name=key, quiet=True)
         if configured != default:
             description = (
                 f"{key}: configured value {configured} differs from the code default of "
@@ -404,6 +474,50 @@ def log_config_default_divergences(cfg, expectations=None):
             logger.warning("Config value divergence: %s", description)
             divergences.append(description)
     return divergences
+
+
+def log_timeout_truncations(cfg, maxima=None):
+    """Report configured timeout values that exceed the supported maximum.
+
+    The GUI spin buttons are bounded by :data:`TIMEOUT_MAX_SECONDS`, so a larger
+    configured value cannot be represented in the UI and would otherwise be
+    silently rewritten to the bound on the next save — the same class of
+    unrecoverable, invisible value loss ADD-007 rejects. The value is clamped (see
+    :func:`normalize_positive_int`) and this note names the key, the configured
+    value and the applied maximum so the user can correct it.
+
+    Args:
+        cfg: Loaded config mapping.
+        maxima: Mapping of timeout key -> supported upper bound in seconds.
+            Defaults to :data:`TIMEOUT_MAX_SECONDS`.
+
+    Returns:
+        List of human-readable descriptions of every clamped timeout.
+    """
+    expected_maxima = TIMEOUT_MAX_SECONDS if maxima is None else maxima
+    notes = []
+    for key, maximum in expected_maxima.items():
+        if key not in cfg:
+            continue
+        raw = cfg.get(key)
+        try:
+            # bool is a user error, not a magnitude: leave it to the read path.
+            if isinstance(raw, bool):
+                continue
+            exceeds = int(raw) > maximum
+        except (TypeError, ValueError, OverflowError):
+            # Unparseable or non-finite: the read path already warns about the
+            # coercion; this pass reports magnitude truncation only.
+            continue
+        if not exceeds:
+            continue
+        description = (
+            f"{key}: configured value {raw} s exceeds the supported maximum of "
+            f"{maximum} s; the value is clamped and saved back as {maximum} s"
+        )
+        logger.warning("Config timeout truncation: %s", description)
+        notes.append(description)
+    return notes
 
 
 # ============================================================================

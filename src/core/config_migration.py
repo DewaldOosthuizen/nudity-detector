@@ -37,7 +37,6 @@ from .constants import (
     CONFIG_VERSION_KEY,
     LEGACY_MILLISECOND_TIMEOUT_KEYS,
     MILLISECONDS_PER_SECOND,
-    MIN_MIGRATABLE_SECONDS,
     RENAMED_TIMEOUT_KEYS,
 )
 
@@ -82,11 +81,16 @@ def needs_migration(cfg):
 def _convert_milliseconds_to_seconds(raw_value, default_seconds, key):
     """Convert one legacy millisecond timeout to whole seconds.
 
-    A value that cannot be honoured as seconds — unparseable, non-positive, or
-    sub-second once converted — falls back to ``default_seconds``. The shipped
-    ``250`` is exactly such a value: 250 ms is 0.25 s, which no whole-second
-    timeout can express and which would make every detection time out at once, so
-    it migrates to the code default (5 s / 60 s) rather than to 0 s or 1 s.
+    The decision rule matches every document in the PR: a legacy value of at least
+    one second (``>= MILLISECONDS_PER_SECOND`` ms) is converted ms -> s, round-half-up;
+    anything below one second is *unconvertible* and falls back to ``default_seconds``.
+
+    The shipped ``250`` is exactly such a value: 250 ms is 0.25 s, which no
+    whole-second timeout can express and which would make every detection time out
+    at once, so it migrates to the code default (5 s / 60 s) rather than to 0 s or
+    1 s. The same rule covers the whole 0-999 ms band, including 700-999 ms, which
+    would otherwise round up to a 1-second timeout — a value that times out on
+    essentially every file, the exact failure the fallback exists to prevent.
 
     Args:
         raw_value: The legacy millisecond value read from the config.
@@ -103,12 +107,17 @@ def _convert_milliseconds_to_seconds(raw_value, default_seconds, key):
     except (TypeError, ValueError, OverflowError):
         # OverflowError covers non-finite floats such as float('inf').
         return default_seconds, f"{key}: unusable value {raw_value!r} replaced with {default_seconds} s"
-    seconds = int(milliseconds / MILLISECONDS_PER_SECOND + 0.5)  # round-half-up
-    if seconds < MIN_MIGRATABLE_SECONDS:
+    if milliseconds < MILLISECONDS_PER_SECOND:
+        # Includes negatives and zero: no sub-second value can be expressed as a
+        # usable whole-second timeout.
         return (
             default_seconds,
-            f"{key}: legacy {milliseconds} ms is sub-second, replaced with {default_seconds} s",
+            f"{key}: legacy {milliseconds} ms is below one second, replaced with {default_seconds} s",
         )
+    seconds = int(milliseconds / MILLISECONDS_PER_SECOND + 0.5)  # round-half-up
+    # With milliseconds >= MILLISECONDS_PER_SECOND the rounding above yields
+    # >= 1 s by construction, so MIN_MIGRATABLE_SECONDS holds without a second
+    # branch; ``test_conversion_never_emits_below_the_migratable_floor`` pins it.
     return seconds, f"{key}: legacy {milliseconds} ms migrated to {seconds} s"
 
 
@@ -207,14 +216,16 @@ def migrate_config(cfg):
     return migrated, changes
 
 
-def _write_config(config_path, data):
+def write_config(config_path, data):
     """Write ``data`` as formatted JSON to ``config_path``, atomically.
 
-    The config file is the user's only copy of their settings (theme, model, last
-    source folder as well as timeouts), so it is never truncated in place: the
-    JSON is streamed to a sibling temp file in the same directory and then moved
-    over the target with :func:`os.replace`, which is atomic on POSIX and stays
-    on the same filesystem.
+    This is the single writer for ``config/app_config.json``: both the migration
+    (:func:`migrate_config_file`) and the GUI's ``_save_config`` go through it, so
+    neither can truncate the user's only config file. The config file is the user's
+    only copy of their settings (theme, model, last source folder as well as
+    timeouts), so it is never written in place: the JSON is streamed to a sibling
+    temp file in the same directory and then moved over the target with
+    :func:`os.replace`, which is atomic on POSIX and stays on the same filesystem.
 
     Args:
         config_path: Destination path.
@@ -285,7 +296,7 @@ def migrate_config_file(config_dir=None, config_file_name=None, cfg=None):
         return dict(cfg), []
 
     try:
-        _write_config(config_path, migrated)
+        write_config(config_path, migrated)
     except OSError as exc:
         # Note is returned, not just logged: the on-disk and in-memory views now
         # diverge and the user must be told (ADD-007 section 3).

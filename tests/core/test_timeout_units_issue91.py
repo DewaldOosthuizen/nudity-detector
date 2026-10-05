@@ -9,6 +9,7 @@ Two layers are covered:
 """
 import json
 import os
+import re
 from unittest.mock import patch
 
 import pytest
@@ -226,6 +227,44 @@ def test_migrate_config_rounds_half_up(legacy_ms, expected):
     assert migrated['detect_timeout_seconds'] == expected
 
 
+@pytest.mark.parametrize("legacy_ms", [1, 250, 499, 500, 700, 999, 0, -5])
+def test_migrate_config_sub_second_band_uses_constant_default(legacy_ms):
+    """The whole 0-999 ms band falls back to the constant default.
+
+    Regression guard for the documented rule ("a legacy value below one second
+    becomes the code default"). The first implementation branched only on whether
+    the *rounded* result was 0, so ``700``/``999`` became a 1-second timeout —
+    which times out on essentially every file, the exact failure the fallback
+    exists to prevent — while every document said otherwise.
+    """
+    migrated, changes = config_migration.migrate_config({'detect_timeout': legacy_ms})
+    assert migrated['detect_timeout_seconds'] == constants.DETECT_TIMEOUT
+    assert str(constants.DETECT_TIMEOUT) in changes[0]
+
+    migrated, _ = config_migration.migrate_config({'worker_thread_timeout': legacy_ms})
+    assert migrated['worker_thread_timeout_seconds'] == constants.WORKER_THREAD_TIMEOUT
+
+
+def test_migrate_config_one_second_legacy_value_converts():
+    """Exactly 1000 ms is one second and converts, not falls back."""
+    migrated, _ = config_migration.migrate_config({'detect_timeout': 1000})
+    assert migrated['detect_timeout_seconds'] == 1
+
+
+def test_conversion_never_emits_below_the_migratable_floor():
+    """Every converted value honours ``MIN_MIGRATABLE_SECONDS``.
+
+    The sub-second branch handles everything below one second, so the rounding
+    branch cannot yield 0. This test pins that invariant rather than leaving a
+    defensive branch no test could reach.
+    """
+    for legacy_ms in range(1000, 1000 + 5000):
+        seconds, _ = config_migration._convert_milliseconds_to_seconds(
+            legacy_ms, constants.DETECT_TIMEOUT, "detect_timeout",
+        )
+        assert seconds >= constants.MIN_MIGRATABLE_SECONDS
+
+
 def test_migrate_config_stamps_current_version():
     """A migrated config is stamped so the legacy branch never runs again."""
     migrated, _ = config_migration.migrate_config({'detect_timeout': 250})
@@ -361,7 +400,7 @@ def test_migrate_config_file_survives_unwritable_file(tmp_path, caplog):
     config_path = tmp_path / "app_config.json"
     config_path.write_text(json.dumps({'detect_timeout': 250}))
 
-    with patch("src.core.config_migration._write_config", side_effect=OSError("read-only")):
+    with patch("src.core.config_migration.write_config", side_effect=OSError("read-only")):
         with caplog.at_level("WARNING", logger="src.core.config_migration"):
             _, changes = config_migration.migrate_config_file(str(tmp_path), "app_config.json")
 
@@ -489,7 +528,7 @@ def test_write_config_is_atomic_and_ends_with_newline(tmp_path):
     target = tmp_path / "app_config.json"
     target.write_text('{"theme": "dark"}')
 
-    config_migration._write_config(str(target), {'theme': 'light'})
+    config_migration.write_config(str(target), {'theme': 'light'})
 
     assert target.read_text().endswith('\n')
     assert json.loads(target.read_text()) == {'theme': 'light'}
@@ -504,10 +543,27 @@ def test_write_config_leaves_no_temp_file_on_failure(tmp_path):
 
     with patch("src.core.config_migration.json.dump", side_effect=OSError("disk full")):
         with pytest.raises(OSError):
-            config_migration._write_config(str(target), {'theme': 'light'})
+            config_migration.write_config(str(target), {'theme': 'light'})
 
     assert target.read_text() == '{"theme": "dark"}'
     assert [p.name for p in tmp_path.iterdir()] == ['app_config.json']
+
+
+def test_write_config_raises_when_the_temp_file_cannot_be_removed(tmp_path):
+    """An unremovable temp file does not mask the original write failure.
+
+    The unlink in the cleanup path is best-effort: a failure there must not
+    replace the OSError the caller needs to see.
+    """
+    target = tmp_path / "app_config.json"
+    target.write_text('{"theme": "dark"}')
+
+    with patch("src.core.config_migration.json.dump", side_effect=OSError("disk full")), \
+         patch("src.core.config_migration.os.unlink", side_effect=OSError("permission")):
+        with pytest.raises(OSError, match="disk full"):
+            config_migration.write_config(str(target), {'theme': 'light'})
+
+    assert target.read_text() == '{"theme": "dark"}'
 
 
 def test_migrate_config_file_defaults_to_constants_paths():
@@ -568,6 +624,201 @@ def test_log_config_default_divergences_is_quiet_when_aligned(caplog):
 def test_log_config_default_divergences_ignores_absent_keys():
     """A key the config does not set is not a divergence."""
     assert constants.log_config_default_divergences({}) == []
+
+
+def test_log_config_default_divergences_does_not_double_log(caplog):
+    """An unparseable value yields one coercion WARNING, not two.
+
+    The divergence pass runs before the real read, so a coercing call inside it
+    produced a second WARNING for the same key and made one bad value look like
+    two separate problems.
+    """
+    with caplog.at_level("WARNING", logger="src.core.constants"):
+        constants.log_config_default_divergences({'video_frame_rate': "abc"})
+    assert caplog.text == ""
+
+
+def test_normalize_positive_int_quiet_suppresses_logging(caplog):
+    """``quiet=True`` coerces without reporting, for callers that only want a value."""
+    with caplog.at_level("WARNING", logger="src.core.constants"):
+        assert constants.normalize_positive_int("abc", 5, name="some_key", quiet=True) == 5
+        assert constants.normalize_positive_int(-1, 5, name="some_key", quiet=True) == 1
+    assert caplog.text == ""
+
+
+# ---------------------------------------------------------------------------
+# Bounded ranges — the GUI must not silently truncate a legal value
+# ---------------------------------------------------------------------------
+
+def test_normalize_timeout_seconds_clamps_above_the_supported_maximum(caplog):
+    """A value beyond the documented maximum is clamped and the clamp is logged."""
+    with caplog.at_level("WARNING", logger="src.core.constants"):
+        result = constants.normalize_positive_int(
+            999999, 60, name="detect_timeout_seconds",
+            max_value=constants.DETECT_TIMEOUT_MAX_SECONDS,
+        )
+    assert result == constants.DETECT_TIMEOUT_MAX_SECONDS
+    assert "detect_timeout_seconds" in caplog.text
+    assert "999999" in caplog.text
+    assert str(constants.DETECT_TIMEOUT_MAX_SECONDS) in caplog.text
+
+
+def test_normalize_timeout_seconds_honours_3600_within_the_bound():
+    """The README's headline example survives: 3600 s is inside the bound."""
+    assert constants.normalize_timeout_seconds(3600, 60, name="detect_timeout_seconds") == 3600
+    assert constants.normalize_timeout_seconds(3600, 60, name="worker_thread_timeout_seconds") == 3600
+
+
+def test_timeout_maxima_cover_every_suffixed_timeout_key():
+    """Every ``*_seconds`` key the GUI reads has a declared maximum."""
+    for key in ("worker_thread_timeout_seconds", "detect_timeout_seconds",
+                "helloz_nsfw_request_timeout_seconds", "helloz_nsfw_health_check_timeout_seconds"):
+        assert key in constants.TIMEOUT_MAX_SECONDS
+        assert constants.TIMEOUT_MAX_SECONDS[key] >= constants.MIN_MIGRATABLE_SECONDS
+
+
+def test_log_timeout_truncations_reports_an_out_of_range_value(caplog):
+    """A value past the bound is reported with the key and both values."""
+    with caplog.at_level("WARNING", logger="src.core.constants"):
+        notes = constants.log_timeout_truncations({
+            'detect_timeout_seconds': constants.DETECT_TIMEOUT_MAX_SECONDS + 1,
+        })
+    assert len(notes) == 1
+    assert "detect_timeout_seconds" in notes[0]
+    assert str(constants.DETECT_TIMEOUT_MAX_SECONDS + 1) in notes[0]
+    assert "Config timeout truncation" in caplog.text
+
+
+def test_log_timeout_truncations_is_quiet_for_supported_values(caplog):
+    """A value inside the supported range is not reported as truncated."""
+    with caplog.at_level("WARNING", logger="src.core.constants"):
+        notes = constants.log_timeout_truncations({
+            'detect_timeout_seconds': 3600,
+            'worker_thread_timeout_seconds': constants.WORKER_THREAD_TIMEOUT_MAX_SECONDS,
+        })
+    assert notes == []
+    assert caplog.text == ""
+
+
+def test_log_timeout_truncations_ignores_absent_and_unparseable_keys(caplog):
+    """Absent keys, booleans and garbage are the read path's business, not this pass."""
+    with caplog.at_level("WARNING", logger="src.core.constants"):
+        assert constants.log_timeout_truncations({}) == []
+        assert constants.log_timeout_truncations({'detect_timeout_seconds': True}) == []
+        assert constants.log_timeout_truncations({'detect_timeout_seconds': "abc"}) == []
+        assert constants.log_timeout_truncations({'detect_timeout_seconds': float("inf")}) == []
+    assert caplog.text == ""
+
+
+def test_normalize_positive_int_clamps_to_the_port_bound(caplog):
+    """The port accessor bound is enforced and logged, not silently substituted."""
+    with caplog.at_level("WARNING", logger="src.core.constants"):
+        assert constants.normalize_positive_int(
+            70000, 6086, name="helloz_nsfw_port", min_value=1, max_value=constants.MAX_PORT,
+        ) == constants.MAX_PORT
+        assert constants.normalize_positive_int(
+            0, 6086, name="helloz_nsfw_port", min_value=1, max_value=constants.MAX_PORT,
+        ) == 1
+    assert "helloz_nsfw_port" in caplog.text
+
+
+def test_max_port_is_the_highest_legal_tcp_port():
+    """The bound constant is the real TCP limit, not a duplicated literal."""
+    assert constants.MAX_PORT == 65535
+
+
+# ---------------------------------------------------------------------------
+# Live vs dead key classification must match what src/ actually reads
+# ---------------------------------------------------------------------------
+
+def _src_sources(subdir="src"):
+    """Return the concatenated text of every Python module under a source directory.
+
+    Args:
+        subdir: Directory to walk, relative to the repository root.
+
+    Returns:
+        A single string containing the contents of every ``*.py`` file found.
+    """
+    root_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(__file__))), subdir,
+    )
+    chunks = []
+    for root, _dirs, files in os.walk(root_dir):
+        for name in files:
+            if name.endswith(".py"):
+                with open(os.path.join(root, name), encoding="utf-8") as handle:
+                    chunks.append(handle.read())
+    return "\n".join(chunks)
+
+
+def _has_config_read_access(sources, key):
+    """Return whether ``sources`` reads ``key`` out of a config mapping.
+
+    A reader looks like ``cfg.get('key')`` or ``cfg['key']`` — an actual access.
+    Merely naming the key (as ``constants.DEAD_CONFIG_KEYS`` or the migration
+    rename tables do) is not a reader.
+
+    A key referenced through a constant (``CONFIG_VERSION_KEY`` for
+    ``config_version``) is also a reader: the alias map supplies the constant name
+    as a second accepted spelling — quoted (it indexes a table of key names) or
+    bare (``cfg.get(CONFIG_VERSION_KEY, 1)``) — so indirection through
+    ``constants.py`` does not read as "no reader".
+
+    Args:
+        sources: Concatenated source text.
+        key: Config key name.
+
+    Returns:
+        True if the key is read from a mapping somewhere in the text.
+    """
+    spellings = [key] + list(_READER_ALIASES.get(key, ()))
+    patterns = [
+        rf"\.get\(\s*['\"]{re.escape(spelling)}['\"]" for spelling in spellings
+    ] + [
+        rf"\[\s*['\"]{re.escape(spelling)}['\"]\s*\]" for spelling in spellings
+    ] + [
+        rf"\.get\(\s*{re.escape(alias)}\b" for alias in _READER_ALIASES.get(key, ())
+    ]
+    return any(re.search(pattern, sources) for pattern in patterns)
+
+
+# Config keys whose reader goes through a named constant rather than a literal.
+# The value is the *name* of that constant, since the read is ``.get(NAME)``.
+_READER_ALIASES = {
+    'config_version': ('CONFIG_VERSION_KEY',),
+}
+
+
+@pytest.mark.parametrize("key", sorted(_load_default_config()))
+def test_shipped_live_config_keys_have_a_reader(key):
+    """Every non-dead shipped key is actually read somewhere under ``src/``.
+
+    Guards the documentation: a key described as "read directly from config at
+    runtime" with no reader is a defect (issue #104's scope is derived from that
+    classification), and this is what proves it either way.
+    """
+    if key in constants.DEAD_CONFIG_KEYS:
+        pytest.skip(f"{key} is documented as dead (issue #104)")
+    assert _has_config_read_access(_src_sources(), key), (
+        f"shipped config key {key} is documented as read at runtime but has no src/ reader"
+    )
+
+
+@pytest.mark.parametrize("key", sorted(constants.DEAD_CONFIG_KEYS))
+def test_dead_config_keys_are_documented_as_dead(key):
+    """A key in ``DEAD_CONFIG_KEYS`` must ship in the fixture and be documented."""
+    assert key in _load_default_config()
+    assert key in constants.DEAD_CONFIG_KEYS
+
+
+def test_dead_config_keys_are_not_read_by_src():
+    """A key classified as dead is never read from a config mapping under ``src/``."""
+    sources = _src_sources()
+    for key in constants.DEAD_CONFIG_KEYS:
+        assert not _has_config_read_access(sources, key), (
+            f"{key} is classified as dead but src/ reads it"
+        )
 
 
 # ---------------------------------------------------------------------------

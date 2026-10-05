@@ -4,7 +4,7 @@
 |------------|--------------------------------|
 | Status     | Accepted                       |
 | Date       | 2026-10-02 17:37               |
-| Revised    | 2026-10-05 06:10               |
+| Revised    | 2026-10-05 09:40               |
 | Author     | Dewald Oosthuizen              |
 | Relates to | ADD-005, ADD-006               |
 
@@ -57,7 +57,10 @@ by `src/core/config_migration.py`:
 - a legacy millisecond value `>= 1000` converts ms → s, round-half-up
   (`2500` → `3`);
 - a legacy value below one second — **including the shipped `250`** — becomes the
-  key's constant default (`5` s / `60` s);
+  key's constant default (`5` s / `60` s). The whole `0–999` ms band is treated
+  this way, not only the values that round to 0 s: `700` would otherwise round to a
+  1-second timeout, which times out on essentially every file — the exact failure
+  the fallback exists to prevent;
 - the file is rewritten with the `_seconds` key names and `config_version: 2`, so the
   conversion never runs twice; the migration is idempotent.
 
@@ -130,15 +133,56 @@ mismatch cannot silently recur" was only true for units. Two changes close that:
 
 ### 5. One coercion implementation, one logging policy
 
-`constants.normalize_positive_int(value, default, name=None, min_value=1)` is the
-single implementation of "config scalar → safe positive int". Every numeric config
-read — `worker_thread_count`, `video_frame_rate`, `progress_update_interval`,
-`helloz_nsfw_port`, and all four timeouts — routes through it, in both `__init__`
-and the widget accessors. Previously the same coercion was hand-rolled as
-`try: max(1, int(...)) except (ValueError, TypeError)` in six places, some of which
-logged and some of which did not. The policy is now uniform: absent → DEBUG (a
-missing key is normal on a fresh install, not a defect); unparseable, boolean, or
-below-minimum → WARNING naming the key.
+`constants.normalize_positive_int(value, default, name=None, min_value=1,
+max_value=None, quiet=False)` is the single implementation of "config scalar → safe
+positive int". Every numeric config read — `worker_thread_count`,
+`video_frame_rate`, `progress_update_interval`, `helloz_nsfw_port`, and all four
+timeouts — routes through it, in both `__init__` and every widget accessor. This
+includes `_get_progress_interval()`, `_get_video_frame_rate()` and
+`_get_worker_thread_count()`, which previously hand-rolled
+`max(1, int(spin.get_value()))`, and `_get_helloz_nsfw_port()`, which substituted the
+constant default for an out-of-range value without logging. Previously the same
+coercion was hand-rolled in six places, some of which logged and some of which did
+not. The policy is now uniform: absent → DEBUG (a missing key is normal on a fresh
+install, not a defect); unparseable, boolean, below-minimum, or above-maximum →
+WARNING naming the key.
+
+`quiet=True` exists for the divergence pass (§4): it wants the coerced *value* only
+and delegates value-coercion reporting to the single read path, so an invalid value
+yields one WARNING naming the key rather than two that read as separate problems.
+
+### 5a. Bounded ranges, and no silent truncation by the widget
+
+A documented "no value is ever re-interpreted" guarantee is worthless if the GUI
+silently rewrites a legal value: the spin buttons were built with `upper=600`
+(detect), `300` (worker, Helloz request) and `60` (Helloz health), so a configured
+`detect_timeout_seconds: 3600` survived exactly one launch and was then persisted as
+600 by the next save — the same irrecoverable, invisible loss this ADD rejects for the
+both-spellings-present case.
+
+`constants.TIMEOUT_MAX_SECONDS` declares the supported range per key (86400 s for the
+two general timeouts, 3600 s for the two Helloz timeouts) and is used as the spin
+buttons' `upper`, so the widget represents every value the config path accepts.
+`normalize_timeout_seconds` derives the bound from `TIMEOUT_MAX_SECONDS` by key name,
+and `normalize_positive_int`'s new `max_value` clamps anything beyond it, logging the
+key, the configured value and the applied maximum.
+`constants.log_timeout_truncations` produces that note for the activity log at
+startup. A value beyond the documented maximum is therefore clamped *visibly*; a value
+within it is never truncated.
+
+`MAX_PORT` does the same for `helloz_nsfw_port` (`1..65535`), replacing the inline
+literal in the adjustment and the silent range check in the accessor.
+
+### 5b. One writer for the config file
+
+`config_migration.write_config()` is the single atomic writer, used by both the startup
+migration and `NudityDetectorWindow._save_config()`. `_save_config` previously opened
+the file with `open(path, 'w')` — truncating the user's only config file on an
+interrupted write — and swallowed `OSError`/`IOError` with a bare `pass`, so a full
+disk or a permission change discarded every pending setting change with no log line
+and no activity-log entry. It now writes through `write_config` and, on failure, logs
+at WARNING naming the path and exception and surfaces the failure in the activity log
+via the existing `log_message` mechanism.
 
 ### 6. The runtime config is not committed
 
@@ -159,6 +203,14 @@ the threading API. The spin-button labels already read `Thread Timeout (s)` /
 The `tests/fixtures/app_config.default.json` reference file, the `.env.example`
 reference table, and the `README.md` config table were corrected to the seconds
 defaults and the new key names.
+
+**Dead keys.** `nudenet_worker_thread_count` and `helloz_nsfw_worker_thread_count` are
+*also* unread: the only worker-count key any code reads is `worker_thread_count`. The
+earlier README claimed otherwise, and since #104's scope is derived from this
+documentation, a wrong live/dead classification is a real defect rather than a typo.
+`constants.DEAD_CONFIG_KEYS` is now the single source of that list, and a test greps
+`src/` for every shipped fixture key: a key documented as live without a reader under
+`src/` fails, so the classification cannot drift in either direction.
 
 ---
 

@@ -646,7 +646,7 @@ def _make_window_instance(window_cls, config_dict):
     # The stub Adw base class carries no widget methods; __init__ calls set_title()
     # and friends. A permissive per-instance fallback supplies no-op stand-ins so
     # the real config read path can run without a GTK toolkit.
-    # The startup migration persists the rewritten config; _write_config is
+    # The startup migration persists the rewritten config; write_config is
     # redirected so the suite never touches the developer's real
     # config/app_config.json. The on-disk rewrite itself is covered in
     # tests/core/test_timeout_units_issue91.py.
@@ -658,11 +658,47 @@ def _make_window_instance(window_cls, config_dict):
          patch.object(window_cls, "_announce_config_migration"), \
          patch.object(window_cls, "_find_latest_report_path", return_value="/tmp/reports"), \
          patch("src.gui.app.get_report_path", return_value="/tmp/reports"), \
-         patch("src.core.config_migration._write_config"), \
+         patch("src.core.config_migration.write_config"), \
          patch.object(type(win).__mro__[-2], "__getattr__",
                       create=True, side_effect=lambda _name: MagicMock()):
         window_cls.__init__(win)
     win.log_message = no_op_widgets.log_message
+    return win
+
+
+def _attach_widget_stubs(win):
+    """Attach the MagicMock widgets ``_save_config`` reads to a real window.
+
+    ``_build_ui`` is patched away by :func:`_make_window_instance`, so a real
+    instance has no widgets; ``_save_config`` needs them. Each accessor reads a
+    real widget through ``get_value()``, which a bare MagicMock turns into a
+    MagicMock rather than a number, so the numeric widgets are scripted here and
+    the real accessors then coerce them.
+
+    Args:
+        win: The window instance to populate.
+
+    Returns:
+        The same instance, for chaining.
+    """
+    numeric_spins = {
+        "threshold_spin": 60.0,
+        "progress_interval_spin": 100,
+        "video_frame_rate_spin": 5,
+        "worker_thread_count_spin": 10,
+        "worker_thread_timeout_spin": 5,
+        "detect_timeout_spin": 60,
+        "helloz_nsfw_port_spin": 6086,
+        "helloz_nsfw_request_timeout_spin": 30,
+        "helloz_nsfw_health_check_timeout_spin": 5,
+    }
+    for name, value in numeric_spins.items():
+        setattr(win, name, MagicMock(**{"get_value.return_value": value}))
+    win.theme_dropdown = MagicMock(**{"get_selected.return_value": 1})
+    win.nudenet_radio = MagicMock(**{"get_active.return_value": False})
+    win.folder_entry = MagicMock(**{"get_text.return_value": "/tmp"})
+    win.helloz_nsfw_host_entry = MagicMock(**{"get_text.return_value": "localhost"})
+    win.helloz_nsfw_endpoint_entry = MagicMock(**{"get_text.return_value": "/api/upload_check"})
     return win
 
 
@@ -808,6 +844,145 @@ class TestTimeoutUnits:
             'detect_timeout_seconds': 3600,
         })
         assert win._detect_timeout == 3600
+
+    def test_large_seconds_value_survives_a_save(self, tmp_path):
+        """3600 must be persisted as 3600, not truncated to the spin button's upper.
+
+        Regression guard for the spin-button bounds: the detect-timeout adjustment
+        used to be built with ``upper=600``, so GTK clamped the widget value and
+        ``_save_config`` then persisted 600 — silent, unrecoverable loss of a value
+        the config path had deliberately accepted.
+        """
+        window_cls = _load_nudity_window_class()
+        win = _attach_widget_stubs(_make_window_instance(window_cls, {
+            constants.CONFIG_VERSION_KEY: constants.CONFIG_VERSION,
+            'detect_timeout_seconds': 3600,
+        }))
+        win.detect_timeout_spin = MagicMock(**{"get_value.return_value": 3600})
+
+        config_path = tmp_path / constants.CONFIG_FILE_NAME
+        with patch("src.core.constants.CONFIG_DIR", str(tmp_path)):
+            window_cls._save_config(win)
+
+        persisted = json.loads(config_path.read_text())
+        assert persisted['detect_timeout_seconds'] == 3600
+
+    def test_save_config_uses_the_atomic_writer(self, tmp_path):
+        """Both writers share one atomic implementation, so neither truncates."""
+        window_cls = _load_nudity_window_class()
+        win = _attach_widget_stubs(_make_window_instance(window_cls, {}))
+        with patch("src.core.constants.CONFIG_DIR", str(tmp_path)), \
+             patch("src.gui.app.config_migration.write_config") as mock_write:
+            window_cls._save_config(win)
+        mock_write.assert_called_once()
+        written_path, written_data = mock_write.call_args.args
+        assert written_path.endswith(constants.CONFIG_FILE_NAME)
+        assert written_data[constants.CONFIG_VERSION_KEY] == constants.CONFIG_VERSION
+        assert "detect_timeout_seconds" in written_data
+
+    def test_save_config_logs_and_announces_a_write_failure(self, tmp_path, caplog):
+        """A config that cannot be written is reported, not swallowed.
+
+        ``_save_config`` previously caught ``OSError`` with a bare ``pass``, so a
+        full disk or a permission change discarded every pending setting change
+        with no log line and no activity-log entry.
+        """
+        window_cls = _load_nudity_window_class()
+        win = _attach_widget_stubs(_make_window_instance(window_cls, {}))
+        with patch("src.core.constants.CONFIG_DIR", str(tmp_path)), \
+             patch("src.gui.app.config_migration.write_config", side_effect=OSError("read-only")), \
+             caplog.at_level("WARNING", logger="src.gui.app"):
+            window_cls._save_config(win)
+        assert "read-only" in caplog.text
+        win.log_message.assert_called()
+        assert any("read-only" in call.args[0] for call in win.log_message.call_args_list)
+        assert all(call.kwargs.get("level") == "warning" for call in win.log_message.call_args_list)
+
+    def test_timeout_spin_buttons_accept_the_documented_maximum(self):
+        """Every spin button's ``upper`` is the documented bound for that setting.
+
+        The widget must be able to represent every value the config path accepts;
+        otherwise ``_save_config`` silently rewrites the config on the next save.
+        ``_build_settings_tab`` is driven for real — Gtk is a stub, so
+        ``Gtk.Adjustment(**kwargs)`` records exactly the arguments the code passed.
+        Asserting the whole set pins every bound at once, so a stale literal
+        (the old 600/300/60) cannot return unnoticed.
+        """
+        window_cls = _load_nudity_window_class()
+        Gtk = sys.modules["gi.repository.Gtk"]
+        Gtk.Adjustment.reset_mock()
+        # _build_settings_tab reads the values __init__ computed from the config,
+        # so a real configured instance supplies them.
+        win = _attach_widget_stubs(_make_window_instance(window_cls, {}))
+        window_cls._build_settings_tab(win)
+
+        uppers = {call.kwargs["upper"] for call in Gtk.Adjustment.call_args_list}
+        for bound in constants.TIMEOUT_MAX_SECONDS.values():
+            assert bound in uppers, f"no spin button accepts the documented maximum {bound}"
+        assert constants.MAX_PORT in uppers
+        # The old, silently-truncating timeout bounds — 600 for the detect timeout,
+        # 300 for the worker and Helloz request timeouts, 60 for the Helloz health
+        # check. None may return as a timeout spin button's upper.
+        for stale_bound in (60, 300, 600):
+            assert stale_bound not in uppers, f"a timeout spin button still uses the stale upper {stale_bound}"
+
+    def test_value_beyond_the_maximum_is_clamped_and_announced(self, caplog):
+        """A value past the bound is clamped, and the truncation is user-visible."""
+        window_cls = _load_nudity_window_class()
+        with caplog.at_level("WARNING", logger="src.core.constants"):
+            win = _make_window_instance(window_cls, {
+                constants.CONFIG_VERSION_KEY: constants.CONFIG_VERSION,
+                'detect_timeout_seconds': constants.DETECT_TIMEOUT_MAX_SECONDS + 1,
+            })
+        assert win._detect_timeout == constants.DETECT_TIMEOUT_MAX_SECONDS
+        assert len(win._config_truncation_notes) == 1
+        assert "detect_timeout_seconds" in win._config_truncation_notes[0]
+        # Merged into the announcement set, so the note reaches the activity log.
+        assert win._config_truncation_notes[0] in win._config_migration_notes
+
+    def test_truncation_notes_reach_the_activity_log(self):
+        """A clamp the user cannot see is a clamp they cannot correct."""
+        window_cls = _load_nudity_window_class()
+        win = MagicMock()
+        win._config_migration_notes = ["detect_timeout_seconds: clamped to 86400 s"]
+        win._config_divergence_notes = []
+        window_cls._announce_config_migration(win)
+        assert "86400" in win.log_message.call_args.args[0]
+
+    def test_init_clamps_an_out_of_range_port(self, caplog):
+        """The port bound is enforced on the config path and logged."""
+        window_cls = _load_nudity_window_class()
+        with caplog.at_level("WARNING", logger="src.core.constants"):
+            win = _make_window_instance(window_cls, {
+                constants.CONFIG_VERSION_KEY: constants.CONFIG_VERSION,
+                'helloz_nsfw_port': constants.MAX_PORT + 1,
+            })
+        assert win._helloz_nsfw_port == constants.MAX_PORT
+        assert "helloz_nsfw_port" in caplog.text
+
+    @pytest.mark.parametrize("accessor, spin_name", [
+        ("_get_progress_interval", "progress_interval_spin"),
+        ("_get_video_frame_rate", "video_frame_rate_spin"),
+        ("_get_worker_thread_count", "worker_thread_count_spin"),
+    ])
+    def test_numeric_accessors_clamp_and_log(self, accessor, spin_name, caplog):
+        """The three formerly hand-rolled accessors now clamp and log like the rest."""
+        window_cls = _load_nudity_window_class()
+        win = MagicMock()
+        getattr(win, spin_name).get_value.return_value = 0
+        with caplog.at_level("WARNING", logger="src.core.constants"):
+            assert getattr(window_cls, accessor)(win) == 1
+        assert spin_name in caplog.text
+
+    def test_port_accessor_logs_an_out_of_range_value(self, caplog):
+        """The port accessor reports the clamp instead of substituting silently."""
+        window_cls = _load_nudity_window_class()
+        win = MagicMock()
+        win.helloz_nsfw_port_spin.get_value.return_value = constants.MAX_PORT + 1
+        with caplog.at_level("WARNING", logger="src.core.constants"):
+            result = window_cls._get_helloz_nsfw_port(win)
+        assert result == constants.MAX_PORT
+        assert "helloz_nsfw_port_spin" in caplog.text
 
     def test_init_missing_keys_fall_back_to_constants(self):
         """An empty config yields the constant defaults, without raising."""

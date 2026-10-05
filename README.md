@@ -180,9 +180,9 @@ All 19 keys in `config/app_config.json`:
 | `video_frame_rate` | `5` | `VIDEO_FRAME_RATE` | app-wide |
 | `worker_thread_count` | `10` | `WORKER_THREAD_COUNT` | app-wide |
 | `worker_thread_timeout_seconds` | `5` | `WORKER_THREAD_TIMEOUT` | app-wide |
-| `nudenet_worker_thread_count` | `4` | *no constant* | app-wide |
+| `nudenet_worker_thread_count` | `4` | *no constant*, *dead* — see #104 | app-wide |
 | `nudenet_worker_thread_timeout_seconds` | `10` | *no constant*, *dead* — see #104 | app-wide |
-| `helloz_nsfw_worker_thread_count` | `20` | *no constant* | Helloz-NSFW |
+| `helloz_nsfw_worker_thread_count` | `20` | *no constant*, *dead* — see #104 | Helloz-NSFW |
 | `helloz_nsfw_worker_thread_timeout_seconds` | `35` | *no constant*, *dead* — see #104 | Helloz-NSFW |
 | `detect_timeout_seconds` | `60` | `DETECT_TIMEOUT` | app-wide |
 | `helloz_nsfw_host` | `"localhost"` | `HELLOZ_NSFW_HOST` | Helloz-NSFW |
@@ -197,10 +197,16 @@ stored in **seconds**, matching the constants in `src/core/constants.py` and the
 `detect_timeout_seconds: 3600` means one hour, as written.
 
 Every timeout key states its unit in its name — there is no bare `*_timeout` key,
-so the suffix is a reliable marker and not a convention. `nudenet_worker_thread_timeout_seconds`
-and `helloz_nsfw_worker_thread_timeout_seconds` are nonetheless **not read by any
-code** (no `src/` references) and are retained only as reference entries; their
-removal is tracked in issue #104.
+so the suffix is a reliable marker and not a convention. Four entries are
+nonetheless **not read by any code** (no `src/` references) and are retained only as
+reference entries: `nudenet_worker_thread_count`,
+`helloz_nsfw_worker_thread_count`, `nudenet_worker_thread_timeout_seconds` and
+`helloz_nsfw_worker_thread_timeout_seconds`. Their removal is tracked in issue #104,
+and `constants.DEAD_CONFIG_KEYS` is the single source of that list — a test greps
+`src/` for every shipped key, so a key cannot be documented as live without a reader.
+
+Only `worker_thread_count` is read for the worker pool; the per-detector counts above
+are inert.
 
 ### Automatic migration (issue #91)
 
@@ -214,8 +220,10 @@ deterministically:
 - A legacy value of at least one second (`>= 1000` ms) is converted ms → s,
   round-half-up (`2500` → `3`).
 - A legacy value below one second — including the shipped `250` — becomes the code
-  default (`5` s / `60` s). 250 ms is 0.25 s, which no whole-second timeout can
-  express and which would time out on essentially every file.
+  default (`5` s / `60` s). The whole `0–999` ms band is treated this way, *not* just
+  values that round to 0 s: 250 ms is 0.25 s and 700 ms is 0.7 s, neither of which is
+  a usable whole-second timeout, and rounding either up to 1 s would time out on
+  essentially every file.
 - Four keys that already held seconds but lacked the suffix
   (`helloz_nsfw_request_timeout`, `helloz_nsfw_health_check_timeout`,
   `nudenet_worker_thread_timeout`, `helloz_nsfw_worker_thread_timeout`) are **renamed**
@@ -231,16 +239,26 @@ naming the key and both the old and new value. So is a config file that could no
 or rewritten, which is the state in which a stale on-disk config matters most. Re-check
 your timeout values once after upgrading; the log tells you exactly what changed.
 
-Three config entries have no corresponding constant in `src/core/constants.py` and are
-read directly from `config/app_config.json` at runtime: `last_source_folder`,
-`nudenet_worker_thread_count`, and `helloz_nsfw_worker_thread_count`. The two
-`*_worker_thread_timeout_seconds` entries are likewise constant-free but **dead** — see
-issue #104.
+Exactly one config entry has no corresponding constant in `src/core/constants.py` and
+is read directly from `config/app_config.json` at runtime: `last_source_folder`. The
+four entries listed above as dead have no constant *and* no reader. A test enumerates
+both sets (`FIXTURE_NON_CONSTANT_KEYS` / `constants.DEAD_CONFIG_KEYS`) so the
+classification cannot drift.
 
-Every other numeric config value is coerced by
+Every numeric config value — in `__init__` and in every widget accessor — is coerced by
 `constants.normalize_positive_int` / `constants.normalize_timeout_seconds`: an
-unparseable, boolean, or out-of-range value falls back to the constant default and is
-logged at WARNING level, so no config error is applied silently.
+unparseable, boolean, or out-of-range value falls back to the constant default (or is
+clamped to the documented bound) and is logged at WARNING level, so no config error is
+applied silently.
+
+Supported ranges: `helloz_nsfw_port` is clamped to `1..65535`, and the timeout keys to
+their `TIMEOUT_MAX_SECONDS` bound (`worker_thread_timeout_seconds` and
+`detect_timeout_seconds`: 86400 s; the two Helloz timeouts: 3600 s). The GUI spin
+buttons use the same bounds, so a value inside the supported range is never truncated
+by the widget. A value *beyond* it is clamped, and
+`constants.log_timeout_truncations` reports the truncation at WARNING with the key,
+the configured value and the applied maximum — the note reaches the activity log, so a
+clamped value is visible rather than silently rewritten on the next save.
 
 A value that is the right unit but the wrong magnitude relative to its constant (e.g. a
 hand-tuned `helloz_nsfw_request_timeout_seconds: 300` against the 30 s code default) is

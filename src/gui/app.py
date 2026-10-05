@@ -6,6 +6,7 @@ Supports both NudeNet and Helloz NSFW models with theme support and session pers
 """
 
 import json
+import logging
 import os
 import sys
 from datetime import datetime
@@ -25,6 +26,8 @@ from .results import ResultsMixin
 from .scan_history import ScanHistoryMixin
 from .scanning import ScanningMixin
 from .session import SessionMixin
+
+logger = logging.getLogger(__name__)
 
 
 class NudityDetectorWindow(
@@ -63,6 +66,11 @@ class NudityDetectorWindow(
         # 30 s) is legitimate for a hand-tuned setting, so it is never rewritten — but
         # the user is told, per ADD-007: a change they never see is one they cannot correct.
         self._config_divergence_notes = constants.log_config_default_divergences(cfg)
+        # A timeout beyond the GUI spin button's supported maximum cannot be
+        # represented in the UI, and would otherwise be silently rewritten to the
+        # bound by the next save. Clamp it (below) and tell the user (ADD-007).
+        self._config_truncation_notes = constants.log_timeout_truncations(cfg)
+        self._config_migration_notes = self._config_migration_notes + self._config_truncation_notes
         self._model = cfg.get('model', constants.MODEL_NUDENET)
         self._folder = cfg.get('last_source_folder', '')
         self._theme_mode = cfg.get('theme', constants.THEME_SYSTEM)
@@ -72,7 +80,8 @@ class NudityDetectorWindow(
         )
         self._helloz_nsfw_host = cfg.get('helloz_nsfw_host', constants.HELLOZ_NSFW_HOST)
         self._helloz_nsfw_port = constants.normalize_positive_int(
-            cfg.get('helloz_nsfw_port'), constants.HELLOZ_NSFW_PORT, name='helloz_nsfw_port', min_value=1,
+            cfg.get('helloz_nsfw_port'), constants.HELLOZ_NSFW_PORT, name='helloz_nsfw_port',
+            min_value=1, max_value=constants.MAX_PORT,
         )
         self._helloz_nsfw_api_endpoint = cfg.get('helloz_nsfw_api_endpoint', constants.HELLOZ_NSFW_API_ENDPOINT)
         self._helloz_nsfw_request_timeout = constants.normalize_timeout_seconds(
@@ -320,7 +329,7 @@ class NudityDetectorWindow(
         thread_timeout_adj = Gtk.Adjustment(
             value=self._worker_thread_timeout,
             lower=1,
-            upper=300,
+            upper=constants.WORKER_THREAD_TIMEOUT_MAX_SECONDS,
             step_increment=1,
             page_increment=10,
         )
@@ -341,7 +350,7 @@ class NudityDetectorWindow(
         detect_timeout_adj = Gtk.Adjustment(
             value=self._detect_timeout,
             lower=1,
-            upper=600,
+            upper=constants.DETECT_TIMEOUT_MAX_SECONDS,
             step_increment=5,
             page_increment=30,
         )
@@ -382,7 +391,7 @@ class NudityDetectorWindow(
         ds_port_adj = Gtk.Adjustment(
             value=self._helloz_nsfw_port,
             lower=1,
-            upper=65535,
+            upper=constants.MAX_PORT,
             step_increment=1,
             page_increment=100,
         )
@@ -420,7 +429,7 @@ class NudityDetectorWindow(
         ds_req_timeout_adj = Gtk.Adjustment(
             value=self._helloz_nsfw_request_timeout,
             lower=1,
-            upper=300,
+            upper=constants.HELLOZ_NSFW_REQUEST_TIMEOUT_MAX_SECONDS,
             step_increment=1,
             page_increment=10,
         )
@@ -441,7 +450,7 @@ class NudityDetectorWindow(
         ds_health_timeout_adj = Gtk.Adjustment(
             value=self._helloz_nsfw_health_check_timeout,
             lower=1,
-            upper=60,
+            upper=constants.HELLOZ_NSFW_HEALTH_CHECK_TIMEOUT_MAX_SECONDS,
             step_increment=1,
             page_increment=5,
         )
@@ -781,6 +790,13 @@ class NudityDetectorWindow(
         key names, so it is read back through the seconds path of
         :func:`src.core.config_migration.migrate_config` and never re-interpreted.
 
+        The write goes through :func:`src.core.config_migration.write_config`, the
+        same atomic writer the startup migration uses, so an interrupted save
+        cannot leave the user's only config file as a partial JSON document. A
+        write failure is never swallowed: it is logged at WARNING naming the path
+        and the exception, and surfaced in the on-screen activity log, because a
+        silently discarded setting change is indistinguishable from one that saved.
+
         Returns:
             None.
         """
@@ -804,10 +820,10 @@ class NudityDetectorWindow(
                 'helloz_nsfw_request_timeout_seconds': self._get_helloz_nsfw_request_timeout(),
                 'helloz_nsfw_health_check_timeout_seconds': self._get_helloz_nsfw_health_check_timeout(),
             }
-            with open(config_path, 'w', encoding='utf-8') as f:
-                json.dump(data, f, indent=2)
-        except (OSError, IOError):
-            pass
+            config_migration.write_config(config_path, data)
+        except (OSError, ValueError, TypeError) as exc:
+            logger.warning("Could not save config to %s (%s); settings were not persisted", config_path, exc)
+            self.log_message(f'Config: could not save settings to {config_path} ({exc})', level='warning')
 
     # ------------------------------------------------------------------
     # Widget state accessors
@@ -822,13 +838,48 @@ class NudityDetectorWindow(
         return themes[idx] if idx < len(themes) else constants.THEME_SYSTEM
 
     def _get_progress_interval(self) -> int:
-        return max(1, int(self.progress_interval_spin.get_value()))
+        """Return the progress-update interval in files.
+
+        Routed through ``constants.normalize_positive_int`` like every other
+        numeric read (ADD-007 §5), so a widget value below the minimum clamps to 1
+        and logs rather than silently presenting.
+
+        Returns:
+            Interval in files, always >= 1.
+        """
+        return constants.normalize_positive_int(
+            self.progress_interval_spin.get_value(),
+            constants.SCAN_PROGRESS_UPDATE_INTERVAL,
+            name='progress_interval_spin',
+        )
 
     def _get_video_frame_rate(self) -> int:
-        return max(1, int(self.video_frame_rate_spin.get_value()))
+        """Return the video frame-extraction divisor.
+
+        Routed through ``constants.normalize_positive_int`` (ADD-007 §5).
+
+        Returns:
+            Frame rate divisor, always >= 1.
+        """
+        return constants.normalize_positive_int(
+            self.video_frame_rate_spin.get_value(),
+            constants.VIDEO_FRAME_RATE,
+            name='video_frame_rate_spin',
+        )
 
     def _get_worker_thread_count(self) -> int:
-        return max(1, int(self.worker_thread_count_spin.get_value()))
+        """Return the worker-thread pool size.
+
+        Routed through ``constants.normalize_positive_int`` (ADD-007 §5).
+
+        Returns:
+            Worker count, always >= 1.
+        """
+        return constants.normalize_positive_int(
+            self.worker_thread_count_spin.get_value(),
+            constants.WORKER_THREAD_COUNT,
+            name='worker_thread_count_spin',
+        )
 
     def _get_worker_thread_timeout(self) -> int:
         """Return the worker-thread join timeout in seconds.
@@ -870,8 +921,23 @@ class NudityDetectorWindow(
         return self.helloz_nsfw_host_entry.get_text().strip() or constants.HELLOZ_NSFW_HOST
 
     def _get_helloz_nsfw_port(self) -> int:
-        val = int(self.helloz_nsfw_port_spin.get_value())
-        return val if 1 <= val <= 65535 else constants.HELLOZ_NSFW_PORT
+        """Return the Helloz NSFW server port.
+
+        Routed through ``constants.normalize_positive_int`` with the explicit
+        ``constants.MAX_PORT`` upper bound, so an out-of-range value falls back to
+        the code default *and logs* naming the key, instead of silently
+        substituting the default as the previous hand-rolled range check did.
+
+        Returns:
+            TCP port, always in ``[1, constants.MAX_PORT]``.
+        """
+        return constants.normalize_positive_int(
+            self.helloz_nsfw_port_spin.get_value(),
+            constants.HELLOZ_NSFW_PORT,
+            name='helloz_nsfw_port_spin',
+            min_value=1,
+            max_value=constants.MAX_PORT,
+        )
 
     def _get_helloz_nsfw_api_endpoint(self) -> str:
         return self.helloz_nsfw_endpoint_entry.get_text().strip() or constants.HELLOZ_NSFW_API_ENDPOINT
