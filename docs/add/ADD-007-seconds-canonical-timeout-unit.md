@@ -4,7 +4,7 @@
 |------------|--------------------------------|
 | Status     | Accepted                       |
 | Date       | 2026-10-02 17:37               |
-| Revised    | 2026-10-05 09:40               |
+| Revised    | 2026-10-05 14:20               |
 | Author     | Dewald Oosthuizen              |
 | Relates to | ADD-005, ADD-006               |
 
@@ -221,6 +221,59 @@ disk or a permission change discarded every pending setting change with no log l
 and no activity-log entry. It now writes through `write_config` and, on failure, logs
 at WARNING naming the path and exception and surfaces the failure in the activity log
 via the existing `log_message` mechanism.
+
+### 5d. Review follow-ups: one rule per concern, and no silent forward path
+
+Four defects found in review of this PR's own additions are closed here, all of the
+same shape — a rule that exists in two places, or nowhere:
+
+**The scheme rule had two copies.** `resolve_scheme()` was introduced as the single
+scheme rule and then `_load_helloz_config` inlined the same
+http-for-loopback / https-for-remote default expression twice in a row, so the
+security-relevant half of the rule was duplicated inside one file and only one copy
+was canonical. `_load_helloz_config` now ends with
+`resolve_scheme(host, cfg.get('helloz_nsfw_scheme'))`; a test asserts the default
+expression occurs exactly once in `constants.py`.
+
+**A valid JSON document of the wrong shape was fatal.** The `try/except` in
+`_load_helloz_config` covered only `open()`/`json.load()`, so a config containing
+`[1, 2]`, `"dark"` or `null` parsed successfully and then `cfg.get(...)` raised
+`AttributeError`/`TypeError` out of the detection backend on every call. The shape is
+now checked after the load and the built-in defaults are returned with a WARNING
+naming the file and the JSON type found.
+
+**The millisecond conversion was float arithmetic outside its own guard.** The
+round-half-up step used `int(ms / 1000 + 0.5)`, which is inexact, and sat outside the
+`OverflowError` guard the comment above it reasoned about — so a hand-edited
+multi-hundred-digit JSON integer raised straight out of `migrate_config`, and therefore
+out of the window constructor. It is now exact integer arithmetic,
+`(ms + 500) // 1000`, inside a guarded block. Separately, the threshold it compares
+against is now `SUBSECOND_MILLISECOND_CEILING`, distinct from the
+`MILLISECONDS_PER_SECOND` conversion factor, so the two cannot be changed together
+and a future reader cannot mistake the factor for a unit-detection bound.
+
+**A downgrade was silently accepted.** `config_version: 3` — the user ran a later
+build, then came back to this one — took the no-migration branch with no log line, so
+every key the newer schema renamed was silently ignored and the affected settings fell
+back to constants. `needs_migration` now logs a WARNING naming both versions, and
+`downgrade_note` returns the same information as a note so it reaches the activity log.
+The config is still not rewritten: this build cannot know what the newer schema means.
+
+Two documentation defects are closed at the same time. The activity-log promise in
+`.env.example` and `README.md` was scoped to migration notes; the coercion warnings
+raised on the detection read path are WARNING-level logger records only, and both
+documents now say so. And the normative migration rules — the conversion, the
+sub-second fallback, the both-spellings rule, the rename set — are stated **here** and
+only summarised in `README.md` and `.env.example`, each of which links back to this
+file. Three hand-maintained copies of a rule set is how the sub-second rule and the
+dead-key rename needed correcting in three documents in one pass.
+
+`DEAD_CONFIG_KEYS` stays in `src/core/constants.py`: it is classification data, no
+code branches on it, and the documentation needs one discoverable authoritative
+source. The drift that choice risks against the shipped fixture is pinned by
+`test_dead_config_keys_agree_with_the_shipped_fixture`, which requires the dead set
+plus the three genuinely non-constant live keys to be exactly the fixture's
+constant-less entries.
 
 ### 6. The runtime config is not committed
 

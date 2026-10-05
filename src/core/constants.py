@@ -144,26 +144,39 @@ def _normalize_config_text(value, default, name):
     straight into the request URL, producing a malformed address that surfaces as a
     confusing connection error instead of a named config problem.
 
+    ``default=None`` is a supported sentinel meaning "no value": the caller treats a
+    None return as "absent or unusable" and supplies its own fallback. In that case the
+    WARNING omits the default entirely rather than telling the user the app is "using
+    default of None", which is not a remedy anyone can act on.
+
     Args:
         value: Raw configured value; may be None, a non-string, or blank.
-        default: Value used when the configured value is unusable.
+        default: Value used when the configured value is unusable, or None to mean
+            "no value" (the caller supplies the fallback).
         name: Setting name, used only to make the WARNING message actionable.
 
     Returns:
-        The stripped string value, or ``default`` when it cannot be used.
+        The stripped string value, ``default`` when it cannot be used (None when
+        ``default`` is None).
     """
     if value is None:
         # An absent key is normal on a fresh install, not a defect.
         logger.debug("%s is not configured; using default of %r", name, default)
         return default
     if not isinstance(value, str):
-        logger.warning(
-            "%s value %r is not a string; using default of %r", name, value, default,
-        )
+        if default is None:
+            logger.warning("%s value %r is not a string; it is being ignored", name, value)
+        else:
+            logger.warning(
+                "%s value %r is not a string; using default of %r", name, value, default,
+            )
         return default
     stripped = value.strip()
     if not stripped:
-        logger.warning("%s is blank; using default of %r", name, default)
+        if default is None:
+            logger.warning("%s is blank; it is being ignored", name)
+        else:
+            logger.warning("%s is blank; using default of %r", name, default)
         return default
     return stripped
 
@@ -182,13 +195,24 @@ def _load_helloz_config():
         Tuple of ``(host, port, endpoint, scheme)``, using the built-in defaults for
         any key that is absent or unusable.
     """
+    path = _config_path()
     try:
-        with open(_config_path(), 'r') as f:
+        with open(path, 'r') as f:
             cfg = json.load(f)
     except (OSError, json.JSONDecodeError):
         logger.warning(
             "app_config.json not found or invalid at %s; using built-in defaults",
-            _config_path(),
+            path,
+        )
+        return HELLOZ_NSFW_HOST, HELLOZ_NSFW_PORT, HELLOZ_NSFW_API_ENDPOINT, 'http'
+    if not isinstance(cfg, dict):
+        # Valid JSON of the wrong shape parses without error, so the try/except
+        # above does not catch it. Calling .get() on a list/str/None would raise
+        # AttributeError/TypeError out of the detection backend on every call —
+        # the opposite of "return defaults on error".
+        logger.warning(
+            "app_config.json at %s contains a JSON %s, not an object; using built-in defaults",
+            path, type(cfg).__name__,
         )
         return HELLOZ_NSFW_HOST, HELLOZ_NSFW_PORT, HELLOZ_NSFW_API_ENDPOINT, 'http'
     host = _normalize_config_text(cfg.get('helloz_nsfw_host'), HELLOZ_NSFW_HOST, 'helloz_nsfw_host')
@@ -199,16 +223,10 @@ def _load_helloz_config():
     endpoint = _normalize_config_text(
         cfg.get('helloz_nsfw_api_endpoint'), HELLOZ_NSFW_API_ENDPOINT, 'helloz_nsfw_api_endpoint',
     )
-    # Use configured scheme when provided; otherwise default to http for loopback
-    # and https for any remote host.
-    if 'helloz_nsfw_scheme' in cfg:
-        scheme = _normalize_config_text(
-            cfg['helloz_nsfw_scheme'], None, 'helloz_nsfw_scheme',
-        )
-        if scheme is None:
-            scheme = 'http' if host in _LOOPBACK_HOSTS else 'https'
-    else:
-        scheme = 'http' if host in _LOOPBACK_HOSTS else 'https'
+    # resolve_scheme is the single scheme rule (http for loopback, https for remote,
+    # explicit override honoured, explicit http for a remote host rejected). The
+    # detection read path routes through it so the rule cannot diverge from the GUI.
+    scheme = resolve_scheme(host, cfg.get('helloz_nsfw_scheme'))
     return host, port, endpoint, scheme
 
 
@@ -317,10 +335,20 @@ DETECT_TIMEOUT = 60  # seconds for individual detections
 # Threading — Timeout Units
 # ============================================================================
 # Conversion factor used ONLY by the one-time config migration in
-# src/core/config_migration.py. It is a plain conversion factor, deliberately
-# unrelated to any unit-detection bound: since ADD-007 the unit is never guessed
-# from the magnitude of a value, it is stated by the config schema version.
+# src/core/config_migration.py. It is a plain conversion factor: since ADD-007 the
+# unit is never guessed from the magnitude of a value, it is stated by the config
+# schema version. Nothing may use it as a unit-detection bound — that threshold is
+# SUBSECOND_MILLISECOND_CEILING below — or changing it for conversion reasons would
+# silently move the migration's sub-second fallback with it.
 MILLISECONDS_PER_SECOND = 1000
+
+# Threshold below which a *legacy millisecond* value cannot be honoured as a
+# whole-second timeout and is replaced by the key's constant default instead.
+# This is a fidelity threshold, not a unit-detection bound: the decision to read a
+# value as milliseconds is made by the declared ``config_version``, never by this
+# number. Kept separate from MILLISECONDS_PER_SECOND so a change to the conversion
+# factor cannot move the fallback boundary, and vice versa.
+SUBSECOND_MILLISECOND_CEILING = 1000
 
 # Bumped whenever the meaning (not merely the value) of a config key changes.
 # Version 1: timeout keys were milliseconds (the defect in issue #91).
@@ -372,7 +400,7 @@ CONFIG_DEFAULT_ALIGNMENT = {
 
 
 # Smallest whole-second timeout the migration will ever emit. A legacy millisecond
-# value below one second (``MILLISECONDS_PER_SECOND``) is not migrated by arithmetic
+# value below :data:`SUBSECOND_MILLISECOND_CEILING` is not migrated by arithmetic
 # at all — it is replaced by the key's constant default, because 0.25 s expressed
 # in whole seconds is not a usable timeout. The floor is **enforced**, not merely
 # documented: ``config_migration._validated_fallback_seconds`` clamps any
@@ -402,8 +430,17 @@ MAX_PORT = 65535
 
 # Config keys that no code under ``src/`` reads. They are retained in the shipped
 # defaults as a reference table only; their removal is tracked in issue #104.
-# Kept here so the documentation, the reference fixture and the test that greps
-# ``src/`` for a reader cannot disagree about which keys are dead.
+#
+# WHY THIS LIVES IN src/ RATHER THAN IN tests/fixtures/: no code branches on this
+# set — it is classification data consumed by the reader-grep test and by the
+# shipped documentation tables. It is declared here (rather than in a test fixture)
+# so that it is discoverable next to the constants it classifies and so the
+# documentation can name a single authoritative source. The cost of that choice is
+# drift against ``tests/fixtures/app_config.default.json``, which is pinned by
+# ``test_dead_config_keys_agree_with_the_shipped_fixture`` in
+# ``tests/core/test_timeout_units_issue91.py``: the dead set plus the three
+# genuinely non-constant live keys must be exactly the fixture's constant-less
+# entries, so neither side can change alone.
 #
 # SELF-REFERENCE: this declaration lives in ``src/``, so a naive "does the string
 # appear anywhere under src/" search would find every entry here and classify all

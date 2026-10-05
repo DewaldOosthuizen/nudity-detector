@@ -40,6 +40,7 @@ from .constants import (
     MILLISECONDS_PER_SECOND,
     MIN_MIGRATABLE_SECONDS,
     RENAMED_TIMEOUT_KEYS,
+    SUBSECOND_MILLISECOND_CEILING,
 )
 
 logger = logging.getLogger(__name__)
@@ -98,21 +99,60 @@ def config_version(cfg):
 def needs_migration(cfg):
     """Return whether ``cfg`` predates the seconds timeout contract.
 
+    A config stamped with a version *newer* than :data:`CONFIG_VERSION` is a
+    downgrade (the user ran a later build, then came back to this one). It is
+    deliberately not migrated — this build cannot know what the later schema means
+    — but it is reported, because every key the newer schema renamed is then
+    silently ignored by this build's readers and the affected settings fall back
+    to constants with no indication to the user.
+
     Args:
         cfg: Loaded config mapping.
 
     Returns:
         True if the config must be migrated from millisecond to second timeouts.
     """
-    return config_version(cfg) < CONFIG_VERSION
+    version = config_version(cfg)
+    if version > CONFIG_VERSION:
+        message = (
+            f"{CONFIG_VERSION_KEY} is {version}, newer than the supported version "
+            f"{CONFIG_VERSION}; this config was written by a later build, so its "
+            "settings are read as-is and any key that build renamed is ignored "
+            "(settings fall back to the built-in defaults)"
+        )
+        logger.warning("Config downgrade: %s", message)
+        return False
+    return version < CONFIG_VERSION
+
+
+def downgrade_note(cfg):
+    """Return an activity-log note when ``cfg`` declares a newer schema version.
+
+    Args:
+        cfg: Loaded config mapping.
+
+    Returns:
+        A one-line description naming both versions when ``cfg`` declares a version
+        greater than :data:`CONFIG_VERSION`, otherwise None.
+    """
+    version = config_version(cfg)
+    if version <= CONFIG_VERSION:
+        return None
+    return (
+        f"{CONFIG_VERSION_KEY} is {version}, newer than the supported version "
+        f"{CONFIG_VERSION}; this file was written by a later build and is used "
+        "as-is, so settings it renamed are read as defaults"
+    )
 
 
 def _convert_milliseconds_to_seconds(raw_value, default_seconds, key):
     """Convert one legacy millisecond timeout to whole seconds.
 
     The decision rule matches every document in the PR: a legacy value of at least
-    one second (``>= MILLISECONDS_PER_SECOND`` ms) is converted ms -> s, round-half-up;
-    anything below one second is *unconvertible* and falls back to ``default_seconds``.
+    one second (``>= SUBSECOND_MILLISECOND_CEILING`` ms) is converted ms -> s,
+    round-half-up; anything below one second is *unconvertible* and falls back to
+    ``default_seconds``. The threshold is a fidelity bound, not a unit-detection
+    bound — the unit is known from the declared ``config_version``.
 
     The shipped ``250`` is exactly such a value: 250 ms is 0.25 s, which no
     whole-second timeout can express and which would make every detection time out
@@ -138,16 +178,27 @@ def _convert_milliseconds_to_seconds(raw_value, default_seconds, key):
         # OverflowError covers non-finite floats such as float('inf').
         fallback = _validated_fallback_seconds(default_seconds, key)
         return fallback, f"{key}: unusable value {raw_value!r} replaced with {fallback} s"
-    if milliseconds < MILLISECONDS_PER_SECOND:
-        # Includes negatives and zero: no sub-second value can be expressed as a
-        # usable whole-second timeout.
+    if milliseconds < SUBSECOND_MILLISECOND_CEILING:
+        # The unit comes from the declared config *version*, not from the magnitude
+        # of the value (ADD-007). What this threshold expresses is that the legacy
+        # value is shorter than one second: no sub-second value can be expressed as
+        # a usable whole-second timeout, including the 700-999 ms band that would
+        # otherwise round up to 1 s and time out on essentially every file.
+        # Includes negatives and zero.
         fallback = _validated_fallback_seconds(default_seconds, key)
         return (
             fallback,
             f"{key}: legacy {milliseconds} ms is below one second, replaced with {fallback} s",
         )
-    seconds = int(milliseconds / MILLISECONDS_PER_SECOND + 0.5)  # round-half-up
-    # With milliseconds >= MILLISECONDS_PER_SECOND the rounding above yields
+    try:
+        # Exact integer round-half-up. Integer-only arithmetic avoids both the
+        # inexactness of float division and the OverflowError a hand-edited
+        # multi-hundred-digit JSON integer would raise in ``ms / 1000.0``.
+        seconds = (milliseconds + MILLISECONDS_PER_SECOND // 2) // MILLISECONDS_PER_SECOND
+    except (TypeError, ValueError, OverflowError):  # pragma: no cover - defensive
+        fallback = _validated_fallback_seconds(default_seconds, key)
+        return fallback, f"{key}: unusable value {raw_value!r} replaced with {fallback} s"
+    # With milliseconds >= SUBSECOND_MILLISECOND_CEILING the rounding above yields
     # >= MIN_MIGRATABLE_SECONDS by construction; the fallback branch is what
     # _validated_fallback_seconds floors, and
     # ``test_conversion_never_emits_below_the_migratable_floor`` pins both.
@@ -354,8 +405,14 @@ def migrate_config_file(config_dir=None, config_file_name=None, cfg=None):
         return {}, [f"{config_path} is not a JSON object; it is ignored and will be retried on every start"]
 
     migrated, changes = migrate_config(cfg)
+    # A downgrade is never migrated, but it is surfaced: the user's settings would
+    # otherwise silently read as defaults on this build.
+    notes = list(changes)
+    newer = downgrade_note(cfg)
+    if newer:
+        notes.append(newer)
     if not changes and config_version(cfg) >= CONFIG_VERSION:
-        return dict(cfg), []
+        return dict(cfg), notes
 
     try:
         write_config(config_path, migrated)

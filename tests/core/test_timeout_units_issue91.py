@@ -952,6 +952,9 @@ FIXTURE_NON_CONSTANT_KEYS = {
 }
 
 
+FIXTURE_CONSTANT_KEYS_DICT = dict(FIXTURE_CONSTANT_KEYS)
+
+
 @pytest.mark.parametrize("key, expected", FIXTURE_CONSTANT_KEYS)
 def test_fixture_matches_constant(key, expected):
     """Each constant-backed fixture key equals its constant default."""
@@ -1249,3 +1252,118 @@ def test_resolve_scheme_is_the_single_scheme_rule():
         constants.resolve_scheme("myserver", "http")
     # An unusable configured scheme falls back to the default rule, never to http.
     assert constants.resolve_scheme("myserver", 42) == "https"
+
+
+# ---------------------------------------------------------------------------
+# PR #102 review — hardening of the shared read path
+# ---------------------------------------------------------------------------
+
+def test_load_helloz_config_uses_the_single_scheme_rule(tmp_path, monkeypatch):
+    """``_load_helloz_config`` routes through ``resolve_scheme``, not its own copy.
+
+    Regression guard: the PR added ``resolve_scheme`` as the single scheme rule and
+    then inlined the same http-for-loopback / https-for-remote default twice more in
+    ``_load_helloz_config``, so the security-relevant half of the rule existed in two
+    places and only one was canonical.
+    """
+    calls = []
+    original = constants.resolve_scheme
+    monkeypatch.setattr(
+        constants, "resolve_scheme",
+        lambda host, scheme=None: calls.append((host, scheme)) or original(host, scheme),
+    )
+    with _write_config(tmp_path, {"helloz_nsfw_host": "localhost"}):
+        _host, _port, _endpoint, scheme = constants._load_helloz_config()
+    assert scheme == "http"
+    assert calls == [("localhost", None)], "detection read path bypassed resolve_scheme"
+    # The default expression itself must exist in exactly one function.
+    source = open(constants.__file__, encoding="utf-8").read()
+    assert source.count("'http' if host in _LOOPBACK_HOSTS else 'https'") == 1
+
+
+@pytest.mark.parametrize("payload", ["[1, 2]", '"dark"', "null", "42"])
+def test_load_helloz_config_rejects_a_non_object_document(tmp_path, caplog, payload):
+    """Valid JSON of the wrong shape must not raise out of the detection path.
+
+    Regression guard: ``json.load`` succeeded, so the ``try/except`` never fired and
+    ``cfg.get(...)`` raised AttributeError/TypeError on every detection call —
+    the opposite of the function's stated "return defaults on error" contract.
+    """
+    config_path = tmp_path / "app_config.json"
+    config_path.write_text(payload, encoding="utf-8")
+    with patch("src.core.constants._config_path", return_value=str(config_path)), \
+         caplog.at_level("WARNING", logger="src.core.constants"):
+        result = constants._load_helloz_config()
+    assert result == (
+        constants.HELLOZ_NSFW_HOST, constants.HELLOZ_NSFW_PORT,
+        constants.HELLOZ_NSFW_API_ENDPOINT, 'http',
+    )
+    assert "not an object" in caplog.text
+
+
+def test_absurdly_large_legacy_value_never_raises(tmp_path):
+    """A ~400-digit legacy integer must not escape the migration.
+
+    Regression guard: ``ms / 1000.0`` raised OverflowError for an integer beyond
+    the float range, escaping ``migrate_config`` and therefore the window
+    constructor — from the function whose job is to be defensive about junk. The
+    integer-only conversion is exact, so the absurd magnitude is carried forward
+    and bounded downstream by the read path, which is where the bound lives.
+    """
+    huge = int("9" * 400)
+    migrated, changes = config_migration.migrate_config({"detect_timeout": huge})
+    assert isinstance(migrated["detect_timeout_seconds"], int)
+    assert migrated["detect_timeout_seconds"] == (huge + 500) // 1000
+    assert changes and "detect_timeout" in changes[0]
+    # Bounded on read, never on write — the value is honoured, not silently capped.
+    assert constants.normalize_timeout_seconds(
+        migrated["detect_timeout_seconds"], constants.DETECT_TIMEOUT,
+        name="detect_timeout_seconds", max_seconds=constants.DETECT_TIMEOUT_MAX_SECONDS,
+    ) == constants.DETECT_TIMEOUT_MAX_SECONDS
+    # And the file-level entry point stays exception-free.
+    (tmp_path / "app_config.json").write_text(
+        json.dumps({"detect_timeout": huge}), encoding="utf-8",
+    )
+    persisted, notes = config_migration.migrate_config_file(str(tmp_path), "app_config.json")
+    assert isinstance(persisted["detect_timeout_seconds"], int)
+    assert notes
+
+
+def test_config_from_a_newer_schema_version_warns_and_is_not_migrated(caplog):
+    """A downgrade is reported, never silently accepted."""
+    cfg = {constants.CONFIG_VERSION_KEY: constants.CONFIG_VERSION + 1, "detect_timeout": 250}
+    with caplog.at_level("WARNING", logger="src.core.config_migration"):
+        assert config_migration.needs_migration(cfg) is False
+        note = config_migration.downgrade_note(cfg)
+    assert note and str(constants.CONFIG_VERSION + 1) in note
+    assert str(constants.CONFIG_VERSION) in note
+    assert "newer than the supported version" in caplog.text
+    # Nothing was rewritten: this build cannot know the newer schema.
+    assert config_migration.migrate_config(cfg) == (cfg, [])
+    assert config_migration.downgrade_note({}) is None
+
+
+def test_downgrade_reaches_the_activity_log(tmp_path):
+    """``migrate_config_file`` returns the downgrade note so the GUI can show it."""
+    (tmp_path / "app_config.json").write_text(
+        json.dumps({constants.CONFIG_VERSION_KEY: constants.CONFIG_VERSION + 1, "theme": "dark"}),
+        encoding="utf-8",
+    )
+    migrated, notes = config_migration.migrate_config_file(str(tmp_path), "app_config.json")
+    assert migrated == {constants.CONFIG_VERSION_KEY: constants.CONFIG_VERSION + 1, "theme": "dark"}
+    assert any("newer than the supported version" in note for note in notes)
+
+
+def test_dead_config_keys_agree_with_the_shipped_fixture():
+    """The dead-key set and the fixture's non-constant set describe the same split.
+
+    ``DEAD_CONFIG_KEYS`` is documentation-and-test data that lives in
+    ``src/core/constants.py`` deliberately, so the drift risk it carries is pinned
+    here: the four dead keys plus the three genuinely non-constant live keys must be
+    exactly the fixture's constant-less entries.
+    """
+    non_constant_live = {"config_version", "model", "last_source_folder"}
+    assert set(_load_default_config()) - set(FIXTURE_CONSTANT_KEYS_DICT) == (
+        set(constants.DEAD_CONFIG_KEYS) | non_constant_live
+    )
+    assert constants.DEAD_CONFIG_KEYS <= set(FIXTURE_NON_CONSTANT_KEYS)

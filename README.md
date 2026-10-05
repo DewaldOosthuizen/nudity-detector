@@ -245,28 +245,20 @@ named `worker_thread_timeout` / `detect_timeout` and held **milliseconds** — w
 what produced the reported 250-second hangs on the values the project shipped.
 
 On startup, `src/core/config_migration.py` converts any pre-version-2 config once,
-deterministically:
+deterministically and atomically (sibling temp file plus `os.replace`, so an
+interrupted rewrite cannot truncate the user's only config file), then stamps it
+`config_version: 2` so the conversion never runs twice. The normative rules — the
+millisecond conversion and its sub-second fallback, which spelling wins when both are
+present, and the keys that are renamed without conversion — are stated once, in
+[`docs/add/ADD-007`](docs/add/ADD-007-seconds-canonical-timeout-unit.md), and are not
+restated here.
 
-- A legacy value of at least one second (`>= 1000` ms) is converted ms → s,
-  round-half-up (`2500` → `3`).
-- A legacy value below one second — including the shipped `250` — becomes the code
-  default (`5` s / `60` s). The whole `0–999` ms band is treated this way, *not* just
-  values that round to 0 s: 250 ms is 0.25 s and 700 ms is 0.7 s, neither of which is
-  a usable whole-second timeout, and rounding either up to 1 s would time out on
-  essentially every file.
-- Two keys that already held seconds but lacked the suffix
-  (`helloz_nsfw_request_timeout`, `helloz_nsfw_health_check_timeout`) are **renamed**
-  with their values untouched — the unit was always seconds for those keys.
-- When a config carries *both* spellings of a key, the `_seconds` value is authoritative:
-  the legacy key is dropped and the explicit value kept, never overwritten.
-- The migrated file is written back to disk at startup — atomically, via a sibling temp
-  file and `os.replace`, so an interrupted rewrite cannot truncate the user's only config
-  file — and stamped `config_version: 2`, so the conversion never runs twice.
-
-Every rewrite is logged at WARNING level **and** written to the on-screen activity log,
-naming the key and both the old and new value. So is a config file that could not be read
-or rewritten, which is the state in which a stale on-disk config matters most. Re-check
-your timeout values once after upgrading; the log tells you exactly what changed.
+Migration notes — every rewrite, and every failure to read or rewrite the file — are
+logged at WARNING level **and** written to the on-screen activity log, naming the key
+and both the old and new value. (Coercion warnings raised later on the detection read
+path are WARNING-level logger records only and are *not* shown in the activity log.)
+Re-check your timeout values once after upgrading; the log tells you exactly what
+changed.
 
 Exactly one config entry has no corresponding constant in `src/core/constants.py` and
 is read directly from `config/app_config.json` at runtime: `last_source_folder`. The
