@@ -13,6 +13,7 @@ structured as it is, not just *how* it works.
 | 004  | PyInstaller one-dir + AppImage packaging pipeline        | Accepted |
 | 005  | Ruff as the sole linting tool                            | Accepted |
 | 006  | GLib.idle_add for GUI updates from worker threads        | Accepted |
+| 007  | Seconds as the canonical timeout unit                    | Accepted |
 
 ## Conventions
 

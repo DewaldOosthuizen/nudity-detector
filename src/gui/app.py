@@ -6,6 +6,7 @@ Supports both NudeNet and Helloz NSFW models with theme support and session pers
 """
 
 import json
+import logging
 import os
 import sys
 from datetime import datetime
@@ -16,7 +17,7 @@ gi.require_version('Gtk', '4.0')
 gi.require_version('Adw', '1')
 from gi.repository import Adw, Gio, GLib, Gtk
 
-from ..core import constants
+from ..core import config_migration, constants
 from ..core.utils import get_report_path
 from .dialogs import DialogsMixin
 from .preview import PreviewMixin
@@ -25,6 +26,8 @@ from .results import ResultsMixin
 from .scan_history import ScanHistoryMixin
 from .scanning import ScanningMixin
 from .session import SessionMixin
+
+logger = logging.getLogger(__name__)
 
 
 class NudityDetectorWindow(
@@ -46,44 +49,78 @@ class NudityDetectorWindow(
         self.set_size_request(constants.GUI_WINDOW_MIN_WIDTH, constants.GUI_WINDOW_MIN_HEIGHT)
 
         cfg = self._load_config()
+        # One-time unit migration (ADD-007): a config written before CONFIG_VERSION 2
+        # carries its timeouts in milliseconds. Migrate before any read so the unit
+        # boundary below only ever sees seconds, and so an existing install is repaired
+        # rather than left with the shipped 250-second timeouts. The on-disk rewrite is
+        # persisted here, so the conversion is recorded once and does not depend on the
+        # user happening to change a setting; notes cover every rewrite *and* every
+        # failure to read/persist the file, so a stale on-disk config is never silent.
+        # An empty ``cfg`` means ``_load_config`` already found the file missing or
+        # unreadable, so it is re-read here to tell the user which of the two it was
+        # (and to record the reason in the activity log).
+        cfg, self._config_migration_notes = config_migration.migrate_config_file(
+            constants.CONFIG_DIR, constants.CONFIG_FILE_NAME, cfg=cfg or None,
+        )
+        # A right-unit / wrong-magnitude value (e.g. 300 s where the code default is
+        # 30 s) is legitimate for a hand-tuned setting, so it is never rewritten — but
+        # the user is told, per ADD-007: a change they never see is one they cannot correct.
+        self._config_divergence_notes = constants.log_config_default_divergences(cfg)
+        # The on-disk config as loaded (and migrated). ``_save_config`` starts from
+        # this dict and overwrites only the keys the GUI owns, so keys the GUI has
+        # no widget for — ``helloz_nsfw_scheme`` above all, plus any key a future
+        # version adds — survive a save instead of being silently erased.
+        self._config = dict(cfg)
+        # A timeout beyond the GUI spin button's supported maximum cannot be
+        # represented in the UI, and would otherwise be silently rewritten to the
+        # bound by the next save. Clamp it (below) and tell the user (ADD-007).
+        self._config_truncation_notes = constants.log_timeout_truncations(cfg)
+        self._config_migration_notes = self._config_migration_notes + self._config_truncation_notes
         self._model = cfg.get('model', constants.MODEL_NUDENET)
         self._folder = cfg.get('last_source_folder', '')
         self._theme_mode = cfg.get('theme', constants.THEME_SYSTEM)
-        self._threshold = float(cfg.get('threshold_percent', constants.DEFAULT_THRESHOLD_PERCENT))
-        try:
-            self._progress_interval = max(1, int(cfg.get('progress_update_interval', constants.SCAN_PROGRESS_UPDATE_INTERVAL)))
-        except (ValueError, TypeError):
-            self._progress_interval = constants.SCAN_PROGRESS_UPDATE_INTERVAL
+        # Routed through ``constants.normalize_threshold_percent`` like every other
+        # numeric config read (ADD-007 §5): a hand-edited ``"abc"`` or ``true`` here
+        # used to raise out of the constructor, so the app never started.
+        self._threshold = constants.normalize_threshold_percent(
+            cfg.get('threshold_percent'), constants.DEFAULT_THRESHOLD_PERCENT, name='threshold_percent',
+        )
+        self._progress_interval = constants.normalize_positive_int(
+            cfg.get('progress_update_interval'), constants.SCAN_PROGRESS_UPDATE_INTERVAL, name='progress_update_interval'
+        )
         self._helloz_nsfw_host = cfg.get('helloz_nsfw_host', constants.HELLOZ_NSFW_HOST)
-        try:
-            self._helloz_nsfw_port = int(cfg.get('helloz_nsfw_port', constants.HELLOZ_NSFW_PORT))
-        except (ValueError, TypeError):
-            self._helloz_nsfw_port = constants.HELLOZ_NSFW_PORT
+        self._helloz_nsfw_port = constants.normalize_positive_int(
+            cfg.get('helloz_nsfw_port'), constants.HELLOZ_NSFW_PORT, name='helloz_nsfw_port',
+            min_value=1, max_value=constants.MAX_PORT,
+        )
         self._helloz_nsfw_api_endpoint = cfg.get('helloz_nsfw_api_endpoint', constants.HELLOZ_NSFW_API_ENDPOINT)
-        try:
-            self._helloz_nsfw_request_timeout = int(cfg.get('helloz_nsfw_request_timeout', constants.HELLOZ_NSFW_REQUEST_TIMEOUT))
-        except (ValueError, TypeError):
-            self._helloz_nsfw_request_timeout = constants.HELLOZ_NSFW_REQUEST_TIMEOUT
-        try:
-            self._helloz_nsfw_health_check_timeout = int(cfg.get('helloz_nsfw_health_check_timeout', constants.HELLOZ_NSFW_HEALTH_CHECK_TIMEOUT))
-        except (ValueError, TypeError):
-            self._helloz_nsfw_health_check_timeout = constants.HELLOZ_NSFW_HEALTH_CHECK_TIMEOUT
-        try:
-            self._worker_thread_count = max(1, int(cfg.get('worker_thread_count', constants.WORKER_THREAD_COUNT)))
-        except (ValueError, TypeError):
-            self._worker_thread_count = constants.WORKER_THREAD_COUNT
-        try:
-            self._worker_thread_timeout = max(1, int(cfg.get('worker_thread_timeout', constants.WORKER_THREAD_TIMEOUT)))
-        except (ValueError, TypeError):
-            self._worker_thread_timeout = constants.WORKER_THREAD_TIMEOUT
-        try:
-            self._detect_timeout = max(1, int(cfg.get('detect_timeout', constants.DETECT_TIMEOUT)))
-        except (ValueError, TypeError):
-            self._detect_timeout = constants.DETECT_TIMEOUT
-        try:
-            self._video_frame_rate = max(1, int(cfg.get('video_frame_rate', constants.VIDEO_FRAME_RATE)))
-        except (ValueError, TypeError):
-            self._video_frame_rate = constants.VIDEO_FRAME_RATE
+        self._helloz_nsfw_request_timeout = constants.normalize_timeout_seconds(
+            cfg.get('helloz_nsfw_request_timeout_seconds'),
+            constants.HELLOZ_NSFW_REQUEST_TIMEOUT,
+            name='helloz_nsfw_request_timeout_seconds',
+            max_seconds=constants.HELLOZ_NSFW_REQUEST_TIMEOUT_MAX_SECONDS,
+        )
+        self._helloz_nsfw_health_check_timeout = constants.normalize_timeout_seconds(
+            cfg.get('helloz_nsfw_health_check_timeout_seconds'),
+            constants.HELLOZ_NSFW_HEALTH_CHECK_TIMEOUT,
+            name='helloz_nsfw_health_check_timeout_seconds',
+            max_seconds=constants.HELLOZ_NSFW_HEALTH_CHECK_TIMEOUT_MAX_SECONDS,
+        )
+        self._worker_thread_count = constants.normalize_positive_int(
+            cfg.get('worker_thread_count'), constants.WORKER_THREAD_COUNT, name='worker_thread_count'
+        )
+        self._worker_thread_timeout = constants.normalize_timeout_seconds(
+            cfg.get('worker_thread_timeout_seconds'), constants.WORKER_THREAD_TIMEOUT,
+            name='worker_thread_timeout_seconds',
+            max_seconds=constants.WORKER_THREAD_TIMEOUT_MAX_SECONDS,
+        )
+        self._detect_timeout = constants.normalize_timeout_seconds(
+            cfg.get('detect_timeout_seconds'), constants.DETECT_TIMEOUT, name='detect_timeout_seconds',
+            max_seconds=constants.DETECT_TIMEOUT_MAX_SECONDS,
+        )
+        self._video_frame_rate = constants.normalize_positive_int(
+            cfg.get('video_frame_rate'), constants.VIDEO_FRAME_RATE, name='video_frame_rate'
+        )
 
         self.is_processing = False
         self.processing_thread = None
@@ -100,6 +137,25 @@ class NudityDetectorWindow(
         self._build_ui()
         self._apply_theme(self._theme_mode)
         self.load_initial_session()
+        self._announce_config_migration()
+
+    def _announce_config_migration(self):
+        """Show config-migration rewrites and failures in the on-screen activity log.
+
+        A unit rewrite the user never sees is a rewrite they cannot correct, and a
+        config file that could not be migrated or persisted is exactly the state
+        where the user most needs to be told the on-disk file is stale. Both are
+        logged by ``config_migration``, but the GUI user reads the activity log, not
+        the Python logger, so the notes are surfaced there too.
+
+        Returns:
+            None. No-op when the config needed no migration and diverged from no
+            constant default.
+        """
+        for note in self._config_migration_notes:
+            self.log_message(f'Config: {note}', level='warning')
+        for note in self._config_divergence_notes:
+            self.log_message(f'Config: {note}', level='warning')
 
     # ------------------------------------------------------------------
     # UI construction
@@ -288,7 +344,7 @@ class NudityDetectorWindow(
         thread_timeout_adj = Gtk.Adjustment(
             value=self._worker_thread_timeout,
             lower=1,
-            upper=300,
+            upper=constants.WORKER_THREAD_TIMEOUT_MAX_SECONDS,
             step_increment=1,
             page_increment=10,
         )
@@ -309,7 +365,7 @@ class NudityDetectorWindow(
         detect_timeout_adj = Gtk.Adjustment(
             value=self._detect_timeout,
             lower=1,
-            upper=600,
+            upper=constants.DETECT_TIMEOUT_MAX_SECONDS,
             step_increment=5,
             page_increment=30,
         )
@@ -350,7 +406,7 @@ class NudityDetectorWindow(
         ds_port_adj = Gtk.Adjustment(
             value=self._helloz_nsfw_port,
             lower=1,
-            upper=65535,
+            upper=constants.MAX_PORT,
             step_increment=1,
             page_increment=100,
         )
@@ -388,7 +444,7 @@ class NudityDetectorWindow(
         ds_req_timeout_adj = Gtk.Adjustment(
             value=self._helloz_nsfw_request_timeout,
             lower=1,
-            upper=300,
+            upper=constants.HELLOZ_NSFW_REQUEST_TIMEOUT_MAX_SECONDS,
             step_increment=1,
             page_increment=10,
         )
@@ -409,7 +465,7 @@ class NudityDetectorWindow(
         ds_health_timeout_adj = Gtk.Adjustment(
             value=self._helloz_nsfw_health_check_timeout,
             lower=1,
-            upper=60,
+            upper=constants.HELLOZ_NSFW_HEALTH_CHECK_TIMEOUT_MAX_SECONDS,
             step_increment=1,
             page_increment=5,
         )
@@ -743,10 +799,40 @@ class NudityDetectorWindow(
         return {}
 
     def _save_config(self):
+        """Persist the GUI state to ``config/app_config.json``.
+
+        The written config carries ``config_version`` and the ``*_seconds`` timeout
+        key names, so it is read back through the seconds path of
+        :func:`src.core.config_migration.migrate_config` and never re-interpreted.
+
+        **Keys the GUI does not own are preserved.** The write starts from the
+        config loaded at startup and overwrites only the keys that have a widget,
+        so ``helloz_nsfw_scheme`` — the user's own escape hatch for forcing HTTPS
+        against a remote host, read by ``constants._validate_scheme`` — and any key a
+        future version adds survive a save. Building the file from a literal
+        whitelist instead deleted every such key on the next save, and this runs on
+        quit *and* on every theme change, so a remote user's ``https`` was reverted
+        the moment they touched the theme dropdown.
+
+        The write goes through :func:`src.core.config_migration.write_config`, the
+        same atomic writer the startup migration uses, so an interrupted save
+        cannot leave the user's only config file as a partial JSON document. A
+        write failure is never swallowed: it is logged at WARNING naming the path
+        and the exception, and surfaced in the on-screen activity log, because a
+        silently discarded setting change is indistinguishable from one that saved.
+
+        Returns:
+            None.
+        """
         config_path = os.path.join(constants.CONFIG_DIR, constants.CONFIG_FILE_NAME)
         try:
             os.makedirs(constants.CONFIG_DIR, exist_ok=True)
-            data = {
+            # Start from the on-disk config: everything the GUI does not manage is
+            # carried through untouched. A key absent from ``self._config`` (a fresh
+            # install) is simply not present, which is correct.
+            data = dict(self._config)
+            data.update({
+                constants.CONFIG_VERSION_KEY: constants.CONFIG_VERSION,
                 'theme': self._get_theme_mode(),
                 'model': self._get_model(),
                 'threshold_percent': self.threshold_spin.get_value(),
@@ -754,18 +840,21 @@ class NudityDetectorWindow(
                 'progress_update_interval': self._get_progress_interval(),
                 'video_frame_rate': self._get_video_frame_rate(),
                 'worker_thread_count': self._get_worker_thread_count(),
-                'worker_thread_timeout': self._get_worker_thread_timeout(),
-                'detect_timeout': self._get_detect_timeout(),
+                'worker_thread_timeout_seconds': self._get_worker_thread_timeout(),
+                'detect_timeout_seconds': self._get_detect_timeout(),
                 'helloz_nsfw_host': self._get_helloz_nsfw_host(),
                 'helloz_nsfw_port': self._get_helloz_nsfw_port(),
                 'helloz_nsfw_api_endpoint': self._get_helloz_nsfw_api_endpoint(),
-                'helloz_nsfw_request_timeout': self._get_helloz_nsfw_request_timeout(),
-                'helloz_nsfw_health_check_timeout': self._get_helloz_nsfw_health_check_timeout(),
-            }
-            with open(config_path, 'w', encoding='utf-8') as f:
-                json.dump(data, f, indent=2)
-        except (OSError, IOError):
-            pass
+                'helloz_nsfw_request_timeout_seconds': self._get_helloz_nsfw_request_timeout(),
+                'helloz_nsfw_health_check_timeout_seconds': self._get_helloz_nsfw_health_check_timeout(),
+            })
+            config_migration.write_config(config_path, data)
+            # Keep the in-memory view in step with what was just written, so a
+            # second save in the same session does not resurrect a dropped key.
+            self._config = dict(data)
+        except (OSError, ValueError, TypeError) as exc:
+            logger.warning("Could not save config to %s (%s); settings were not persisted", config_path, exc)
+            self.log_message(f'Config: could not save settings to {config_path} ({exc})', level='warning')
 
     # ------------------------------------------------------------------
     # Widget state accessors
@@ -780,46 +869,194 @@ class NudityDetectorWindow(
         return themes[idx] if idx < len(themes) else constants.THEME_SYSTEM
 
     def _get_progress_interval(self) -> int:
-        return max(1, int(self.progress_interval_spin.get_value()))
+        """Return the progress-update interval in files.
+
+        Routed through ``constants.normalize_positive_int`` like every other
+        numeric read (ADD-007 §5), so a widget value below the minimum clamps to 1
+        and logs rather than silently presenting.
+
+        Returns:
+            Interval in files, always >= 1.
+        """
+        return constants.normalize_positive_int(
+            self.progress_interval_spin.get_value(),
+            constants.SCAN_PROGRESS_UPDATE_INTERVAL,
+            name='progress_interval_spin',
+        )
 
     def _get_video_frame_rate(self) -> int:
-        return max(1, int(self.video_frame_rate_spin.get_value()))
+        """Return the video frame-extraction divisor.
+
+        Routed through ``constants.normalize_positive_int`` (ADD-007 §5).
+
+        Returns:
+            Frame rate divisor, always >= 1.
+        """
+        return constants.normalize_positive_int(
+            self.video_frame_rate_spin.get_value(),
+            constants.VIDEO_FRAME_RATE,
+            name='video_frame_rate_spin',
+        )
 
     def _get_worker_thread_count(self) -> int:
-        return max(1, int(self.worker_thread_count_spin.get_value()))
+        """Return the worker-thread pool size.
+
+        Routed through ``constants.normalize_positive_int`` (ADD-007 §5).
+
+        Returns:
+            Worker count, always >= 1.
+        """
+        return constants.normalize_positive_int(
+            self.worker_thread_count_spin.get_value(),
+            constants.WORKER_THREAD_COUNT,
+            name='worker_thread_count_spin',
+        )
 
     def _get_worker_thread_timeout(self) -> int:
-        return max(1, int(self.worker_thread_timeout_spin.get_value()))
+        """Return the worker-thread join timeout in seconds.
+
+        Delegates unit normalization to ``constants.normalize_timeout_seconds`` so
+        the value handed to ``threading.Thread.join(timeout=...)`` is always in
+        whole seconds (the threading API unit). An unparseable widget value falls
+        back to ``constants.WORKER_THREAD_TIMEOUT`` and is logged as a warning
+        rather than presenting silently.
+
+        Returns:
+            Timeout in seconds, always >= 1.
+        """
+        return constants.normalize_timeout_seconds(
+            self.worker_thread_timeout_spin.get_value(),
+            constants.WORKER_THREAD_TIMEOUT,
+            name='worker_thread_timeout_spin',
+            max_seconds=constants.WORKER_THREAD_TIMEOUT_MAX_SECONDS,
+        )
 
     def _get_detect_timeout(self) -> int:
-        return max(1, int(self.detect_timeout_spin.get_value()))
+        """Return the per-file detection timeout in seconds.
+
+        Delegates unit normalization to ``constants.normalize_timeout_seconds`` so
+        the value handed to ``detect_with_timeout(..., timeout_seconds=...)`` is
+        always in whole seconds. An unparseable widget value falls back to
+        ``constants.DETECT_TIMEOUT`` and is logged as a warning rather than
+        presenting silently.
+
+        Returns:
+            Timeout in seconds, always >= 1.
+        """
+        return constants.normalize_timeout_seconds(
+            self.detect_timeout_spin.get_value(),
+            constants.DETECT_TIMEOUT,
+            name='detect_timeout_spin',
+            max_seconds=constants.DETECT_TIMEOUT_MAX_SECONDS,
+        )
 
     def _get_helloz_nsfw_host(self) -> str:
         return self.helloz_nsfw_host_entry.get_text().strip() or constants.HELLOZ_NSFW_HOST
 
     def _get_helloz_nsfw_port(self) -> int:
-        val = int(self.helloz_nsfw_port_spin.get_value())
-        return val if 1 <= val <= 65535 else constants.HELLOZ_NSFW_PORT
+        """Return the Helloz NSFW server port.
+
+        Routed through ``constants.normalize_positive_int`` with the explicit
+        ``constants.MAX_PORT`` upper bound, so an out-of-range value falls back to
+        the code default *and logs* naming the key, instead of silently
+        substituting the default as the previous hand-rolled range check did.
+
+        Returns:
+            TCP port, always in ``[1, constants.MAX_PORT]``.
+        """
+        return constants.normalize_positive_int(
+            self.helloz_nsfw_port_spin.get_value(),
+            constants.HELLOZ_NSFW_PORT,
+            name='helloz_nsfw_port_spin',
+            min_value=1,
+            max_value=constants.MAX_PORT,
+        )
 
     def _get_helloz_nsfw_api_endpoint(self) -> str:
         return self.helloz_nsfw_endpoint_entry.get_text().strip() or constants.HELLOZ_NSFW_API_ENDPOINT
 
     def _get_helloz_nsfw_request_timeout(self) -> int:
-        return max(1, int(self.helloz_nsfw_request_timeout_spin.get_value()))
+        """Return the Helloz NSFW request timeout in seconds.
+
+        The supported bound is passed explicitly: it is not inferred from the
+        widget's display name, so the clamp is enforced on this save path too.
+
+        Returns:
+            Timeout in seconds, always in ``[1, HELLOZ_NSFW_REQUEST_TIMEOUT_MAX_SECONDS]``.
+        """
+        return constants.normalize_timeout_seconds(
+            self.helloz_nsfw_request_timeout_spin.get_value(),
+            constants.HELLOZ_NSFW_REQUEST_TIMEOUT,
+            name='helloz_nsfw_request_timeout_spin',
+            max_seconds=constants.HELLOZ_NSFW_REQUEST_TIMEOUT_MAX_SECONDS,
+        )
 
     def _get_helloz_nsfw_health_check_timeout(self) -> int:
-        return max(1, int(self.helloz_nsfw_health_check_timeout_spin.get_value()))
+        """Return the Helloz NSFW health-check timeout in seconds.
+
+        The supported bound is passed explicitly: it is not inferred from the
+        widget's display name, so the clamp is enforced on this save path too.
+
+        Returns:
+            Timeout in seconds, always in ``[1, HELLOZ_NSFW_HEALTH_CHECK_TIMEOUT_MAX_SECONDS]``.
+        """
+        return constants.normalize_timeout_seconds(
+            self.helloz_nsfw_health_check_timeout_spin.get_value(),
+            constants.HELLOZ_NSFW_HEALTH_CHECK_TIMEOUT,
+            name='helloz_nsfw_health_check_timeout_spin',
+            max_seconds=constants.HELLOZ_NSFW_HEALTH_CHECK_TIMEOUT_MAX_SECONDS,
+        )
 
     def _get_helloz_nsfw_url(self) -> str:
+        """Return the Helloz NSFW upload URL for the current widget values.
+
+        Built from the *unsaved* widget values, not from a re-read of the config
+        file, so a user's in-progress edit is not ignored. The scheme rule and the
+        loopback security guard are shared with the detection read path via
+        ``constants.resolve_scheme``.
+
+        Returns:
+            The full URL, with the scheme resolved and validated.
+
+        Raises:
+            ValueError: If the resolved scheme is ``http`` for a non-loopback host.
+        """
         host = self._get_helloz_nsfw_host()
         port = self._get_helloz_nsfw_port()
         endpoint = self._get_helloz_nsfw_api_endpoint()
-        return f'http://{host}:{port}{endpoint}'
+        scheme = constants.resolve_scheme(host, self._config_helloz_nsfw_scheme())
+        return f'{scheme}://{host}:{port}{endpoint}'
 
     def _get_helloz_nsfw_check_url(self) -> str:
+        """Return the Helloz NSFW connection-check base URL for the widget values.
+
+        Shares the scheme resolution and loopback security guard with
+        :meth:`_get_helloz_nsfw_url`.
+
+        Returns:
+            The base URL, e.g. ``http://localhost:6086``.
+
+        Raises:
+            ValueError: If the resolved scheme is ``http`` for a non-loopback host.
+        """
         host = self._get_helloz_nsfw_host()
         port = self._get_helloz_nsfw_port()
-        return f'http://{host}:{port}'
+        scheme = constants.resolve_scheme(host, self._config_helloz_nsfw_scheme())
+        return f'{scheme}://{host}:{port}'
+
+    def _config_helloz_nsfw_scheme(self):
+        """Return the ``helloz_nsfw_scheme`` value from the config on disk, or None.
+
+        The scheme has no widget: it is the user's escape hatch for a remote
+        deployment (``https`` forced explicitly) and is preserved verbatim by
+        ``_save_config``. Read from the on-disk config the window loaded at
+        startup rather than re-read, so it reflects what the user actually has.
+
+        Returns:
+            The configured scheme as a string, or None when the config does not set
+            one (in which case the loopback/remote default applies).
+        """
+        return self._config.get('helloz_nsfw_scheme')
 
     # ------------------------------------------------------------------
     # Theme
