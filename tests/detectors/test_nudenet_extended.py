@@ -8,10 +8,10 @@ import pytest
 sys.modules.setdefault("nudenet", MagicMock())
 
 from src.core import constants
+from src.core.utils import prompt_threshold_percent
 from src.detectors.nudenet import (
     get_nudenet_confidence,
     main,
-    prompt_threshold_percent,
     simplify_nudenet_results,
 )
 

@@ -1,5 +1,6 @@
 """Extended tests for src/processing/media_processor.py to boost coverage."""
 import base64
+import os
 import sys
 from unittest.mock import MagicMock, patch
 
@@ -260,19 +261,18 @@ def test_iter_frames_partial_imwrite_failures_yields_successful_only():
     # alternating True, False, True, False
     imwrite_results = [True, False, True, False]
 
-    try:
-        with patch.object(mp.cv2, "VideoCapture", return_value=mock_cap), \
-             patch.object(mp.cv2, "imwrite", side_effect=imwrite_results), \
-             patch("logging.warning") as mock_warn:
-            yielded = list(extractor.iter_frames("/fake/video.mp4"))
+    with patch.object(mp.cv2, "VideoCapture", return_value=mock_cap), \
+         patch.object(mp.cv2, "imwrite", side_effect=imwrite_results), \
+         patch("logging.warning") as mock_warn:
+        yielded = list(extractor.iter_frames("/fake/video.mp4"))
 
-        # 2 successful writes => 2 paths yielded and in frame_paths
-        assert len(yielded) == 2
-        assert len(extractor.frame_paths) == 2
-        # 2 failed writes => 2 warnings
-        assert mock_warn.call_count == 2
-    finally:
-        extractor.cleanup()
+    # 2 successful writes => 2 paths yielded
+    assert len(yielded) == 2
+    # 2 failed writes => 2 warnings
+    assert mock_warn.call_count == 2
+    # Auto-cleanup ran on normal completion: temp_dir cleared and removed
+    assert extractor.temp_dir is None
+    assert extractor.frame_paths == []
 
 
 def test_frame_extractor_raises_on_bad_file():
@@ -292,3 +292,64 @@ def test_frame_extractor_raises_on_bad_file():
     with patch.object(mp.cv2, "VideoCapture", return_value=mock_cap):
         with pytest.raises(RuntimeError, match="Could not open"):
             list(extractor.iter_frames("/nonexistent/video.mp4"))
+
+
+def test_iter_frames_cleanup_on_unexpected_exception():
+    """Temp directory is removed even when an unexpected (non-RuntimeError)
+    exception escapes the extraction loop."""
+    import src.processing.media_processor as mp
+    if mp.cv2 is None:
+        pytest.skip("cv2 not available in media_processor module")
+
+    captured_temp_dir = []
+    dummy_frame = MagicMock()
+    mock_cap = MagicMock()
+    mock_cap.isOpened.return_value = True
+    # First read succeeds (yields a frame path, lets us capture temp_dir),
+    # then the second read raises ValueError — a non-RuntimeError exception.
+    mock_cap.read.side_effect = [(True, dummy_frame), ValueError("unexpected cv2 error")]
+
+    extractor = FrameExtractor(frame_rate=1)
+
+    with patch.object(mp.cv2, "VideoCapture", return_value=mock_cap), \
+         patch.object(mp.cv2, "imwrite", return_value=True):
+        with pytest.raises(ValueError, match="unexpected cv2 error"):
+            for frame_path in extractor.iter_frames("/fake/video.mp4"):
+                captured_temp_dir.append(extractor.temp_dir)
+
+    # temp_dir was captured during iteration
+    path = captured_temp_dir[0]
+    assert path is not None
+    # Auto-cleanup ran in the finally despite the ValueError
+    assert extractor.temp_dir is None
+    assert not os.path.isdir(path), "Temp directory should have been cleaned up"
+
+
+def test_iter_frames_cleanup_on_normal_completion():
+    """Temp directory is removed after the generator runs to exhaustion
+    (normal completion exit path)."""
+    import src.processing.media_processor as mp
+    if mp.cv2 is None:
+        pytest.skip("cv2 not available in media_processor module")
+
+    dummy_frame = MagicMock()
+    mock_cap = MagicMock()
+    mock_cap.isOpened.return_value = True
+    mock_cap.read.side_effect = [
+        (True, dummy_frame),
+        (True, dummy_frame),
+        (False, None),
+    ]
+
+    extractor = FrameExtractor(frame_rate=1)
+    captured_temp_dir = None
+
+    with patch.object(mp.cv2, "VideoCapture", return_value=mock_cap), \
+         patch.object(mp.cv2, "imwrite", return_value=True):
+        for frame_path in extractor.iter_frames("/fake/video.mp4"):
+            if captured_temp_dir is None:
+                captured_temp_dir = extractor.temp_dir
+
+    assert captured_temp_dir is not None
+    assert extractor.temp_dir is None
+    assert not os.path.isdir(captured_temp_dir)

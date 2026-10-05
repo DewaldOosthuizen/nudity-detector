@@ -231,6 +231,26 @@ ensure_gi_stubs()
 sys.modules.setdefault("nudenet", MagicMock())
 
 
+class _BlockRealGI:
+    """Prevent the real PyGObject package from being imported during tests.
+
+    GUI test modules install their own MagicMock-based ``gi`` stubs and assume
+    the real toolkit is absent (as it is in CI, where PyGObject is not a
+    dependency). On developer machines with system ``python3-gi`` installed the
+    real package can be pulled in transitively — ``send2trash`` imports
+    ``gi.repository.Gio`` on Linux — before those stubs run, which breaks their
+    collection. Blocking the real package here makes local runs match CI.
+    """
+
+    def find_spec(self, name, path=None, target=None):
+        if name == "gi" or name.startswith("gi."):
+            raise ImportError("real gi blocked in tests; GUI tests install stubs")
+        return None
+
+
+sys.meta_path.insert(0, _BlockRealGI())
+
+
 @pytest.fixture
 def tmp_report_dir(tmp_path):
     """Temporary report directory backed by pytest's tmp_path."""

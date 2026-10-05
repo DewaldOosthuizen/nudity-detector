@@ -20,11 +20,13 @@ from ..core.utils import (
     create_session_state,
     detect_with_timeout,
     get_detected_results,
+    get_nudenet_confidence,
     get_report_path,
     handle_results,
     make_scan_config,
     normalize_threshold,
     save_nudity_report,
+    simplify_nudenet_results,
 )
 
 
@@ -155,20 +157,6 @@ class ScanningMixin:
 
         detector = NudeDetector()
 
-        def simplify_results(detection_result):
-            return [
-                {'class': record.get('label', ''), 'score': record.get('score', 0.0)}
-                for record in detection_result
-            ]
-
-        def confidence_for_results(detection_result):
-            scores = [
-                record.get('score', 0.0)
-                for record in detection_result
-                if record.get('label') in constants.NUDITY_CLASSES
-            ]
-            return max(scores, default=0.0)
-
         detect_timeout = self._get_detect_timeout()
 
         def classify_image(file_path):
@@ -196,11 +184,11 @@ class ScanningMixin:
             if detection_result is None:
                 GLib.idle_add(self.log_message, f'No result returned for {os.path.basename(file_path)}', 'warning')
                 return
-            confidence_score = confidence_for_results(detection_result)
+            confidence_score = get_nudenet_confidence(detection_result)
             handle_results(
                 file_path,
                 confidence_score >= threshold_value,
-                simplify_results(detection_result),
+                simplify_nudenet_results(detection_result),
                 session=session,
                 confidence_score=confidence_score,
                 media_type='image',
@@ -235,11 +223,11 @@ class ScanningMixin:
                         continue
                     if frame_result is None:
                         continue
-                    simplified_frame = simplify_results(frame_result)
+                    simplified_frame = simplify_nudenet_results(frame_result)
                     detection_results.append(
                         {'frame': os.path.basename(frame_path), 'detections': simplified_frame}
                     )
-                    max_confidence = max(max_confidence, confidence_for_results(frame_result))
+                    max_confidence = max(max_confidence, get_nudenet_confidence(frame_result))
                     if max_confidence >= threshold_value:
                         break
                 handle_results(
@@ -376,11 +364,15 @@ class ScanningMixin:
         scan_session = self._scan_session
 
         # ------------------------------------------------------------------
-        # Step 1 — Count supported files before starting workers.
-        # This lets us show a real progress fraction and verify completion.
+        # Single directory walk — collect all files once.
         # ------------------------------------------------------------------
         scan_start_time = datetime.now()
-        total_files = count_supported_files(folder_path)
+        all_files = []
+        for root, _, files in os.walk(folder_path):
+            for file_name in files:
+                all_files.append(os.path.join(root, file_name))
+
+        total_files = count_supported_files(folder_path, file_list=all_files)
         GLib.idle_add(self.log_message, f'Found {total_files} supported file(s) to scan.')
         if total_files == 0:
             GLib.idle_add(self.log_message, 'No supported media files found. Scan complete.', 'warning')
@@ -490,6 +482,7 @@ class ScanningMixin:
                 classify_video,
                 worker_count=self._get_worker_thread_count(),
                 worker_timeout=self._get_worker_thread_timeout(),
+                file_list=all_files,
             )
 
             processed = files_processed[0]
