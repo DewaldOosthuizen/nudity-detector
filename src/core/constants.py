@@ -136,27 +136,80 @@ def _config_path():
     return os.path.join(CONFIG_DIR, CONFIG_FILE_NAME)
 
 
+def _normalize_config_text(value, default, name):
+    """Return ``value`` as a non-empty stripped string, or ``default``.
+
+    The single guard for the string-valued config keys on the detection read path.
+    Without it a hand-edited ``"helloz_nsfw_host": 42`` or ``""`` is interpolated
+    straight into the request URL, producing a malformed address that surfaces as a
+    confusing connection error instead of a named config problem.
+
+    Args:
+        value: Raw configured value; may be None, a non-string, or blank.
+        default: Value used when the configured value is unusable.
+        name: Setting name, used only to make the WARNING message actionable.
+
+    Returns:
+        The stripped string value, or ``default`` when it cannot be used.
+    """
+    if value is None:
+        # An absent key is normal on a fresh install, not a defect.
+        logger.debug("%s is not configured; using default of %r", name, default)
+        return default
+    if not isinstance(value, str):
+        logger.warning(
+            "%s value %r is not a string; using default of %r", name, value, default,
+        )
+        return default
+    stripped = value.strip()
+    if not stripped:
+        logger.warning("%s is blank; using default of %r", name, default)
+        return default
+    return stripped
+
+
 def _load_helloz_config():
-    """Load helloz NSFW config from app_config.json; return defaults on error."""
+    """Load helloz NSFW config from app_config.json; return defaults on error.
+
+    This is the detection backend's own read of the config file, so it uses the
+    *same* coercion helpers as the GUI read path (ADD-007 §5): the port goes
+    through :func:`normalize_positive_int` with ``min_value=1`` and
+    ``max_value=MAX_PORT``, and the string keys through :func:`_normalize_config_text`.
+    One read policy, one place — a bare ``cfg.get()`` here would interpolate a
+    non-numeric or boolean port straight into the URL.
+
+    Returns:
+        Tuple of ``(host, port, endpoint, scheme)``, using the built-in defaults for
+        any key that is absent or unusable.
+    """
     try:
         with open(_config_path(), 'r') as f:
             cfg = json.load(f)
-        host = cfg.get('helloz_nsfw_host', HELLOZ_NSFW_HOST)
-        port = cfg.get('helloz_nsfw_port', HELLOZ_NSFW_PORT)
-        endpoint = cfg.get('helloz_nsfw_api_endpoint', HELLOZ_NSFW_API_ENDPOINT)
-        # Use configured scheme when provided; otherwise default to http for loopback
-        # and https for any remote host.
-        if 'helloz_nsfw_scheme' in cfg:
-            scheme = cfg['helloz_nsfw_scheme']
-        else:
-            scheme = 'http' if host in _LOOPBACK_HOSTS else 'https'
-        return host, port, endpoint, scheme
     except (OSError, json.JSONDecodeError):
         logger.warning(
             "app_config.json not found or invalid at %s; using built-in defaults",
             _config_path(),
         )
         return HELLOZ_NSFW_HOST, HELLOZ_NSFW_PORT, HELLOZ_NSFW_API_ENDPOINT, 'http'
+    host = _normalize_config_text(cfg.get('helloz_nsfw_host'), HELLOZ_NSFW_HOST, 'helloz_nsfw_host')
+    port = normalize_positive_int(
+        cfg.get('helloz_nsfw_port'), HELLOZ_NSFW_PORT,
+        name='helloz_nsfw_port', min_value=1, max_value=MAX_PORT,
+    )
+    endpoint = _normalize_config_text(
+        cfg.get('helloz_nsfw_api_endpoint'), HELLOZ_NSFW_API_ENDPOINT, 'helloz_nsfw_api_endpoint',
+    )
+    # Use configured scheme when provided; otherwise default to http for loopback
+    # and https for any remote host.
+    if 'helloz_nsfw_scheme' in cfg:
+        scheme = _normalize_config_text(
+            cfg['helloz_nsfw_scheme'], None, 'helloz_nsfw_scheme',
+        )
+        if scheme is None:
+            scheme = 'http' if host in _LOOPBACK_HOSTS else 'https'
+    else:
+        scheme = 'http' if host in _LOOPBACK_HOSTS else 'https'
+    return host, port, endpoint, scheme
 
 
 def _validate_scheme(scheme, host):
@@ -166,6 +219,32 @@ def _validate_scheme(scheme, host):
             f"Insecure scheme 'http' is not allowed for non-loopback host '{host}'. "
             "Set 'helloz_nsfw_scheme' to 'https' in config/app_config.json."
         )
+
+
+def resolve_scheme(host, scheme=None):
+    """Return the effective scheme for ``host``, honouring an explicit override.
+
+    The single scheme rule, shared by the detection read path
+    (:func:`_load_helloz_config`) and the GUI URL builders, so the GUI cannot
+    bypass the loopback security guard by hardcoding ``http://``.
+
+    Args:
+        host: Configured host name or address.
+        scheme: Explicitly configured scheme, or None when the config does not
+            set one. An unusable (non-string, blank) value is treated as absent.
+
+    Returns:
+        ``'http'`` for a loopback host with no explicit scheme, ``'https'``
+        otherwise; the explicit scheme when one is configured.
+
+    Raises:
+        ValueError: If the resolved scheme is ``http`` for a non-loopback host.
+    """
+    resolved = _normalize_config_text(scheme, None, 'helloz_nsfw_scheme')
+    if resolved is None:
+        resolved = 'http' if host in _LOOPBACK_HOSTS else 'https'
+    _validate_scheme(resolved, host)
+    return resolved
 
 
 def get_helloz_nsfw_url():
@@ -295,8 +374,10 @@ CONFIG_DEFAULT_ALIGNMENT = {
 # Smallest whole-second timeout the migration will ever emit. A legacy millisecond
 # value below one second (``MILLISECONDS_PER_SECOND``) is not migrated by arithmetic
 # at all — it is replaced by the key's constant default, because 0.25 s expressed
-# in whole seconds is not a usable timeout. ``MIN_MIGRATABLE_SECONDS`` documents
-# that floor so a mapping entry cannot declare a fallback below it.
+# in whole seconds is not a usable timeout. The floor is **enforced**, not merely
+# documented: ``config_migration._validated_fallback_seconds`` clamps any
+# ``LEGACY_MILLISECOND_TIMEOUT_KEYS`` fallback below it (and logs), and
+# ``normalize_timeout_seconds`` uses it as the ``min_value`` of every normalization.
 MIN_MIGRATABLE_SECONDS = 1
 
 # Upper bounds accepted for timeout settings, in seconds. They are the documented
@@ -323,6 +404,16 @@ MAX_PORT = 65535
 # defaults as a reference table only; their removal is tracked in issue #104.
 # Kept here so the documentation, the reference fixture and the test that greps
 # ``src/`` for a reader cannot disagree about which keys are dead.
+#
+# SELF-REFERENCE: this declaration lives in ``src/``, so a naive "does the string
+# appear anywhere under src/" search would find every entry here and classify all
+# four as live. The classification test does not work that way: it looks for a
+# *mapping read* (``cfg.get('key')`` or ``cfg['key']``), which is what a reader
+# looks like, and a bare mention — here, in the migration rename tables, or in a
+# docstring — is not one. ``tests/core/test_timeout_units_issue91.py`` pins both
+# directions: each entry here has no mapping read anywhere under ``src/``, and every
+# shipped fixture key *not* listed here has at least one. So promoting a key out of
+# this set without adding a reader fails the test rather than passing vacuously.
 DEAD_CONFIG_KEYS = frozenset({
     'nudenet_worker_thread_count',
     'helloz_nsfw_worker_thread_count',
@@ -423,11 +514,14 @@ def normalize_timeout_seconds(value, default_seconds, name=None, max_seconds=Non
         default_seconds: Fallback value in seconds when value is missing or invalid.
         name: Optional name of the setting, used only to make log messages
             actionable. Purely diagnostic.
-        max_seconds: Optional supported upper bound, in seconds. A configured value
+        max_seconds: Supported upper bound, in seconds. A configured value
             above it is clamped down and logged, naming the key, the configured
             value and the applied maximum, so the truncation is visible rather than
-            silent. Defaults to the per-key bound in :data:`TIMEOUT_MAX_SECONDS`
-            when ``name`` names a known timeout key.
+            silent. **It is never inferred from ``name``**: every call site passes
+            the bound for the setting it actually reads, because the ``name`` a
+            widget accessor passes is a display name (``detect_timeout_spin``), not
+            a config key, and a stringly-typed lookup silently dropped the clamp on
+            exactly the save path where it matters.
 
     Returns:
         Timeout in whole seconds, always >= 1 — including when ``default_seconds``
@@ -440,10 +534,14 @@ def normalize_timeout_seconds(value, default_seconds, name=None, max_seconds=Non
         WARNING level so an unparseable or out-of-range value is visible in the log
         rather than silently presenting as a default.
     """
-    if max_seconds is None and name in TIMEOUT_MAX_SECONDS:
-        max_seconds = TIMEOUT_MAX_SECONDS[name]
+    if max_seconds is None:
+        logger.warning(
+            "%s was normalized without an explicit supported maximum; only the "
+            ">= 1 floor applies. Pass the setting's documented bound explicitly.",
+            name or 'timeout',
+        )
     return normalize_positive_int(
-        value, default_seconds, name=name, min_value=1, max_value=max_seconds,
+        value, default_seconds, name=name, min_value=MIN_MIGRATABLE_SECONDS, max_value=max_seconds,
     )
 
 

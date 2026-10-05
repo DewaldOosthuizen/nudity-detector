@@ -38,10 +38,38 @@ from .constants import (
     CONFIG_VERSION_KEY,
     LEGACY_MILLISECOND_TIMEOUT_KEYS,
     MILLISECONDS_PER_SECOND,
+    MIN_MIGRATABLE_SECONDS,
     RENAMED_TIMEOUT_KEYS,
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _validated_fallback_seconds(default_seconds, key):
+    """Return ``default_seconds`` clamped up to the migratable whole-second floor.
+
+    :data:`src.core.constants.MIN_MIGRATABLE_SECONDS` claims a mapping entry cannot
+    make the migration emit an unusable timeout. That claim is enforced here rather
+    than left to a comment, so a new entry such as ``('some_timeout',
+    ('some_timeout_seconds', 0))`` cannot slip a zero-second timeout past both this
+    function and :func:`src.core.constants.normalize_timeout_seconds`.
+
+    Args:
+        default_seconds: Fallback declared for the key by the mapping.
+        key: Key name, used for the log message when the fallback is out of range.
+
+    Returns:
+        The fallback in whole seconds, never below
+        :data:`src.core.constants.MIN_MIGRATABLE_SECONDS`.
+    """
+    if default_seconds < MIN_MIGRATABLE_SECONDS:
+        logger.warning(
+            "Config migration: %s declares a fallback of %s s, below the %s s floor; "
+            "using %s s instead",
+            key, default_seconds, MIN_MIGRATABLE_SECONDS, MIN_MIGRATABLE_SECONDS,
+        )
+        return MIN_MIGRATABLE_SECONDS
+    return default_seconds
 
 
 def config_version(cfg):
@@ -102,23 +130,27 @@ def _convert_milliseconds_to_seconds(raw_value, default_seconds, key):
         Tuple of (seconds_value, change_description).
     """
     if isinstance(raw_value, bool):
-        return default_seconds, f"{key}: boolean {raw_value!r} replaced with {default_seconds} s"
+        fallback = _validated_fallback_seconds(default_seconds, key)
+        return fallback, f"{key}: boolean {raw_value!r} replaced with {fallback} s"
     try:
         milliseconds = int(raw_value)
     except (TypeError, ValueError, OverflowError):
         # OverflowError covers non-finite floats such as float('inf').
-        return default_seconds, f"{key}: unusable value {raw_value!r} replaced with {default_seconds} s"
+        fallback = _validated_fallback_seconds(default_seconds, key)
+        return fallback, f"{key}: unusable value {raw_value!r} replaced with {fallback} s"
     if milliseconds < MILLISECONDS_PER_SECOND:
         # Includes negatives and zero: no sub-second value can be expressed as a
         # usable whole-second timeout.
+        fallback = _validated_fallback_seconds(default_seconds, key)
         return (
-            default_seconds,
-            f"{key}: legacy {milliseconds} ms is below one second, replaced with {default_seconds} s",
+            fallback,
+            f"{key}: legacy {milliseconds} ms is below one second, replaced with {fallback} s",
         )
     seconds = int(milliseconds / MILLISECONDS_PER_SECOND + 0.5)  # round-half-up
     # With milliseconds >= MILLISECONDS_PER_SECOND the rounding above yields
-    # >= 1 s by construction, so MIN_MIGRATABLE_SECONDS holds without a second
-    # branch; ``test_conversion_never_emits_below_the_migratable_floor`` pins it.
+    # >= MIN_MIGRATABLE_SECONDS by construction; the fallback branch is what
+    # _validated_fallback_seconds floors, and
+    # ``test_conversion_never_emits_below_the_migratable_floor`` pins both.
     return seconds, f"{key}: legacy {milliseconds} ms migrated to {seconds} s"
 
 

@@ -1,5 +1,6 @@
 """Tests for src/gui/scanning.py — ScanningMixin (GTK/GObject stubbed via sys.modules)."""
 import json
+import os
 import sys
 import threading
 import types
@@ -702,6 +703,20 @@ def _attach_widget_stubs(win):
     return win
 
 
+def _read_src_app():
+    """Return the source text of ``src/gui/app.py``.
+
+    Some wiring obligations (a bound passed at a call site) are only visible in the
+    source, since the real GTK window cannot be constructed in a headless run.
+
+    Returns:
+        The module's contents as a single string.
+    """
+    repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    with open(os.path.join(repo_root, "src", "gui", "app.py"), encoding="utf-8") as handle:
+        return handle.read()
+
+
 class TestTimeoutUnits:
     """The GUI accessors are the unit boundary: they must return whole seconds."""
 
@@ -983,6 +998,102 @@ class TestTimeoutUnits:
             result = window_cls._get_helloz_nsfw_port(win)
         assert result == constants.MAX_PORT
         assert "helloz_nsfw_port_spin" in caplog.text
+
+    @pytest.mark.parametrize("accessor, spin_name, maximum", [
+        ("_get_worker_thread_timeout", "worker_thread_timeout_spin",
+         constants.WORKER_THREAD_TIMEOUT_MAX_SECONDS),
+        ("_get_detect_timeout", "detect_timeout_spin", constants.DETECT_TIMEOUT_MAX_SECONDS),
+        ("_get_helloz_nsfw_request_timeout", "helloz_nsfw_request_timeout_spin",
+         constants.HELLOZ_NSFW_REQUEST_TIMEOUT_MAX_SECONDS),
+        ("_get_helloz_nsfw_health_check_timeout", "helloz_nsfw_health_check_timeout_spin",
+         constants.HELLOZ_NSFW_HEALTH_CHECK_TIMEOUT_MAX_SECONDS),
+    ])
+    def test_timeout_accessors_clamp_above_their_documented_bound(
+            self, accessor, spin_name, maximum, caplog):
+        """Every timeout accessor enforces its own bound on the save path.
+
+        Regression guard: ``normalize_timeout_seconds`` inferred the bound from the
+        ``name`` it was given, and an accessor passes a *widget* name
+        (``detect_timeout_spin``), never a config key — so the lookup never matched
+        and the clamp was inert on the very path (``_save_config``) where it matters.
+        """
+        window_cls = _load_nudity_window_class()
+        win = MagicMock()
+        getattr(win, spin_name).get_value.return_value = maximum + 1
+        with caplog.at_level("WARNING", logger="src.core.constants"):
+            result = getattr(window_cls, accessor)(win)
+        assert result == maximum
+        assert spin_name in caplog.text
+
+    def test_every_timeout_accessor_passes_its_bound_explicitly(self):
+        """No accessor relies on ``normalize_timeout_seconds`` name-based inference.
+
+        Asserted on the source because the clamp is a call-site obligation: the
+        normalizer takes the bound per call, so an accessor that omits it loses the
+        clamp silently.
+        """
+        app_source = _read_src_app()
+        for constant_name in (
+            "WORKER_THREAD_TIMEOUT_MAX_SECONDS",
+            "DETECT_TIMEOUT_MAX_SECONDS",
+            "HELLOZ_NSFW_REQUEST_TIMEOUT_MAX_SECONDS",
+            "HELLOZ_NSFW_HEALTH_CHECK_TIMEOUT_MAX_SECONDS",
+        ):
+            assert f"max_seconds=constants.{constant_name}" in app_source, (
+                f"{constant_name} is not passed as an explicit bound in src/gui/app.py"
+            )
+
+    def test_save_config_preserves_keys_the_gui_does_not_own(self, tmp_path):
+        """``helloz_nsfw_scheme`` and unknown keys survive a save verbatim.
+
+        Regression guard: ``_save_config`` built the file from a literal whitelist of
+        fifteen keys, so every other key was deleted — including
+        ``helloz_nsfw_scheme``, the user's own escape hatch for forcing HTTPS against
+        a remote host (``constants._validate_scheme`` reads it). Since the save runs
+        on quit *and* on every theme change, a remote user's ``https`` was reverted
+        the moment they touched the theme dropdown.
+        """
+        window_cls = _load_nudity_window_class()
+        win = _attach_widget_stubs(_make_window_instance(window_cls, {
+            constants.CONFIG_VERSION_KEY: constants.CONFIG_VERSION,
+            'helloz_nsfw_scheme': 'https',
+            'helloz_nsfw_host': 'myserver',
+            'some_future_key': {'nested': True},
+        }))
+        config_path = tmp_path / constants.CONFIG_FILE_NAME
+        with patch("src.core.constants.CONFIG_DIR", str(tmp_path)):
+            window_cls._save_config(win)
+
+        persisted = json.loads(config_path.read_text())
+        assert persisted['helloz_nsfw_scheme'] == 'https'
+        assert persisted['some_future_key'] == {'nested': True}
+        # The GUI-owned keys are still written.
+        assert persisted['helloz_nsfw_host'] == 'localhost'
+        assert persisted[constants.CONFIG_VERSION_KEY] == constants.CONFIG_VERSION
+
+    def test_save_config_keeps_the_https_scheme_out_of_the_gui_url(self, tmp_path):
+        """The GUI URL builder honours the configured scheme and the loopback guard.
+
+        Regression guard: both GUI URL helpers hardcoded ``http://``, bypassing
+        ``constants._validate_scheme`` entirely, so a remote host configured with
+        ``helloz_nsfw_scheme: http`` was contacted over plaintext by the GUI.
+        """
+        window_cls = _load_nudity_window_class()
+        win = _attach_widget_stubs(_make_window_instance(window_cls, {
+            constants.CONFIG_VERSION_KEY: constants.CONFIG_VERSION,
+            'helloz_nsfw_scheme': 'https',
+            'helloz_nsfw_host': 'myserver',
+        }))
+        assert window_cls._get_helloz_nsfw_url(win) == 'https://localhost:6086/api/upload_check'
+
+        win = _attach_widget_stubs(_make_window_instance(window_cls, {
+            constants.CONFIG_VERSION_KEY: constants.CONFIG_VERSION,
+            'helloz_nsfw_scheme': 'http',
+            'helloz_nsfw_host': 'myserver',
+        }))
+        win.helloz_nsfw_host_entry = MagicMock(**{"get_text.return_value": "myserver"})
+        with pytest.raises(ValueError, match="'http' is not allowed for non-loopback host"):
+            window_cls._get_helloz_nsfw_check_url(win)
 
     def test_init_missing_keys_fall_back_to_constants(self):
         """An empty config yields the constant defaults, without raising."""

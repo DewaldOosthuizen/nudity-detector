@@ -194,6 +194,32 @@ def test_normalize_timeout_seconds_accepts_no_name_argument():
     assert constants.normalize_timeout_seconds(7, 5) == 7
 
 
+def test_normalize_timeout_seconds_warns_when_no_bound_is_passed(caplog):
+    """Omitting the supported bound is a defect and says so.
+
+    The bound used to be inferred from ``name``. A widget accessor passes a display
+    name (``detect_timeout_spin``), never a config key, so the lookup silently
+    failed and the clamp was inert on the save path. Inference is gone; this
+    warning makes a missing bound loud instead of invisible.
+    """
+    with caplog.at_level("WARNING", logger="src.core.constants"):
+        assert constants.normalize_timeout_seconds(999999, 60, name="detect_timeout_spin") == 999999
+    assert "detect_timeout_spin" in caplog.text
+    assert "maximum" in caplog.text
+
+
+def test_normalize_timeout_seconds_bound_is_not_inferred_from_the_name():
+    """A config-key name alone no longer supplies the documented maximum.
+
+    Regression guard for the stringly-typed coupling: with the inference in place a
+    renamed widget or a typo in a log label silently removed the clamp.
+    """
+    assert constants.normalize_timeout_seconds(
+        999999, 60, name="detect_timeout_seconds",
+        max_seconds=constants.DETECT_TIMEOUT_MAX_SECONDS,
+    ) == constants.DETECT_TIMEOUT_MAX_SECONDS
+
+
 # ---------------------------------------------------------------------------
 # migrate_config — the one-time, deterministic ms -> s conversion
 # ---------------------------------------------------------------------------
@@ -585,6 +611,35 @@ def test_legacy_key_rename_and_default_are_one_mapping():
         assert fallback >= constants.MIN_MIGRATABLE_SECONDS
 
 
+def test_migration_floors_a_mapping_fallback_below_the_minimum(caplog):
+    """``MIN_MIGRATABLE_SECONDS`` is enforced, not merely documented.
+
+    The constant claimed a mapping entry could not declare a fallback below the
+    floor, but nothing checked: ``_convert_milliseconds_to_seconds`` returned
+    ``default_seconds`` verbatim, so a new entry such as
+    ``('some_timeout', ('some_timeout_seconds', 0))`` would emit a 0-second timeout,
+    contradicting the constant's own docstring and the ``>= 1`` contract of
+    ``normalize_timeout_seconds``.
+    """
+    bad_mapping = {'detect_timeout': ('detect_timeout_seconds', 0)}
+    with patch.dict(config_migration.LEGACY_MILLISECOND_TIMEOUT_KEYS, bad_mapping, clear=True), \
+         caplog.at_level("WARNING", logger="src.core.config_migration"):
+        migrated, changes = config_migration.migrate_config({'detect_timeout': 250})
+    assert migrated["detect_timeout_seconds"] == constants.MIN_MIGRATABLE_SECONDS
+    assert migrated["detect_timeout_seconds"] >= constants.MIN_MIGRATABLE_SECONDS
+    assert any(f"replaced with {constants.MIN_MIGRATABLE_SECONDS} s" in change for change in changes)
+    assert "below the" in caplog.text
+
+
+def test_migration_never_emits_a_zero_second_timeout_for_any_fallback():
+    """Whatever fallback a mapping declares, the emitted value honours the floor."""
+    for fallback in (0, -5, -1):
+        bad_mapping = {'detect_timeout': ('detect_timeout_seconds', fallback)}
+        with patch.dict(config_migration.LEGACY_MILLISECOND_TIMEOUT_KEYS, bad_mapping, clear=True):
+            migrated, _ = config_migration.migrate_config({'detect_timeout': 250})
+            assert migrated["detect_timeout_seconds"] >= constants.MIN_MIGRATABLE_SECONDS
+
+
 # ---------------------------------------------------------------------------
 # Config/constant default divergence
 # ---------------------------------------------------------------------------
@@ -819,6 +874,48 @@ def test_dead_config_keys_are_not_read_by_src():
     for key in constants.DEAD_CONFIG_KEYS:
         assert not _has_config_read_access(sources, key), (
             f"{key} is classified as dead but src/ reads it"
+        )
+
+
+def test_dead_classification_is_not_vacuous_for_its_own_declaration():
+    """The dead-key declaration in ``src/`` does not make the check self-fulfilling.
+
+    ``DEAD_CONFIG_KEYS`` lives in ``src/core/constants.py`` and necessarily *names*
+    each of its own keys, so a naive "does the string appear under src/" search
+    would find all four and classify them as live. The classification test looks
+    for a mapping read instead, which a declaration is not — this test pins that
+    distinction, so replacing the read-based matcher with a substring search fails
+    here rather than quietly inverting the whole dead/live split.
+    """
+    sources = _src_sources()
+    for key in constants.DEAD_CONFIG_KEYS:
+        assert key in sources, (
+            f"{key} is declared in DEAD_CONFIG_KEYS, so it must appear in src/; if this "
+            "fails the declaration and the classification test have diverged"
+        )
+        assert not _has_config_read_access(sources, key), (
+            f"{key} appears in src/ but only as a declaration, which is not a reader"
+        )
+    # The live direction of the same matcher must still be capable of finding a
+    # reader, otherwise "no reader" would be trivially true for every key.
+    assert _has_config_read_access(sources, "helloz_nsfw_port") is True
+    assert _has_config_read_access(sources, "config_version") is True
+
+
+def test_no_shipped_key_is_silently_unclassified():
+    """Every shipped fixture key is either explicitly dead or proven to have a reader.
+
+    The complementary direction the documentation leans on: a key cannot be promoted
+    to "live" (i.e. left out of ``DEAD_CONFIG_KEYS``) without a reader existing under
+    ``src/``.
+    """
+    sources = _src_sources()
+    for key in _load_default_config():
+        if key in constants.DEAD_CONFIG_KEYS:
+            continue
+        assert _has_config_read_access(sources, key), (
+            f"{key} ships in the default config, is not classified dead, and has no "
+            "src/ reader — either it is dead or it is missing a reader"
         )
 
 
@@ -1065,3 +1162,90 @@ def test_window_constructor_cannot_raise_on_a_threshold_value():
         "not a bare float(): an unparseable value would abort window construction"
     )
     assert "normalize_threshold_percent" in app_source
+
+# ---------------------------------------------------------------------------
+# _load_helloz_config — the detection read path must use the same coercion
+# ---------------------------------------------------------------------------
+
+def _write_config(tmp_path, cfg):
+    """Write ``cfg`` to a temp app_config.json and point constants at it."""
+    config_path = tmp_path / "app_config.json"
+    config_path.write_text(json.dumps(cfg), encoding="utf-8")
+    return patch("src.core.constants._config_path", return_value=str(config_path))
+
+
+@pytest.mark.parametrize("bad_port", ["abc", True, None, 0, -1, 70000, float("inf")])
+def test_load_helloz_config_never_interpolates_an_unusable_port(tmp_path, caplog, bad_port):
+    """The port is coerced, not interpolated raw into the request URL.
+
+    Regression guard: ``cfg.get('helloz_nsfw_port', ...)`` put the configured value
+    straight into the URL, so a boolean or non-numeric port yielded
+    ``http://localhost:True:6086/...`` with no warning anywhere. One read policy:
+    the detection path coerces exactly as the GUI path does.
+    """
+    with _write_config(tmp_path, {"helloz_nsfw_port": bad_port}), \
+         caplog.at_level("WARNING", logger="src.core.constants"):
+        host, port, _endpoint, scheme = constants._load_helloz_config()
+    if bad_port is None:
+        assert port == constants.HELLOZ_NSFW_PORT
+        assert caplog.text == ""
+        return
+    assert 1 <= port <= constants.MAX_PORT
+    assert isinstance(port, int)
+    assert "helloz_nsfw_port" in caplog.text
+    assert f"{scheme}://{host}:{port}" != "http://localhost:True:6086"
+
+
+@pytest.mark.parametrize(
+    "bad_value, expected",
+    [(42, constants.HELLOZ_NSFW_HOST), ("", constants.HELLOZ_NSFW_HOST), ({}, constants.HELLOZ_NSFW_HOST)],
+)
+def test_load_helloz_config_coerces_string_keys(tmp_path, caplog, bad_value, expected):
+    """A non-string or blank host falls back to the constant default, loudly."""
+    with _write_config(tmp_path, {"helloz_nsfw_host": bad_value}), \
+         caplog.at_level("WARNING", logger="src.core.constants"):
+        host, _port, _endpoint, _scheme = constants._load_helloz_config()
+    assert host == expected
+    assert "helloz_nsfw_host" in caplog.text
+
+
+def test_load_helloz_config_coerces_the_api_endpoint(tmp_path, caplog):
+    """A blank endpoint falls back to the documented default, loudly."""
+    with _write_config(tmp_path, {"helloz_nsfw_api_endpoint": "   "}), \
+         caplog.at_level("WARNING", logger="src.core.constants"):
+        _host, _port, endpoint, _scheme = constants._load_helloz_config()
+    assert endpoint == constants.HELLOZ_NSFW_API_ENDPOINT
+    assert "helloz_nsfw_api_endpoint" in caplog.text
+
+
+def test_load_helloz_config_absent_keys_are_not_warned(tmp_path, caplog):
+    """An absent key is normal on a fresh install, not a defect.
+
+    Written against a present-but-empty config file so the only possible warning is
+    the "not found or invalid file" one, which is not what is under test here.
+    """
+    with _write_config(tmp_path, {}), caplog.at_level("WARNING", logger="src.core.constants"):
+        assert constants._load_helloz_config() == (
+            constants.HELLOZ_NSFW_HOST, constants.HELLOZ_NSFW_PORT,
+            constants.HELLOZ_NSFW_API_ENDPOINT, 'http',
+        )
+    assert caplog.text == ""
+
+
+def test_load_helloz_config_scheme_still_guards_remote_hosts(tmp_path):
+    """The explicit-``http``-for-a-remote-host rejection is unchanged."""
+    with _write_config(tmp_path, {"helloz_nsfw_scheme": "http", "helloz_nsfw_host": "myserver"}):
+        with pytest.raises(ValueError, match="'http' is not allowed for non-loopback host"):
+            constants.get_helloz_nsfw_url()
+
+
+def test_resolve_scheme_is_the_single_scheme_rule():
+    """``resolve_scheme`` is shared by the GUI and the detection read path."""
+    assert constants.resolve_scheme("localhost") == "http"
+    assert constants.resolve_scheme("127.0.0.1") == "http"
+    assert constants.resolve_scheme("myserver") == "https"
+    assert constants.resolve_scheme("myserver", "https") == "https"
+    with pytest.raises(ValueError, match="'http' is not allowed for non-loopback host"):
+        constants.resolve_scheme("myserver", "http")
+    # An unusable configured scheme falls back to the default rule, never to http.
+    assert constants.resolve_scheme("myserver", 42) == "https"

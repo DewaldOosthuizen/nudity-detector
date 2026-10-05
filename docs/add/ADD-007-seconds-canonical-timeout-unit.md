@@ -170,17 +170,48 @@ both-spellings-present case.
 `constants.TIMEOUT_MAX_SECONDS` declares the supported range per key (86400 s for the
 two general timeouts, 3600 s for the two Helloz timeouts) and is used as the spin
 buttons' `upper`, so the widget represents every value the config path accepts.
-`normalize_timeout_seconds` derives the bound from `TIMEOUT_MAX_SECONDS` by key name,
-and `normalize_positive_int`'s new `max_value` clamps anything beyond it, logging the
+`normalize_positive_int`'s `max_value` clamps anything beyond it, logging the
 key, the configured value and the applied maximum.
 `constants.log_timeout_truncations` produces that note for the activity log at
 startup. A value beyond the documented maximum is therefore clamped *visibly*; a value
 within it is never truncated.
 
+The bound is passed **explicitly at every call site**
+(`max_seconds=constants.<KEY>_MAX_SECONDS`), never inferred from the `name` argument.
+The earlier revision inferred it from the name by looking the key up in
+`TIMEOUT_MAX_SECONDS`, which is wrong in a way no test could see: the four widget
+accessors pass a *widget* name (`detect_timeout_spin`), never a config key, so the
+lookup never matched and the clamp was inert on `_save_config` — precisely the path
+where a bound is supposed to be enforced. A renamed widget or a typo in a log label
+would have removed it silently. `normalize_timeout_seconds` now logs a WARNING when
+called without a bound, so a missing bound is loud rather than invisible.
+
 `MAX_PORT` does the same for `helloz_nsfw_port` (`1..65535`), replacing the inline
 literal in the adjustment and the silent range check in the accessor.
 
-### 5b. One writer for the config file
+### 5b. One read path for the config file, and keys the GUI does not own
+
+`_load_helloz_config()` was a second, uncoerced reader of the same file: it took the
+host, port, endpoint and scheme with bare `cfg.get()` and the raw constant defaults,
+so a hand-edited or legacy port such as `"abc"` or JSON `true` was interpolated
+straight into the request URL (`http://localhost:True:6086/...`) with no warning
+anywhere. It now routes through the same helpers as the GUI read path —
+`normalize_positive_int(..., min_value=1, max_value=MAX_PORT)` for the port and a
+shared `_normalize_config_text` guard for the string keys — so there is one read
+policy rather than two. `resolve_scheme()` is likewise the single scheme rule, shared
+by the detection getters and the GUI URL builders; the GUI helpers previously
+hardcoded `http://`, bypassing `_validate_scheme` entirely and contacting a remote host
+over plaintext regardless of the configured scheme.
+
+`_save_config()` likewise wrote the file from a literal whitelist of fifteen keys, so
+every other key was deleted on the next save — and that save runs on quit *and* on
+every theme change. The erased set included `helloz_nsfw_scheme`, the user's own
+escape hatch for forcing HTTPS against a remote deployment, so a remote user's
+`https` was reverted the moment they touched the theme dropdown. The write now starts
+from the config loaded at startup and overwrites only the keys that have a widget;
+unknown and future keys survive.
+
+### 5c. One writer for the config file
 
 `config_migration.write_config()` is the single atomic writer, used by both the startup
 migration and `NudityDetectorWindow._save_config()`. `_save_config` previously opened
@@ -215,9 +246,16 @@ defaults and the new key names.
 *also* unread: the only worker-count key any code reads is `worker_thread_count`. The
 earlier README claimed otherwise, and since #104's scope is derived from this
 documentation, a wrong live/dead classification is a real defect rather than a typo.
-`constants.DEAD_CONFIG_KEYS` is now the single source of that list, and a test greps
-`src/` for every shipped fixture key: a key documented as live without a reader under
-`src/` fails, so the classification cannot drift in either direction.
+`constants.DEAD_CONFIG_KEYS` is now the single source of that list, and a test walks
+every module under `src/` looking for a *mapping read* of each shipped fixture key —
+`cfg.get('key')` or `cfg['key']`, which is what a reader looks like. Merely naming a
+key (in `DEAD_CONFIG_KEYS` itself, in the migration's rename tables, or in a
+docstring) is not a reader, which is what stops the declaration — it necessarily
+names its own four entries, and it lives under `src/` — from making the check
+self-fulfilling. Both directions are pinned: an entry in `DEAD_CONFIG_KEYS` must have
+no mapping read anywhere under `src/`, and a shipped fixture key *not* in that set must
+have at least one. So the classification cannot drift in either direction, and a
+substring-based rewrite of the matcher fails loudly instead of inverting the split.
 
 ---
 
@@ -251,8 +289,10 @@ behaviour.
   footnote.
 - One coercion implementation with one logging policy, so no numeric config read
   can fail silently.
-- **Every** timeout key states its unit in its name; there is no bare `*_timeout` key,
-  so the suffix can be relied on by the next reader.
+- **Every** timeout key the app *reads* states its unit in its name, so the suffix can
+  be relied on by the next reader. The four dead reference entries are the documented
+  exemption: nothing reads them, so the migration leaves an existing config's bare
+  `*_worker_thread_timeout` spellings alone and issue #104 deletes them.
 - Covered by unit and migration tests (`tests/core/test_timeout_units_issue91.py`)
   and by GUI-boundary regression tests that drive the real `__init__` config path
   (`tests/gui/test_scanning_mixin.py::TestTimeoutUnits`), including the on-disk rewrite

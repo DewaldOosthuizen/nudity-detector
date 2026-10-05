@@ -196,26 +196,44 @@ stored in **seconds**, matching the constants in `src/core/constants.py` and the
 `threading` API. No value is ever re-interpreted on the strength of its magnitude, so
 `detect_timeout_seconds: 3600` means one hour, as written.
 
-Every timeout key states its unit in its name — there is no bare `*_timeout` key,
-so the suffix is a reliable marker and not a convention. Four entries are
-nonetheless **not read by any code** (no `src/` references) and are retained only as
-reference entries: `nudenet_worker_thread_count`,
+One key is deliberately *not* in the table above, because it is not shipped with a
+default: `helloz_nsfw_scheme`. When present it forces the scheme used for the Helloz
+NSFW endpoint (`constants.resolve_scheme`); when absent the rule is `http` for a
+loopback host and `https` for any remote host, and `constants._validate_scheme` rejects
+an explicit `http` paired with a non-loopback host. It has no GUI widget, and
+`_save_config` preserves it verbatim — set it to `"https"` for a remote deployment and
+it stays set, including across the saves that run on quit and on every theme change.
+
+Every timeout key the app **reads** states its unit in its name — there is no bare
+`*_timeout` key among them, so the suffix is a reliable marker and not a convention.
+The four *dead* reference entries are the documented exemption: they carry the
+`_seconds` suffix in the shipped tables below (for consistency with the keys they
+would replace), but nothing reads them, so the migration deliberately leaves an
+existing config's bare `nudenet_worker_thread_timeout` / `helloz_nsfw_worker_thread_timeout`
+spellings alone — there is no value in flight whose unit needs restating. They are
+**not read by any code** (no `src/` reader) and are retained only as reference entries:
+`nudenet_worker_thread_count`,
 `helloz_nsfw_worker_thread_count`, `nudenet_worker_thread_timeout_seconds` and
 `helloz_nsfw_worker_thread_timeout_seconds`. Their removal is tracked in issue #104,
-and `constants.DEAD_CONFIG_KEYS` is the single source of that list — a test greps
-`src/` for every shipped key, so a key cannot be documented as live without a reader.
+and `constants.DEAD_CONFIG_KEYS` is the single source of that list.
 
-Because no code reads them, the two dead `*_worker_thread_timeout` keys are **not**
-renamed by the migration: there is no value in flight whose unit needs restating, and
-no code path ever established their pre-rename unit, so renaming them forward would
-rest on an assumption no test can verify. Issue #104 deletes them instead.
+How "dead" is established: a test walks every module under `src/` and looks for a
+*mapping read* of each key — `cfg.get('key')` or `cfg['key']`. Merely naming a key (in
+`DEAD_CONFIG_KEYS`, in the migration's rename tables, or in a docstring) is not a
+reader, so the fact that `DEAD_CONFIG_KEYS` lives in `src/core/constants.py` and
+therefore names its own entries does not make the classification self-fulfilling. Both
+directions are pinned: every entry in `DEAD_CONFIG_KEYS` must have **no** mapping read
+anywhere under `src/`, and every shipped fixture key **not** in `DEAD_CONFIG_KEYS`
+must have at least one. So a key cannot be documented as live without a reader, and
+cannot be quietly promoted to live either.
 
 The "retained as reference" state describes the *shipped defaults* in `.env.example`
 and `tests/fixtures/app_config.default.json` only. A config written by the GUI
-(`_save_config`, run on quit and on every theme change) contains just the 15 live
-keys, so the four dead entries are **dropped from your own
-`config/app_config.json` on the first save** — the shipped tables are the reference,
-not a promise about the file on disk.
+(`_save_config`, run on quit and on every theme change) starts from the config loaded
+at startup and overwrites only the keys the GUI has a widget for, so anything else in
+your own `config/app_config.json` survives: the four dead entries, `helloz_nsfw_scheme`
+(the user's escape hatch for forcing HTTPS against a remote host), and any key a future
+version adds. The shipped tables are the reference, not a promise about the file on disk.
 
 Only `worker_thread_count` is read for the worker pool; the per-detector counts above
 are inert.
@@ -256,18 +274,23 @@ four entries listed above as dead have no constant *and* no reader. A test enume
 both sets (`FIXTURE_NON_CONSTANT_KEYS` / `constants.DEAD_CONFIG_KEYS`) so the
 classification cannot drift.
 
-Every numeric config value — in `__init__` and in every widget accessor — is coerced by
-`constants.normalize_positive_int` / `constants.normalize_timeout_seconds`, and the
-one float key (`threshold_percent`) by `constants.normalize_threshold_percent`: an
-unparseable, boolean, or out-of-range value falls back to the constant default (or is
-clamped to the documented bound) and is logged at WARNING level, so no config error is
-applied silently — and none of them can abort startup.
+Every numeric config value is coerced by `constants.normalize_positive_int` /
+`constants.normalize_timeout_seconds`, and the one float key (`threshold_percent`) by
+`constants.normalize_threshold_percent` — in `__init__`, in every widget accessor, and
+on the detection backend's own read of the file (`_load_helloz_config`, which coerces
+the port with the same `1..MAX_PORT` bound and guards the host, endpoint and scheme
+strings): an unparseable, boolean, or out-of-range value falls back to the constant
+default (or is clamped to the documented bound) and is logged at WARNING level, so no
+config error is applied silently — and none of them can abort startup.
 
 Supported ranges: `helloz_nsfw_port` is clamped to `1..65535`, and the timeout keys to
 their `TIMEOUT_MAX_SECONDS` bound (`worker_thread_timeout_seconds` and
-`detect_timeout_seconds`: 86400 s; the two Helloz timeouts: 3600 s). The GUI spin
-buttons use the same bounds, so a value inside the supported range is never truncated
-by the widget. A value *beyond* it is clamped, and
+`detect_timeout_seconds`: 86400 s; the two Helloz timeouts: 3600 s). Every call site
+passes that bound **explicitly** — `normalize_timeout_seconds` never infers it from the
+`name` it is given, because the widget accessors name a widget (`detect_timeout_spin`),
+not a config key, and the inference silently dropped the clamp on the save path. The GUI
+spin buttons use the same bounds, so a value inside the supported range is never
+truncated by the widget. A value *beyond* it is clamped, and
 `constants.log_timeout_truncations` reports the truncation at WARNING with the key,
 the configured value and the applied maximum — the note reaches the activity log, so a
 clamped value is visible rather than silently rewritten on the next save.
