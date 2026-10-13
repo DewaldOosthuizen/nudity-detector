@@ -6,8 +6,8 @@ All persistent project documentation lives under this directory.
 
 Two workflows cover all changes:
 
-- **Pull Request Gate** — `.github/workflows/pr_gate.yml` runs on every PR targeting `main`. It validates the PR head (lint, type-check, tests) and cancels in-progress runs when a new commit lands on the PR.
-- **Release Pipeline** — `.github/workflows/release.yml` runs on every push to `main` and via `workflow_dispatch`. It re-validates the exact commit being released, computes a CalVer tag (`YYYY.MM.DD` or `YYYY.MM.DD.Micro`), creates and pushes the tag, builds any artifacts, and creates a GitHub Release with those artifacts attached.
+- **Pull Request Gate** — `.github/workflows/pr_gate.yml` runs on every PR targeting `main`. It runs Ruff lint, pytest with coverage (after lint), and `pip-audit` (in parallel with lint/test), then summarizes those results; it does not run a type-check job. In-progress runs are cancelled when a new commit lands on the PR.
+- **Release Pipeline** — `.github/workflows/release.yml` runs on pushes to `main` and via `workflow_dispatch`. It runs lint, pytest, and `pip-audit`, checks them at a validation gate, then builds and verifies the AppImage and uploads the build artifact. Only afterward does it check whether `HEAD` is already tagged, compute and check a unique UTC CalVer tag (`YYYY.MM.DD`, or `YYYY.MM.DD.N` for another release on that UTC date), create and push the tag, rename the asset to `NudityDetector-<generated-tag>-x86_64.AppImage`, and publish the GitHub Release. Do not push a tag to trigger a release.
 
 Tags are **CalVer only**. Legacy non-CalVer tags have been cleaned up.
 

@@ -25,22 +25,28 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A([Git tag pushed\nv1.2.3]) --> B[GitHub Actions runner\nubuntu-latest]
-    B --> C[actions/checkout@v4]
-    C --> D[actions/setup-python@v5\npython 3.12]
-    D --> E[apt-get install\nGTK4 system packages\nlibgtk-4-dev · libadwaita-1-dev\ngir1.2-gtk-4.0 · fuse · libfuse2\npkg-config · patchelf]
-    E --> F[pip install\nrequirements.txt + pyinstaller]
-    F --> G[bash scripts/build_linux.sh\nAPPIMAGE_EXTRACT_AND_RUN=1]
-    G --> H{Build succeeded?}
-    H -- No --> I([Workflow fails\nno release created])
-    H -- Yes --> J[Verify artifacts\ndist/NudityDetector-x86_64.AppImage\ndist/nudity-detector/]
-    J --> K[Rename to\nNudityDetector-v1.2.3-x86_64.AppImage]
-    K --> L[softprops/action-gh-release@v2\nCreate GitHub Release\nUpload AppImage as asset]
-    L --> M([GitHub Release published\nnudity-detector v1.2.3])
+    A([Push to main\nor manual workflow_dispatch]) --> B[Validation jobs\nlint · pytest · pip-audit\ntest needs lint; audit runs in parallel]
+    B --> C{Validation gate\nall jobs passed?}
+    C -- No --> D([Workflow fails\nno build or release])
+    C -- Yes --> E[Build AppImage\nUbuntu runner\nAPPIMAGE_EXTRACT_AND_RUN=1]
+    E --> F{Build succeeded?}
+    F -- No --> D
+    F -- Yes --> G[Verify AppImage and bundle\nupload appimage-build artifact]
+    G --> H[Download build artifact\ncheck whether HEAD is already tagged]
+    H --> I{HEAD already tagged?}
+    I -- Yes --> J([Skip release])
+    I -- No --> K[Compute UTC CalVer tag\nYYYY.MM.DD or YYYY.MM.DD.N\ncheck uniqueness on origin]
+    K --> L[Create and push generated tag]
+    L --> M[Rename asset to\nNudityDetector-<generated-tag>-x86_64.AppImage]
+    M --> N[softprops/action-gh-release@v2\nCreate GitHub Release\nattach AppImage]
+    N --> O([GitHub Release published])
 
-    style I fill:#7f1d1d,color:#fca5a5
-    style M fill:#14532d,color:#86efac
+    style D fill:#7f1d1d,color:#fca5a5
+    style O fill:#14532d,color:#86efac
 ```
+
+The workflow validates and builds the selected commit before generating and
+pushing its UTC CalVer tag. Do not push a tag to trigger a release.
 
 ## What is bundled vs host-required
 

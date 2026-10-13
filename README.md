@@ -1,8 +1,6 @@
 # Nudity Detector
 
-[![Tests](https://github.com/DewaldOosthuizen/nudity-detector/actions/workflows/test.yml/badge.svg)](https://github.com/DewaldOosthuizen/nudity-detector/actions/workflows/test.yml)
-[![Lint](https://github.com/DewaldOosthuizen/nudity-detector/actions/workflows/lint.yml/badge.svg)](https://github.com/DewaldOosthuizen/nudity-detector/actions/workflows/lint.yml)
-[![Dependency Audit](https://github.com/DewaldOosthuizen/nudity-detector/actions/workflows/audit.yml/badge.svg)](https://github.com/DewaldOosthuizen/nudity-detector/actions/workflows/audit.yml)
+[![PR Gate](https://github.com/DewaldOosthuizen/nudity-detector/actions/workflows/pr_gate.yml/badge.svg)](https://github.com/DewaldOosthuizen/nudity-detector/actions/workflows/pr_gate.yml)
 [![Release](https://github.com/DewaldOosthuizen/nudity-detector/actions/workflows/release.yml/badge.svg)](https://github.com/DewaldOosthuizen/nudity-detector/actions/workflows/release.yml)
 
 [![Donate](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/paypalme/DewaldOosthuizen1)
@@ -490,22 +488,13 @@ For contributions or support, feel free to open an issue or a pull request. 😊
 
 ## Releasing
 
-A GitHub Release with an AppImage attached is created automatically when a
-version tag is pushed. No manual steps are needed beyond tagging.
-
-```
-# stable release
-git tag v1.2.0
-git push origin v1.2.0
-
-# pre-release  (tag contains a hyphen — marked pre-release automatically)
-git tag v1.2.0-rc1
-git push origin v1.2.0-rc1
-```
-
-The `Release` workflow builds the AppImage on a clean Ubuntu runner, verifies
-the artifact, and publishes it to the GitHub Releases page with auto-generated
-release notes from commits since the previous tag.
+The `Release` workflow runs on pushes to `main` and on manual
+`workflow_dispatch`. It validates the selected commit with lint, tests, and a
+dependency audit, then passes a validation gate before building and verifying
+the AppImage. Only after the build succeeds does the workflow compute and push
+its own UTC CalVer tag (`YYYY.MM.DD`, or `YYYY.MM.DD.N` for another release on
+that UTC date), rename the asset, and publish the GitHub Release. Do not create
+or push a version tag to trigger a release.
 
 See [docs/releasing.md](docs/releasing.md) for the full process, versioning
 convention, and rollback procedure.

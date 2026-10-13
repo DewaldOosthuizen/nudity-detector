@@ -10,10 +10,11 @@ structured as it is, not just *how* it works.
 | 001  | GTK4 + libadwaita as the GUI framework                   | Accepted |
 | 002  | Mixin-based GUI composition                              | Accepted |
 | 003  | Pluggable detector backends                              | Accepted |
-| 004  | PyInstaller one-dir + AppImage packaging pipeline        | Accepted |
+| 004  | PyInstaller one-dir + AppImage packaging pipeline        | Superseded |
 | 005  | Ruff as the sole linting tool                            | Accepted |
 | 006  | GLib.idle_add for GUI updates from worker threads        | Accepted |
 | 007  | Seconds as the canonical timeout unit                    | Accepted |
+| 008  | Release workflow trigger and CalVer                      | Accepted |
 
 ## Conventions
 
