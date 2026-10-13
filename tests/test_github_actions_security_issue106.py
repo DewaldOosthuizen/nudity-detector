@@ -1,8 +1,7 @@
 """Regression tests for issue #106 GitHub Actions security policy."""
 
-from pathlib import Path
 import re
-
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_PATHS = (
