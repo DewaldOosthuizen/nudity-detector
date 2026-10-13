@@ -2,10 +2,10 @@
 
 | Field      | Value                     |
 |------------|---------------------------|
-| Status     | Accepted                  |
+| Status     | Superseded                |
 | Date       | 2024-03-01                |
 | Author     | Dewald Oosthuizen         |
-| Relates to | —                         |
+| Relates to | ADD-008                   |
 
 ---
 
@@ -55,10 +55,18 @@ relative to the AppImage mount point before delegating to the PyInstaller bundle
 
 **CI integration**
 
-A GitHub Actions release workflow (`.github/workflows/release.yml`) triggers on
-`v*.*.*` tags and runs `scripts/build_linux.sh` with `APPIMAGE_EXTRACT_AND_RUN=1`
-(GitHub Actions runners have no FUSE). The resulting AppImage is renamed to
-`NudityDetector-<version>-x86_64.AppImage` and published as a GitHub Release asset.
+The packaging decision above remains accepted. Release triggers, generated
+CalVer tags, asset naming, and workflow order are superseded by
+[ADD-008](ADD-008-release-workflow-trigger-and-calver.md).
+
+---
+
+## Supersession
+
+Superseded on 2026-10-13 13:22 by [ADD-008 — Release Workflow Trigger and
+CalVer](ADD-008-release-workflow-trigger-and-calver.md). ADD-008 carries
+forward this accepted one-dir and AppImage packaging decision, its rationale,
+options, and consequences, while replacing only the release workflow guidance.
 
 ---
 

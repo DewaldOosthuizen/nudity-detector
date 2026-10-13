@@ -209,14 +209,14 @@ See `docs/diagrams/05-build-pipeline.md` for the full pipeline diagram.
 | Artifact | Path | Description |
 |----------|------|-------------|
 | PyInstaller bundle | `dist/nudity-detector/` | One-dir bundle; run without installing Python |
-| AppImage | `dist/NudityDetector-<version>-x86_64.AppImage` | Single portable file; runs on any x86-64 Linux |
+| AppImage | `dist/NudityDetector-<generated-tag>-x86_64.AppImage` | Single portable file; runs on any x86-64 Linux |
 
 ### CI workflows
 
 | Workflow | File | Trigger | Purpose |
 |----------|------|---------|---------|
 | PR Gate | `.github/workflows/pr_gate.yml` | Every pull request targeting `main` | Consolidated quality gate: `lint` (`ruff check src/ tests/`), `test` (`pytest --cov --cov-report=term-missing tests/`, `needs: lint`), `pip-audit` (`pip-audit -r requirements.txt`, parallel with lint), and `pr-gate-summary` (needs all three, `if: always()`) — a single required status check for branch protection |
-| Release | `.github/workflows/release.yml` | Push to `main` and `workflow_dispatch` | Re-validates, computes a CalVer tag (`YYYY.MM.DD[.N]`), builds the AppImage, pushes the tag, and creates a GitHub Release with the AppImage attached — does NOT trigger on manual `v*.*.*` tag pushes |
+| Release | `.github/workflows/release.yml` | Push to `main` and `workflow_dispatch` | Runs lint, tests, and pip-audit validation, then the validation gate; builds and verifies the AppImage before computing and checking a unique UTC CalVer tag (`YYYY.MM.DD` or `YYYY.MM.DD.N`), pushing it, renaming the asset to `NudityDetector-<generated-tag>-x86_64.AppImage`, and publishing the GitHub Release. A pushed tag does not trigger a release. |
 
 See [docs/releasing.md](releasing.md) for the full release process, versioning
 convention, and rollback procedure.
