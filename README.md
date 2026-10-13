@@ -494,7 +494,8 @@ dependency audit, then passes a validation gate before building and verifying
 the AppImage. Only after the build succeeds does the workflow compute and push
 its own UTC CalVer tag (`YYYY.MM.DD`, or `YYYY.MM.DD.N` for another release on
 that UTC date), rename the asset, and publish the GitHub Release. Do not create
-or push a version tag to trigger a release.
+or push a version tag to trigger a release. The published asset is named
+`NudityDetector-<generated-tag>-x86_64.AppImage`.
 
 See [docs/releasing.md](docs/releasing.md) for the full process, versioning
 convention, and rollback procedure.
