@@ -11,6 +11,15 @@ Two workflows cover all changes:
 
 Tags are **CalVer only**. Legacy non-CalVer tags have been cleaned up.
 
+### GitHub Actions pinning and updates
+
+Pin each action to a verified full commit SHA and keep the exact upstream release
+version in an inline comment. Verify the SHA against that specific release tag
+when adding or updating a pin; do not verify only against a moving major tag.
+Dependabot proposes monthly GitHub Actions updates. Review every proposed
+version-to-SHA mapping and require the repository PR validation gates to pass
+before merging. Only the release-publishing job receives `contents: write`.
+
 ## Documentation Conventions
 
 When behavior, API contracts, deployment steps, or architecture change, update the relevant doc under this `docs/` tree in the same change. Code and docs must stay in sync.
