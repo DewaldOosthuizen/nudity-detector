@@ -360,9 +360,13 @@ def open_file(file_path: str, scan_root: str = '') -> Tuple[bool, str]:
         if sys.platform == 'win32':
             os.startfile(path_to_open)
         elif sys.platform == 'darwin':
-            subprocess.run(['open', path_to_open], check=False)
+            process = subprocess.run(['open', path_to_open], check=False)
         else:
-            subprocess.run(['xdg-open', path_to_open], check=False)
+            process = subprocess.run(['xdg-open', path_to_open], check=False)
+        if sys.platform != 'win32' and process.returncode != 0:
+            error_msg = f'Could not open file {resolved_file_path}: opener exited with status {process.returncode}'
+            logging.error(error_msg)
+            return False, error_msg
         return True, ''
     except Exception as error:
         error_msg = f'Could not open file {resolved_file_path}: {error}'
@@ -429,9 +433,13 @@ def open_file_location(file_path: str, scan_root: str = '') -> Tuple[bool, str]:
         if sys.platform == 'win32':
             os.startfile(target_path_str)
         elif sys.platform == 'darwin':
-            subprocess.run(['open', target_path_str], check=False)
+            process = subprocess.run(['open', target_path_str], check=False)
         else:
-            subprocess.run(['xdg-open', target_path_str], check=False)
+            process = subprocess.run(['xdg-open', target_path_str], check=False)
+        if sys.platform != 'win32' and process.returncode != 0:
+            error_msg = f'Could not open path {target_path_str}: opener exited with status {process.returncode}'
+            logging.error(error_msg)
+            return False, error_msg
         return True, ''
     except Exception as error:
         logging.error('Could not open path %s: %s', target_path_str, error)

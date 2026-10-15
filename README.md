@@ -37,6 +37,10 @@ Two detector backends are available:
 
 ## Installation
 
+A nonzero exit status from the platform opener (e.g. `open`/`xdg-open`)
+is now reported with an actionable error surfaced via the GUI log/error
+dialog instead of being treated as a silent success.
+
 1. **Clone the repository**:
 
    ```bash

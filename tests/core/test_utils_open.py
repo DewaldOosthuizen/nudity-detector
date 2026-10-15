@@ -57,6 +57,7 @@ def test_open_file_inside_root_calls_subprocess(tmp_path):
     child.touch()
     with patch("src.core.utils.subprocess.run") as mock_run, \
          patch("src.core.utils.sys.platform", "linux"):
+        mock_run.return_value.returncode = 0
         success, msg = open_file(str(child), scan_root=str(tmp_path))
     assert success is True
     assert msg == ""
@@ -81,6 +82,7 @@ def test_open_file_empty_scan_root_backward_compat(tmp_path):
     child.touch()
     with patch("src.core.utils.subprocess.run") as mock_run, \
          patch("src.core.utils.sys.platform", "linux"):
+        mock_run.return_value.returncode = 0
         success, msg = open_file(str(child))
     assert success is True
     mock_run.assert_called_once()
@@ -93,6 +95,7 @@ def test_open_file_uses_resolved_validated_path(tmp_path):
     symlink_path.symlink_to(real_file)
     with patch("src.core.utils.subprocess.run") as mock_run, \
          patch("src.core.utils.sys.platform", "linux"):
+        mock_run.return_value.returncode = 0
         success, msg = open_file(str(symlink_path), scan_root=str(tmp_path))
     assert success is True
     assert msg == ""
@@ -124,6 +127,7 @@ def test_open_file_location_inside_root_calls_subprocess(tmp_path):
     child.touch()
     with patch("src.core.utils.subprocess.run") as mock_run, \
          patch("src.core.utils.sys.platform", "linux"):
+        mock_run.return_value.returncode = 0
         success, msg = open_file_location(str(child), scan_root=str(tmp_path))
     assert success is True
     mock_run.assert_called_once()
@@ -138,7 +142,33 @@ def test_open_file_location_uses_resolved_validated_path(tmp_path):
     symlink_path.symlink_to(real_file)
     with patch("src.core.utils.subprocess.run") as mock_run, \
          patch("src.core.utils.sys.platform", "linux"):
+        mock_run.return_value.returncode = 0
         success, msg = open_file_location(str(symlink_path), scan_root=str(tmp_path))
     assert success is True
     assert msg == ""
     mock_run.assert_called_once_with(['xdg-open', str(real_file.parent.resolve())], check=False)
+
+
+def test_open_file_failed_opener_returns_false(tmp_path):
+    child = tmp_path / "photo.jpg"
+    child.touch()
+    for platform in ("darwin", "linux"):
+        with patch("src.core.utils.subprocess.run") as mock_run, \
+             patch("src.core.utils.sys.platform", platform):
+            mock_run.return_value.returncode = 1
+            success, msg = open_file(str(child))
+        assert success is False
+        assert msg != ""
+
+
+def test_open_file_location_failed_opener_returns_false(tmp_path):
+    child = tmp_path / "images" / "photo.jpg"
+    child.parent.mkdir()
+    child.touch()
+    for platform in ("darwin", "linux"):
+        with patch("src.core.utils.subprocess.run") as mock_run, \
+             patch("src.core.utils.sys.platform", platform):
+            mock_run.return_value.returncode = 1
+            success, msg = open_file_location(str(child))
+        assert success is False
+        assert msg != ""
