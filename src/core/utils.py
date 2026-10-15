@@ -209,8 +209,14 @@ def load_report_entries(file_path: str) -> list:
     return [e.to_dict() for e in entries]
 
 
-def save_nudity_report(report_data, file_path, session_state=None) -> None:
-    """Save report to Excel with session."""
+def save_nudity_report(report_data, file_path, session_state=None):
+    """Save report (Excel workbook) and session for the run.
+
+    Returns:
+        Tuple ``(workbook_saved, session_saved)`` where each element is
+        True only when the corresponding file write succeeded. The overall
+        save is successful only when both are True.
+    """
     if session_state is None:
         session_state = create_session_state(results=get_detected_results(report_data))
 
@@ -223,11 +229,17 @@ def save_nudity_report(report_data, file_path, session_state=None) -> None:
             entries.append(item)
 
     # Save report
-    ReportManager.save_entries(entries, file_path)
+    entries_saved = bool(ReportManager.save_entries(entries, file_path))
+    if not entries_saved:
+        logging.warning('Could not write workbook report: %s', file_path)
 
     # Save session
     session_obj = SessionState.from_dict(session_state) if isinstance(session_state, dict) else session_state
-    ReportManager.save_session(session_obj, file_path)
+    session_saved = bool(ReportManager.save_session(session_obj, file_path))
+    if not session_saved:
+        logging.warning('Could not write session report: %s', file_path)
+
+    return entries_saved, session_saved
 
 
 def load_scan_session(file_path: str) -> dict:

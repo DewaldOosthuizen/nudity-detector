@@ -117,8 +117,11 @@ def main():
             error_count,
         )
     session_state = create_session_state(scan_config=scan_config, results=get_detected_results(all_results))
-    save_nudity_report(all_results, report_path, session_state=session_state)
-    logger.info('Report saved to %s', report_path)
+    saved = save_nudity_report(all_results, report_path, session_state=session_state)
+    if not all(saved):
+        logger.error('Report persistence failed (workbook_saved=%s, session_saved=%s)', *saved)
+    else:
+        logger.info('Report saved to %s', report_path)
 
 
 if __name__ == '__main__':

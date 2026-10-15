@@ -146,7 +146,7 @@ def test_classify_image_records_error_entry(tmp_path, caplog):
                side_effect=RuntimeError('service down')), \
          patch('src.detectors.helloz_nsfw._check_server_reachable', return_value=True), \
          patch('builtins.input', side_effect=[str(tmp_path), '60']), \
-         patch('src.detectors.helloz_nsfw.save_nudity_report'), \
+         patch('src.detectors.helloz_nsfw.save_nudity_report', return_value=(True, True)), \
          patch('src.detectors.helloz_nsfw.classify_files_in_folder') as mock_cff:
 
         def fake_classify_files(folder, ci, cv, **kw):
@@ -184,7 +184,7 @@ def test_classify_video_records_error_when_all_frames_fail(tmp_path):
                side_effect=RuntimeError('frame fail')), \
          patch('src.detectors.helloz_nsfw._check_server_reachable', return_value=True), \
          patch('builtins.input', side_effect=[str(tmp_path), '60']), \
-         patch('src.detectors.helloz_nsfw.save_nudity_report'), \
+         patch('src.detectors.helloz_nsfw.save_nudity_report', return_value=(True, True)), \
          patch('src.detectors.helloz_nsfw.classify_files_in_folder') as mock_cff, \
          patch('src.detectors.helloz_nsfw.FrameExtractor') as MockFE:
 
@@ -233,7 +233,7 @@ def test_classify_video_partial_success_calls_handle_results(tmp_path):
                side_effect=post_side_effects), \
          patch('src.detectors.helloz_nsfw._check_server_reachable', return_value=True), \
          patch('builtins.input', side_effect=[str(tmp_path), '60']), \
-         patch('src.detectors.helloz_nsfw.save_nudity_report'), \
+         patch('src.detectors.helloz_nsfw.save_nudity_report', return_value=(True, True)), \
          patch('src.detectors.helloz_nsfw.handle_results') as mock_hr, \
          patch('src.detectors.helloz_nsfw.classify_files_in_folder') as mock_cff, \
          patch('src.detectors.helloz_nsfw.FrameExtractor') as MockFE:
@@ -266,7 +266,7 @@ def test_main_emits_warning_for_error_entries(tmp_path, caplog):
                side_effect=RuntimeError('service down')), \
          patch('src.detectors.helloz_nsfw._check_server_reachable', return_value=True), \
          patch('builtins.input', side_effect=[str(tmp_path), '60']), \
-         patch('src.detectors.helloz_nsfw.save_nudity_report'), \
+         patch('src.detectors.helloz_nsfw.save_nudity_report', return_value=(True, True)), \
          patch('src.detectors.helloz_nsfw.classify_files_in_folder') as mock_cff:
 
         def fake_classify_files(folder, ci, cv, **kw):

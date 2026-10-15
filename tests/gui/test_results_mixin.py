@@ -423,7 +423,7 @@ def test_do_delete_success_no_scan_session():
     win.populate_results = MagicMock()
 
     with patch("src.gui.results.delete_file_safely", return_value=(True, "moved to trash")), \
-         patch("src.gui.results.save_nudity_report"):
+         patch("src.gui.results.save_nudity_report", return_value=(True, True)):
         win._do_delete(0, {"file": "/tmp/gone.jpg"})
 
     win.populate_results.assert_called_once()
@@ -442,7 +442,7 @@ def test_do_delete_success_with_scan_session():
     win.populate_results = MagicMock()
 
     with patch("src.gui.results.delete_file_safely", return_value=(True, "ok")), \
-         patch("src.gui.results.save_nudity_report"):
+         patch("src.gui.results.save_nudity_report", return_value=(True, True)):
         win._do_delete(0, {"file": "/tmp/gone.jpg"})
 
     mock_session.reset.assert_called_once()
