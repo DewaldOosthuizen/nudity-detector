@@ -112,7 +112,9 @@ class ScanningMixin:
                 ),
                 results=[],
             )
-            save_nudity_report([], initial_report_path, session_state=initial_session)
+            workbook_saved, session_saved = save_nudity_report([], initial_report_path, session_state=initial_session)
+            if not (workbook_saved and session_saved):
+                self.log_message('Warning: could not create initial report (workbook/session write failed)', 'warning')
             self.last_report_path = initial_report_path
             self.refresh_scan_history()
         except OSError as error:
@@ -397,7 +399,13 @@ class ScanningMixin:
                     break
                 snap, sess, path = item
                 try:
-                    save_nudity_report(snap, path, session_state=sess)
+                    workbook_saved, session_saved = save_nudity_report(snap, path, session_state=sess)
+                    if not (workbook_saved and session_saved):
+                        GLib.idle_add(
+                            self.log_message,
+                            f'Warning: could not save intermediate report (workbook_saved={workbook_saved}, session_saved={session_saved})',
+                            'warning',
+                        )
                 except Exception as exc:
                     logging.exception('Intermediate report save failed: %s', exc)
                     GLib.idle_add(self.log_message, f'Warning: could not save intermediate report: {exc}', 'warning')
@@ -493,7 +501,13 @@ class ScanningMixin:
             session_state = self.build_session_state()
 
             # Write the final definitive report (save thread already drained via finally).
-            save_nudity_report(all_results, report_path, session_state=session_state)
+            final_workbook_saved, final_session_saved = save_nudity_report(all_results, report_path, session_state=session_state)
+            if not (final_workbook_saved and final_session_saved):
+                GLib.idle_add(
+                    self.log_message,
+                    f'Error: final report not fully saved (workbook_saved={final_workbook_saved}, session_saved={final_session_saved})',
+                    'error',
+                )
             elapsed = datetime.now() - scan_start_time
             total_seconds = int(elapsed.total_seconds())
             minutes, seconds = divmod(total_seconds, 60)

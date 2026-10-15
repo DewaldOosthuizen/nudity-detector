@@ -393,6 +393,18 @@ The report includes:
 - Detected nudity classes
 - Thumbnail image (embedded)
 
+### Report Persistence and Save Failures
+
+Each report run writes two files: the Excel workbook (`nudity_report.xlsx`) and the
+session file (`nudity_report_session.json`). Both must be written successfully for the
+save to be considered complete. If either write fails, the run is reported as a
+partial failure that names the file which could not be written: callers receive a
+`(workbook_saved, session_saved)` outcome instead of assuming success, and the GUI,
+CLI, and detector entry points log an error naming the missing file and warn the
+user where applicable. A failure of one file does not roll back the other; rerun or
+re-save once the underlying IO issue (permissions, full disk, read-only directory)
+is resolved.
+
 ### GUI Review
 
 The GUI review panel includes:

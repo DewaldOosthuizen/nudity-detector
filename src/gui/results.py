@@ -1,3 +1,4 @@
+import logging
 import os
 
 import gi
@@ -12,6 +13,8 @@ from ..core.utils import (
     save_nudity_report,
 )
 from .result_item import ResultItem
+
+logger = logging.getLogger(__name__)
 
 
 class ResultsMixin:
@@ -164,8 +167,20 @@ class ResultsMixin:
             self._scan_session.reset()
             for e in remaining:
                 self._scan_session.add_result(e)
-            save_nudity_report(remaining, self.last_report_path, session_state=self.build_session_state())
+            workbook_saved, session_saved = save_nudity_report(remaining, self.last_report_path, session_state=self.build_session_state())
+            if not (workbook_saved and session_saved):
+                logger.error(
+                    'Failed to persist report after delete (workbook_saved=%s, session_saved=%s)',
+                    workbook_saved, session_saved,
+                )
+                self.log_message('Report could not be saved after delete.', 'error')
         else:
-            save_nudity_report(self.detected_results, self.last_report_path, session_state=self.build_session_state())
+            workbook_saved, session_saved = save_nudity_report(self.detected_results, self.last_report_path, session_state=self.build_session_state())
+            if not (workbook_saved and session_saved):
+                logger.error(
+                    'Failed to persist report after delete (workbook_saved=%s, session_saved=%s)',
+                    workbook_saved, session_saved,
+                )
+                self.log_message('Report could not be saved after delete.', 'error')
         self.populate_results(self.detected_results)
         self.log_message(f"Deleted {entry.get('file', '')}. {message}", 'success')

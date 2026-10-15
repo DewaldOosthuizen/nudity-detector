@@ -113,9 +113,15 @@ class SessionMixin:
                     report_path += constants.XLSX_EXTENSION
                 self.last_report_path = report_path
                 results = self._scan_session.get_results() if hasattr(self, '_scan_session') and self._scan_session else []
-                save_nudity_report(results, report_path, session_state=self.build_session_state())
+                saved = save_nudity_report(results, report_path, session_state=self.build_session_state())
                 self.open_report_button.set_sensitive(True)
-                self.log_message(f'Saved session report to {report_path}', 'success')
+                if all(saved):
+                    self.log_message(f'Saved session report to {report_path}', 'success')
+                else:
+                    self.log_message(
+                        f'Failed to save session report (workbook_saved={saved[0]}, session_saved={saved[1]})', 'error'
+                    )
+                    self._show_error('Error', 'Could not save report/session files.')
         except GLib.Error:
             pass
 

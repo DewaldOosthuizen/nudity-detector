@@ -542,7 +542,7 @@ class TestScanningMixinStartScanning:
             with patch("src.gui.scanning.threading.Thread") as mock_thread_cls:
                 mock_thread = MagicMock()
                 mock_thread_cls.return_value = mock_thread
-                with patch("src.gui.scanning.save_nudity_report"), \
+                with patch("src.gui.scanning.save_nudity_report", return_value=(True, True)), \
                      patch("src.gui.scanning.os.makedirs"):
                     ScanningMixin.start_scanning(win)
         mock_thread.start.assert_called()
@@ -556,7 +556,7 @@ class TestScanningMixinStartScanning:
         with patch("src.gui.scanning.threading.Thread") as mock_thread_cls:
             mock_thread = MagicMock()
             mock_thread_cls.return_value = mock_thread
-            with patch("src.gui.scanning.save_nudity_report"), \
+            with patch("src.gui.scanning.save_nudity_report", return_value=(True, True)), \
                  patch("src.gui.scanning.os.makedirs"):
                 ScanningMixin.start_scanning(win)
         mock_thread.start.assert_called()
@@ -1261,7 +1261,7 @@ class TestTimeoutUnits:
 
         with patch("src.gui.scanning.classify_files_in_folder") as mock_classify, \
              patch("src.gui.scanning.count_supported_files", return_value=1), \
-             patch("src.gui.scanning.save_nudity_report"), \
+             patch("src.gui.scanning.save_nudity_report", return_value=(True, True)), \
              patch("src.gui.scanning.os.makedirs"), \
              patch("src.gui.scanning.threading.Thread", new=_processing_thread_factory()):
             ScanningMixin.start_scanning(win)

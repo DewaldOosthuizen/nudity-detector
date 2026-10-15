@@ -125,7 +125,7 @@ def test_main_image_scan(tmp_path, monkeypatch):
     fake_detector.detect.return_value = [{"label": nudity_class, "score": 0.9}]
 
     with patch("src.detectors.nudenet.NudeDetector", return_value=fake_detector), \
-         patch("src.detectors.nudenet.save_nudity_report"), \
+         patch("src.detectors.nudenet.save_nudity_report", return_value=(True, True)), \
          patch("src.detectors.nudenet.get_report_path", return_value=str(tmp_path / "report.xlsx")), \
          patch("src.detectors.nudenet.load_existing_report", return_value=set()):
         main()
@@ -142,7 +142,7 @@ def test_main_image_scan_skip_existing(tmp_path, monkeypatch):
     fake_detector = MagicMock()
 
     with patch("src.detectors.nudenet.NudeDetector", return_value=fake_detector), \
-         patch("src.detectors.nudenet.save_nudity_report"), \
+         patch("src.detectors.nudenet.save_nudity_report", return_value=(True, True)), \
          patch("src.detectors.nudenet.get_report_path", return_value=str(tmp_path / "report.xlsx")), \
          patch("src.detectors.nudenet.load_existing_report", return_value={str(img)}):
         main()
@@ -162,7 +162,7 @@ def test_main_image_error_handling(tmp_path, monkeypatch):
     fake_detector.detect.side_effect = RuntimeError("model error")
 
     with patch("src.detectors.nudenet.NudeDetector", return_value=fake_detector), \
-         patch("src.detectors.nudenet.save_nudity_report"), \
+         patch("src.detectors.nudenet.save_nudity_report", return_value=(True, True)), \
          patch("src.detectors.nudenet.get_report_path", return_value=str(tmp_path / "report.xlsx")), \
          patch("src.detectors.nudenet.load_existing_report", return_value=set()):
         main()  # Should not raise
@@ -184,7 +184,7 @@ def test_main_video_scan(tmp_path, monkeypatch):
 
     with patch("src.detectors.nudenet.NudeDetector", return_value=fake_detector), \
          patch("src.detectors.nudenet.FrameExtractor", return_value=mock_extractor), \
-         patch("src.detectors.nudenet.save_nudity_report"), \
+         patch("src.detectors.nudenet.save_nudity_report", return_value=(True, True)), \
          patch("src.detectors.nudenet.get_report_path", return_value=str(tmp_path / "report.xlsx")), \
          patch("src.detectors.nudenet.load_existing_report", return_value=set()):
         main()
@@ -210,7 +210,7 @@ def test_main_video_early_exit(tmp_path, monkeypatch):
 
     with patch("src.detectors.nudenet.NudeDetector", return_value=fake_detector), \
          patch("src.detectors.nudenet.FrameExtractor", return_value=mock_extractor), \
-         patch("src.detectors.nudenet.save_nudity_report"), \
+         patch("src.detectors.nudenet.save_nudity_report", return_value=(True, True)), \
          patch("src.detectors.nudenet.get_report_path", return_value=str(tmp_path / "report.xlsx")), \
          patch("src.detectors.nudenet.load_existing_report", return_value=set()):
         main()
@@ -230,7 +230,7 @@ def test_main_video_error_handling(tmp_path, monkeypatch):
 
     with patch("src.detectors.nudenet.NudeDetector", return_value=fake_detector), \
          patch("src.detectors.nudenet.FrameExtractor", return_value=mock_extractor), \
-         patch("src.detectors.nudenet.save_nudity_report"), \
+         patch("src.detectors.nudenet.save_nudity_report", return_value=(True, True)), \
          patch("src.detectors.nudenet.get_report_path", return_value=str(tmp_path / "report.xlsx")), \
          patch("src.detectors.nudenet.load_existing_report", return_value=set()):
         main()  # Should not raise
@@ -247,7 +247,7 @@ def test_main_video_skip_existing(tmp_path, monkeypatch):
     fake_detector = MagicMock()
 
     with patch("src.detectors.nudenet.NudeDetector", return_value=fake_detector), \
-         patch("src.detectors.nudenet.save_nudity_report"), \
+         patch("src.detectors.nudenet.save_nudity_report", return_value=(True, True)), \
          patch("src.detectors.nudenet.get_report_path", return_value=str(tmp_path / "report.xlsx")), \
          patch("src.detectors.nudenet.load_existing_report", return_value={str(vid)}):
         main()

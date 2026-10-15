@@ -12,6 +12,7 @@ sys.modules.setdefault("nudenet", MagicMock())
 
 import src.reporting.report_manager as rm_mod  # noqa: E402
 from src.core.models import ReportEntry, SessionState  # noqa: E402
+from src.core.utils import save_nudity_report  # noqa: E402
 from src.reporting.report_manager import ReportManager  # noqa: E402
 
 
@@ -236,3 +237,37 @@ def test_create_demo_session_creates_new_workbook(tmp_path):
     result = ReportManager.create_demo_session(path, state)
     assert result is True
     assert os.path.exists(path)
+
+
+# ---------------------------------------------------------------------------
+# save_nudity_report failure propagation
+# ---------------------------------------------------------------------------
+
+def test_save_nudity_report_save_entries_failure(tmp_path):
+    entry = _entry()
+    path = str(tmp_path / "out.xlsx")
+    with patch("src.reporting.report_manager.ReportManager.save_entries", return_value=False), \
+         patch("src.reporting.report_manager.ReportManager.save_session", return_value=True):
+        workbook_saved, session_saved = save_nudity_report([entry], path)
+    assert workbook_saved is False
+    assert session_saved is True
+
+
+def test_save_nudity_report_save_session_failure(tmp_path):
+    entry = _entry()
+    path = str(tmp_path / "out.xlsx")
+    with patch("src.reporting.report_manager.ReportManager.save_entries", return_value=True), \
+         patch("src.reporting.report_manager.ReportManager.save_session", return_value=False):
+        workbook_saved, session_saved = save_nudity_report([entry], path)
+    assert workbook_saved is True
+    assert session_saved is False
+
+
+def test_save_nudity_report_partial_write(tmp_path):
+    entry = _entry()
+    path = str(tmp_path / "out.xlsx")
+    with patch("src.reporting.report_manager.ReportManager.save_entries", return_value=False), \
+         patch("src.reporting.report_manager.ReportManager.save_session", return_value=False):
+        workbook_saved, session_saved = save_nudity_report([entry], path)
+    assert (workbook_saved, session_saved) == (False, False)
+    assert not (workbook_saved and session_saved)
