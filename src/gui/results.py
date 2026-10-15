@@ -14,6 +14,8 @@ from ..core.utils import (
 )
 from .result_item import ResultItem
 
+logger = logging.getLogger(__name__)
+
 
 class ResultsMixin:
     """Results table population, row selection, row actions, and clear-all.
@@ -167,7 +169,7 @@ class ResultsMixin:
                 self._scan_session.add_result(e)
             workbook_saved, session_saved = save_nudity_report(remaining, self.last_report_path, session_state=self.build_session_state())
             if not (workbook_saved and session_saved):
-                logging.getLogger(__name__).error(
+                logger.error(
                     'Failed to persist report after delete (workbook_saved=%s, session_saved=%s)',
                     workbook_saved, session_saved,
                 )
@@ -175,7 +177,7 @@ class ResultsMixin:
         else:
             workbook_saved, session_saved = save_nudity_report(self.detected_results, self.last_report_path, session_state=self.build_session_state())
             if not (workbook_saved and session_saved):
-                logging.getLogger(__name__).error(
+                logger.error(
                     'Failed to persist report after delete (workbook_saved=%s, session_saved=%s)',
                     workbook_saved, session_saved,
                 )
