@@ -186,7 +186,8 @@ def test_open_file_missing():
 def test_open_file_existing(tmp_path):
     f = tmp_path / "test.jpg"
     f.write_bytes(b"data")
-    with patch("subprocess.run"):
+    with patch("subprocess.run") as mock_run:
+        mock_run.return_value.returncode = 0
         ok, msg = open_file(str(f))
     assert ok is True
 
@@ -225,7 +226,8 @@ def test_delete_file_safely_with_trash(tmp_path):
 # ---------------------------------------------------------------------------
 
 def test_open_file_location_existing_dir(tmp_path):
-    with patch("subprocess.run"):
+    with patch("subprocess.run") as mock_run:
+        mock_run.return_value.returncode = 0
         ok, msg = open_file_location(str(tmp_path))
     assert ok is True
 
@@ -233,7 +235,8 @@ def test_open_file_location_existing_dir(tmp_path):
 def test_open_file_location_existing_file(tmp_path):
     f = tmp_path / "test.jpg"
     f.write_bytes(b"data")
-    with patch("subprocess.run"):
+    with patch("subprocess.run") as mock_run:
+        mock_run.return_value.returncode = 0
         ok, msg = open_file_location(str(f))
     assert ok is True
 
