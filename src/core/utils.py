@@ -31,6 +31,7 @@ except ImportError:
 from ..processing.media_processor import FrameExtractor, ThumbnailGenerator, detect_media_type, is_supported_file
 from ..reporting.report_manager import ReportManager
 from . import constants
+from .inference_pool import RestartableDetectionPool
 from .models import ReportEntry, ScanConfig, SessionState
 from .scan_session import ScanSession
 
@@ -305,41 +306,31 @@ def detect_media_type_utils(file_path: str) -> str:
     return detect_media_type(file_path)
 
 
-def detect_with_timeout(detector, file_path: str, timeout_seconds: int = constants.DETECT_TIMEOUT) -> Optional[list]:
-    """Wrap detection with timeout.
+def detect_with_timeout(
+    detector: RestartableDetectionPool,
+    file_path: str,
+    timeout_seconds: float = constants.DETECT_TIMEOUT,
+) -> list[dict[str, object]]:
+    """Run detection with a timeout that terminates its isolated worker.
 
     Args:
-        detector: Detection instance (NudeNet)
+        detector: Restartable process pool for the NudeNet detector.
         file_path: Path to file
         timeout_seconds: Timeout in seconds
 
     Returns:
-        Detection results
+        Detection records returned by the worker process.
 
     Raises:
-        TimeoutError: If detection exceeds timeout
+        TimeoutError: If a worker is unavailable or detection exceeds its deadline.
+        RemoteDetectionError: If worker startup or inference fails.
+        RuntimeError: If the pool is closed or a worker exits unexpectedly.
     """
-    result_container = [None]
-    exception_container = [None]
-
-    def run_detection():
-        try:
-            result_container[0] = detector.detect(file_path)
-        except Exception as e:
-            exception_container[0] = e
-
-    thread = Thread(target=run_detection, daemon=True)
-    thread.start()
-    thread.join(timeout=timeout_seconds)
-
-    if thread.is_alive():
+    try:
+        return detector.detect(file_path, timeout_seconds)
+    except TimeoutError:
         logging.error('Detection timeout for file: %s after %d seconds', file_path, timeout_seconds)
-        raise TimeoutError(f'Detection timeout for {file_path}')
-
-    if exception_container[0]:
-        raise exception_container[0]
-
-    return result_container[0]
+        raise
 
 
 def open_file(file_path: str, scan_root: str = '') -> Tuple[bool, str]:
