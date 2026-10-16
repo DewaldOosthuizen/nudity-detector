@@ -11,6 +11,8 @@ gi.require_version('Gtk', '4.0')
 from gi.repository import GLib
 
 from ..core import constants
+from ..core.inference_pool import RestartableDetectionPool
+from ..core.nudenet_worker import create_nudenet_detector
 from ..core.scan_session import ScanSession
 from ..core.utils import (
     DEFAULT_REPORT_DIR,
@@ -155,9 +157,14 @@ class ScanningMixin:
     # ------------------------------------------------------------------
 
     def create_nudenet_classifiers(self, existing_files, threshold_value, threshold_percent, session):
-        from nudenet import NudeDetector
-
-        detector = NudeDetector()
+        previous_pool = getattr(self, '_nudenet_worker_pool', None)
+        if isinstance(previous_pool, RestartableDetectionPool):
+            previous_pool.close()
+        detector = RestartableDetectionPool(
+            create_nudenet_detector,
+            worker_count=self._get_worker_thread_count(),
+        )
+        self._nudenet_worker_pool = detector
 
         detect_timeout = self._get_detect_timeout()
 
@@ -170,7 +177,7 @@ class ScanningMixin:
                 detection_result = detect_with_timeout(detector, file_path, detect_timeout)
             except TimeoutError:
                 logging.debug(
-                    'Detection timed out after %ds for %s; worker thread may continue in background',
+                    'Detection timed out after %ds for %s; worker process was stopped',
                     detect_timeout, file_path,
                 )
                 GLib.idle_add(
@@ -534,11 +541,21 @@ class ScanningMixin:
         except Exception as error:
             GLib.idle_add(self.log_message, f'Error during processing: {error}', 'error')
         finally:
-            # Always drain and terminate the async save thread before finish_processing
-            # so there is no background writer touching report files after the scan ends.
-            _save_queue.put(None)
-            save_thread.join()
-            GLib.idle_add(self.finish_processing)
+            try:
+                self._close_nudenet_worker_pool()
+            finally:
+                # Always drain and terminate the async save thread before finish_processing
+                # so there is no background writer touching report files after the scan ends.
+                _save_queue.put(None)
+                save_thread.join()
+                GLib.idle_add(self.finish_processing)
+
+    def _close_nudenet_worker_pool(self) -> None:
+        """Stop NudeNet inference processes after the scan's workers have drained."""
+        worker_pool = getattr(self, '_nudenet_worker_pool', None)
+        if isinstance(worker_pool, RestartableDetectionPool):
+            worker_pool.close()
+            self._nudenet_worker_pool = None
 
     # ------------------------------------------------------------------
     # Progress pulse / fraction
