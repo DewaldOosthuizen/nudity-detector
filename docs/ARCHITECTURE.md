@@ -274,3 +274,19 @@ ruff check src/ tests/
 
 Key design decisions are documented in `docs/add/`. Read the index at
 `docs/add/README.md` for the full list.
+
+---
+
+## Scan Progress and Discovery (Issue #109)
+
+Scanning uses bounded producer/consumer file discovery: `os.walk` yields paths
+into a bounded queue (maxsize configurable via `discovery_queue_maxsize`) that
+worker threads drain before directory traversal finishes. The GUI never holds
+the full path list. Progress reports explicit `discovered`/`processed` counts:
+an indeterminate pulse phase is used until the supported-file total is known;
+once `count_supported_files` has completed the traversal, the total is set and
+the progress bar switches to a determinate fraction (`processed / total`).
+Discovery and workers are aborted cleanly when `is_processing` becomes False.
+`detect_media_type` is cached in `src/processing/media_processor.py` with a
+thread-safe bounded LRU keyed by resolved path + mtime; `is_supported_file`
+reuses it.
