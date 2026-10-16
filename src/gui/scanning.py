@@ -15,7 +15,7 @@ from ..core.scan_session import ScanSession
 from ..core.utils import (
     DEFAULT_REPORT_DIR,
     classify_files_in_folder,
-    count_supported_files,
+    count_supported_files,  # noqa: F401 - imported for test patching
     create_frame_extractor,
     create_session_state,
     detect_with_timeout,
@@ -369,21 +369,9 @@ class ScanningMixin:
         # Single directory walk — collect all files once.
         # ------------------------------------------------------------------
         scan_start_time = datetime.now()
-        all_files = []
-        for root, _, files in os.walk(folder_path):
-            for file_name in files:
-                all_files.append(os.path.join(root, file_name))
-
-        total_files = count_supported_files(folder_path, file_list=all_files)
-        GLib.idle_add(self.log_message, f'Found {total_files} supported file(s) to scan.')
-        if total_files == 0:
-            GLib.idle_add(self.log_message, 'No supported media files found. Scan complete.', 'warning')
-            GLib.idle_add(self.finish_processing)
-            return
-
-        # Publish total to the mixin so the progress bar can switch from pulse
-        # to a real fraction (done on the main thread via idle_add).
-        GLib.idle_add(self._set_scan_total, total_files)
+        # Determine the total up front so progress reporting can be determinate.
+        total_files = count_supported_files(folder_path)
+        self._set_scan_total(total_files)
 
         # ------------------------------------------------------------------
         # Async save thread — receives (snapshot, session, path) from worker
@@ -490,7 +478,6 @@ class ScanningMixin:
                 classify_video,
                 worker_count=self._get_worker_thread_count(),
                 worker_timeout=self._get_worker_thread_timeout(),
-                file_list=all_files,
             )
 
             processed = files_processed[0]

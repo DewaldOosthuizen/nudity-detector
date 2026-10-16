@@ -25,3 +25,5 @@ before merging. Only the release-publishing job receives `contents: write`.
 When behavior, API contracts, deployment steps, or architecture change, update the relevant doc under this `docs/` tree in the same change. Code and docs must stay in sync.
 
 For authoritative rules on verification, review, conventions, and context efficiency, see [openspec/config.yaml](../openspec/config.yaml) (when present in this repo).
+
+- Streamed scan progress: bounded producer/consumer discovery; see docs/ARCHITECTURE.md "Scan Progress and Discovery (Issue #109)".
