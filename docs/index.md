@@ -2,6 +2,28 @@
 
 All persistent project documentation lives under this directory.
 
+## Reading Guide
+
+| Document | Description |
+|----------|-------------|
+| [getting-started.md](getting-started.md) | Installation, prerequisites, running the app, supported formats, output, building |
+| [configuration.md](configuration.md) | Full `app_config.json` reference — all 19 keys, migration, validation |
+| [architecture.md](architecture.md) | Architecture overview — layers, modules, data flow, testing strategy |
+| [contributing.md](contributing.md) | Branch naming, commit style, PR process, coding standards |
+| [development.md](development.md) | Running checks, dependency management, codegraph workflow |
+| [releasing.md](releasing.md) | Release process, versioning convention, rollback |
+| [agent-guide.md](agent-guide.md) | AI agent rules, standards, verification, repository-specific rules |
+| [add/README.md](add/README.md) | Architectural Decision Documents index |
+| [diagrams/README.md](diagrams/README.md) | Mermaid diagram suite |
+
+## Quick Links
+
+- **New contributor?** Start with [getting-started.md](getting-started.md), then [contributing.md](contributing.md).
+- **Changing code?** Read [agent-guide.md](agent-guide.md) for standards, then [development.md](development.md) for checks.
+- **Modifying config?** See [configuration.md](configuration.md) for the full reference.
+- **Designing a feature?** Check [add/README.md](add/README.md) for existing ADDs, then write one before building.
+- **Releasing?** See [releasing.md](releasing.md).
+
 ## CI / CD Pipeline
 
 Two workflows cover all changes:
@@ -13,15 +35,12 @@ Tags are **CalVer only**. Legacy non-CalVer tags have been cleaned up.
 
 ### GitHub Actions pinning and updates
 
-Pin each action to a verified full commit SHA and keep the exact upstream release
-version in an inline comment. Verify the SHA against that specific release tag
-when adding or updating a pin; do not verify only against a moving major tag.
-Dependabot proposes monthly GitHub Actions updates. Review every proposed
-version-to-SHA mapping and require the repository PR validation gates to pass
-before merging. Only the release-publishing job receives `contents: write`.
+Pin each action to a verified full commit SHA and keep the exact upstream release version in an inline comment. Verify the SHA against that specific release tag when adding or updating a pin; do not verify only against a moving major tag.
+
+Dependabot proposes monthly GitHub Actions updates. Review every proposed version-to-SHA mapping and require the repository PR validation gates to pass before merging. Only the release-publishing job receives `contents: write`.
 
 ## Documentation Conventions
 
 When behavior, API contracts, deployment steps, or architecture change, update the relevant doc under this `docs/` tree in the same change. Code and docs must stay in sync.
 
-For authoritative rules on verification, review, conventions, and context efficiency, see [openspec/config.yaml](../openspec/config.yaml) (when present in this repo).
+For authoritative rules on verification, review, conventions, and context efficiency, see [agent-guide.md](agent-guide.md).

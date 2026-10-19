@@ -27,7 +27,7 @@ nudity-detector/
 │   ├── AppRun                       ← AppImage entry point (env var wiring)
 │   └── nudity-detector.desktop      ← FreeDesktop entry used by appimagetool
 ├── docs/
-│   ├── ARCHITECTURE.md              ← This file
+│   ├── architecture.md              ← This file
 │   ├── add/                         ← Architectural Decision Documents
 │   └── diagrams/                    ← Mermaid architecture and flow diagrams
 ├── tests/                           ← pytest test suite (mirrors src/ layout)
