@@ -141,6 +141,7 @@ def test_generate_from_video_cannot_open(tmp_path):
     with patch("cv2.VideoCapture", return_value=mock_cap):
         result = ThumbnailGenerator.generate_from_video("/nonexistent/video.mp4")
     assert result is None
+    mock_cap.release.assert_called_once()
 
 
 def test_generate_from_video_no_frames(tmp_path):
@@ -157,6 +158,65 @@ def test_generate_from_video_no_frames(tmp_path):
     with patch("cv2.VideoCapture", return_value=mock_cap):
         result = ThumbnailGenerator.generate_from_video("/some/video.mp4")
     assert result is None
+    mock_cap.release.assert_called_once()
+
+
+def test_generate_from_video_failed_frame_read_releases_capture():
+    """Returns None and releases the capture when frame extraction fails."""
+    import src.processing.media_processor as mp
+
+    mock_cap = MagicMock()
+    mock_cap.isOpened.return_value = True
+    mock_cap.get.return_value = 10
+    mock_cap.read.return_value = (False, None)
+    mock_cv2 = MagicMock()
+    mock_cv2.VideoCapture.return_value = mock_cap
+
+    with patch.object(mp, "cv2", mock_cv2):
+        result = ThumbnailGenerator.generate_from_video("/some/video.mp4")
+
+    assert result is None
+    mock_cap.release.assert_called_once()
+
+
+def test_generate_from_video_processing_exception_releases_capture():
+    """Returns None and releases the capture if capture processing raises."""
+    import src.processing.media_processor as mp
+
+    mock_cap = MagicMock()
+    mock_cap.isOpened.return_value = True
+    mock_cap.get.side_effect = RuntimeError("capture read failed")
+    mock_cv2 = MagicMock()
+    mock_cv2.VideoCapture.return_value = mock_cap
+
+    with patch.object(mp, "cv2", mock_cv2):
+        result = ThumbnailGenerator.generate_from_video("/some/video.mp4")
+
+    assert result is None
+    mock_cap.release.assert_called_once()
+
+
+def test_generate_from_video_success_releases_capture():
+    """Returns an encoded thumbnail and releases the capture exactly once."""
+    import src.processing.media_processor as mp
+
+    mock_cap = MagicMock()
+    mock_cap.isOpened.return_value = True
+    mock_cap.get.return_value = 10
+    mock_cap.read.return_value = (True, MagicMock())
+    mock_cv2 = MagicMock()
+    mock_cv2.VideoCapture.return_value = mock_cap
+    mock_image = MagicMock()
+    mock_image.save.side_effect = lambda buffer, format: buffer.write(b"thumbnail")
+    mock_pil = MagicMock()
+    mock_pil.fromarray.return_value = mock_image
+
+    with patch.object(mp, "cv2", mock_cv2), patch.object(mp, "Image", mock_pil):
+        result = ThumbnailGenerator.generate_from_video("/some/video.mp4")
+
+    assert result is not None
+    assert base64.b64decode(result) == b"thumbnail"
+    mock_cap.release.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
