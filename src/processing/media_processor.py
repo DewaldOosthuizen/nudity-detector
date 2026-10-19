@@ -320,6 +320,9 @@ class ThumbnailGenerator:
 
         Returns:
             Base64-encoded PNG thumbnail, or None if generation fails
+
+        Raises:
+            None. Capture and processing errors are logged and return None.
         """
         if cv2 is None:
             logging.debug('OpenCV not available for video thumbnail generation: %s', file_path)
@@ -331,38 +334,38 @@ class ThumbnailGenerator:
 
         try:
             cap = cv2.VideoCapture(file_path)
-            if not cap.isOpened():
-                logging.warning('Could not open video file: %s', file_path)
-                return None
+            try:
+                if not cap.isOpened():
+                    logging.warning('Could not open video file: %s', file_path)
+                    return None
 
-            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-            if total_frames <= 0:
-                logging.warning('Video has no frames: %s', file_path)
+                total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                if total_frames <= 0:
+                    logging.warning('Video has no frames: %s', file_path)
+                    return None
+
+                # Extract frame at progress point
+                frame_index = max(0, int(total_frames * constants.THUMBNAIL_IMAGE_INDEX))
+                cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
+
+                ret, frame = cap.read()
+                if not ret or frame is None:
+                    logging.warning('Could not extract frame from video: %s', file_path)
+                    return None
+
+                # Convert BGR to RGB
+                frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                img = Image.fromarray(frame_rgb)
+                img.thumbnail(size, Image.Resampling.LANCZOS if hasattr(Image, 'Resampling') else Image.LANCZOS)
+
+                # Encode to base64
+                buffer = BytesIO()
+                img.save(buffer, format=constants.THUMBNAIL_FORMAT)
+                buffer.seek(0)
+                encoded = base64.b64encode(buffer.getvalue()).decode('utf-8')
+                return encoded
+            finally:
                 cap.release()
-                return None
-
-            # Extract frame at progress point
-            frame_index = max(0, int(total_frames * constants.THUMBNAIL_IMAGE_INDEX))
-            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
-
-            ret, frame = cap.read()
-            cap.release()
-
-            if not ret or frame is None:
-                logging.warning('Could not extract frame from video: %s', file_path)
-                return None
-
-            # Convert BGR to RGB
-            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            img = Image.fromarray(frame_rgb)
-            img.thumbnail(size, Image.Resampling.LANCZOS if hasattr(Image, 'Resampling') else Image.LANCZOS)
-
-            # Encode to base64
-            buffer = BytesIO()
-            img.save(buffer, format=constants.THUMBNAIL_FORMAT)
-            buffer.seek(0)
-            encoded = base64.b64encode(buffer.getvalue()).decode('utf-8')
-            return encoded
         except Exception as e:
             logging.warning('Failed to generate video thumbnail for %s: %s', file_path, e)
             return None
