@@ -130,15 +130,14 @@ def test_generate_from_video_cv2_unavailable(tmp_path):
 
 def test_generate_from_video_cannot_open(tmp_path):
     """Returns None when video file cannot be opened."""
-    try:
-        import cv2 as real_cv2
-    except ImportError:
-        pytest.skip("cv2 not installed")
+    import src.processing.media_processor as mp
 
     mock_cap = MagicMock()
     mock_cap.isOpened.return_value = False
+    mock_cv2 = MagicMock()
+    mock_cv2.VideoCapture.return_value = mock_cap
 
-    with patch("cv2.VideoCapture", return_value=mock_cap):
+    with patch.object(mp, "cv2", mock_cv2), patch.object(mp, "Image", MagicMock()):
         result = ThumbnailGenerator.generate_from_video("/nonexistent/video.mp4")
     assert result is None
     mock_cap.release.assert_called_once()
@@ -146,16 +145,15 @@ def test_generate_from_video_cannot_open(tmp_path):
 
 def test_generate_from_video_no_frames(tmp_path):
     """Returns None when video has 0 frames."""
-    try:
-        import cv2 as real_cv2
-    except ImportError:
-        pytest.skip("cv2 not installed")
+    import src.processing.media_processor as mp
 
     mock_cap = MagicMock()
     mock_cap.isOpened.return_value = True
     mock_cap.get.return_value = 0  # 0 total frames
+    mock_cv2 = MagicMock()
+    mock_cv2.VideoCapture.return_value = mock_cap
 
-    with patch("cv2.VideoCapture", return_value=mock_cap):
+    with patch.object(mp, "cv2", mock_cv2), patch.object(mp, "Image", MagicMock()):
         result = ThumbnailGenerator.generate_from_video("/some/video.mp4")
     assert result is None
     mock_cap.release.assert_called_once()
