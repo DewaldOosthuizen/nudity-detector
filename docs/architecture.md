@@ -164,6 +164,10 @@ src/core/utils.py  ← normalize_threshold, build ScanConfig
         │
         ├─ spawn N worker threads
         │        │
+        │        ├─ NudeNet GUI inference uses restartable child processes
+        │        │     timed-out workers are terminated before their slots are reused
+        │        │     scan teardown stops every remaining inference process
+        │        │
         │        ├─ src/processing/media_processor.py
         │        │     detect_media_type()
         │        │     FrameExtractor.iter_frames()   (videos only)
@@ -180,6 +184,13 @@ src/core/utils.py  ← normalize_threshold, build ScanConfig
 
 GUI updates are marshalled back to the main thread via `GLib.idle_add` so
 that worker threads never touch GTK widgets directly.
+
+The GUI's NudeNet detector runs in one child process per configured worker.
+Each process loads its detector once and handles one request at a time. If a
+detection exceeds its timeout, the owning process is terminated and recreated
+before that worker slot can process another image or video frame. Scan teardown
+closes all remaining detector processes. This boundary is required because a
+Python thread cannot be safely stopped while native inference is running.
 
 ---
 
@@ -274,3 +285,19 @@ ruff check src/ tests/
 
 Key design decisions are documented in `docs/add/`. Read the index at
 `docs/add/README.md` for the full list.
+
+---
+
+## Scan Progress and Discovery (Issue #109)
+
+Scanning uses bounded producer/consumer file discovery: `os.walk` yields paths
+into a bounded queue (maxsize configurable via `discovery_queue_maxsize`) that
+worker threads drain before directory traversal finishes. The GUI never holds
+the full path list. Progress reports explicit `discovered`/`processed` counts:
+an indeterminate pulse phase is used until the supported-file total is known;
+once `count_supported_files` has completed the traversal, the total is set and
+the progress bar switches to a determinate fraction (`processed / total`).
+Discovery and workers are aborted cleanly when `is_processing` becomes False.
+`detect_media_type` is cached in `src/processing/media_processor.py` with a
+thread-safe bounded LRU keyed by resolved path + mtime; `is_supported_file`
+reuses it.

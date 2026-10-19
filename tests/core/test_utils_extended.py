@@ -1,6 +1,7 @@
 """Extended tests for src/core/utils.py to boost coverage."""
 import os
 import sys
+import time
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -9,6 +10,7 @@ import pytest
 sys.modules.setdefault("nudenet", MagicMock())
 
 from src.core import constants
+from src.core.inference_pool import RemoteDetectionError, RestartableDetectionPool
 from src.core.scan_session import ScanSession
 from src.core.utils import (
     count_supported_files,
@@ -30,6 +32,21 @@ from src.core.utils import (
     save_nudity_report,
     validate_report_dir,
 )
+
+
+class _TimeoutTestDetector:
+    """Small picklable detector used to exercise the process boundary."""
+
+    def detect(self, path: str) -> list[dict[str, object]]:
+        if path == "slow":
+            time.sleep(10)
+        if path == "error":
+            raise ValueError("bad file")
+        return [{"label": "safe", "path": path}]
+
+
+def _create_timeout_test_detector() -> _TimeoutTestDetector:
+    return _TimeoutTestDetector()
 
 # ---------------------------------------------------------------------------
 # create_session_state
@@ -144,33 +161,40 @@ def test_detect_media_type_utils_unknown():
 # ---------------------------------------------------------------------------
 
 def test_detect_with_timeout_success():
-    class FakeDetector:
-        def detect(self, path):
-            return [{"label": "EXPOSED_BREAST_F", "score": 0.9}]
-
-    result = detect_with_timeout(FakeDetector(), "dummy.jpg", timeout_seconds=5)
-    assert result == [{"label": "EXPOSED_BREAST_F", "score": 0.9}]
+    detector = RestartableDetectionPool(
+        _create_timeout_test_detector, worker_count=1, startup_timeout_seconds=5
+    )
+    try:
+        result = detect_with_timeout(detector, "dummy.jpg", timeout_seconds=5)
+        assert result == [{"label": "safe", "path": "dummy.jpg"}]
+    finally:
+        detector.close()
 
 
 def test_detect_with_timeout_raises_on_detector_error():
-    class ErrorDetector:
-        def detect(self, path):
-            raise ValueError("bad file")
-
-    with pytest.raises(ValueError, match="bad file"):
-        detect_with_timeout(ErrorDetector(), "dummy.jpg", timeout_seconds=5)
+    detector = RestartableDetectionPool(
+        _create_timeout_test_detector, worker_count=1, startup_timeout_seconds=5
+    )
+    try:
+        with pytest.raises(RemoteDetectionError, match="ValueError.*bad file"):
+            detect_with_timeout(detector, "error", timeout_seconds=5)
+        assert detect_with_timeout(detector, "dummy.jpg", timeout_seconds=5) == [
+            {"label": "safe", "path": "dummy.jpg"}
+        ]
+    finally:
+        detector.close()
 
 
 def test_detect_with_timeout_raises_timeout():
-    import time
-
-    class SlowDetector:
-        def detect(self, path):
-            time.sleep(10)
-            return []
-
-    with pytest.raises(TimeoutError):
-        detect_with_timeout(SlowDetector(), "dummy.jpg", timeout_seconds=1)
+    detector = RestartableDetectionPool(
+        _create_timeout_test_detector, worker_count=1, startup_timeout_seconds=5
+    )
+    try:
+        with pytest.raises(TimeoutError):
+            detect_with_timeout(detector, "slow", timeout_seconds=1)
+        assert detector._workers[0] is None
+    finally:
+        detector.close()
 
 
 # ---------------------------------------------------------------------------

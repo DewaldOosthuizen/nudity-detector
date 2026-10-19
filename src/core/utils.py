@@ -31,6 +31,7 @@ except ImportError:
 from ..processing.media_processor import FrameExtractor, ThumbnailGenerator, detect_media_type, is_supported_file
 from ..reporting.report_manager import ReportManager
 from . import constants
+from .inference_pool import RestartableDetectionPool
 from .models import ReportEntry, ScanConfig, SessionState
 from .scan_session import ScanSession
 
@@ -305,41 +306,31 @@ def detect_media_type_utils(file_path: str) -> str:
     return detect_media_type(file_path)
 
 
-def detect_with_timeout(detector, file_path: str, timeout_seconds: int = constants.DETECT_TIMEOUT) -> Optional[list]:
-    """Wrap detection with timeout.
+def detect_with_timeout(
+    detector: RestartableDetectionPool,
+    file_path: str,
+    timeout_seconds: float = constants.DETECT_TIMEOUT,
+) -> list[dict[str, object]]:
+    """Run detection with a timeout that terminates its isolated worker.
 
     Args:
-        detector: Detection instance (NudeNet)
+        detector: Restartable process pool for the NudeNet detector.
         file_path: Path to file
         timeout_seconds: Timeout in seconds
 
     Returns:
-        Detection results
+        Detection records returned by the worker process.
 
     Raises:
-        TimeoutError: If detection exceeds timeout
+        TimeoutError: If a worker is unavailable or detection exceeds its deadline.
+        RemoteDetectionError: If worker startup or inference fails.
+        RuntimeError: If the pool is closed or a worker exits unexpectedly.
     """
-    result_container = [None]
-    exception_container = [None]
-
-    def run_detection():
-        try:
-            result_container[0] = detector.detect(file_path)
-        except Exception as e:
-            exception_container[0] = e
-
-    thread = Thread(target=run_detection, daemon=True)
-    thread.start()
-    thread.join(timeout=timeout_seconds)
-
-    if thread.is_alive():
+    try:
+        return detector.detect(file_path, timeout_seconds)
+    except TimeoutError:
         logging.error('Detection timeout for file: %s after %d seconds', file_path, timeout_seconds)
-        raise TimeoutError(f'Detection timeout for {file_path}')
-
-    if exception_container[0]:
-        raise exception_container[0]
-
-    return result_container[0]
+        raise
 
 
 def open_file(file_path: str, scan_root: str = '') -> Tuple[bool, str]:
@@ -463,11 +454,11 @@ def open_file_location(file_path: str, scan_root: str = '') -> Tuple[bool, str]:
 # ============================================================================
 def process_file(file_path: str, classify_image, classify_video) -> None:
     """Process single file with appropriate classification function."""
-    if not is_supported_file(file_path):
+    media_type = detect_media_type(file_path)
+    if media_type == constants.MEDIA_TYPE_UNKNOWN:
         logging.info('Skipping unsupported file: %s', file_path)
         return
 
-    media_type = detect_media_type(file_path)
     if media_type == constants.MEDIA_TYPE_IMAGE:
         classify_image(file_path)
     elif media_type == constants.MEDIA_TYPE_VIDEO:
@@ -509,6 +500,7 @@ def classify_files_in_folder(
     worker_count: int = constants.WORKER_THREAD_COUNT,
     worker_timeout: int = constants.WORKER_THREAD_TIMEOUT,
     file_list: list[str] | None = None,
+    discovery_queue_maxsize: int = 256,
 ) -> None:
     """Classify all supported files in folder using worker threads.
 
@@ -529,7 +521,7 @@ def classify_files_in_folder(
         raise ValueError(f'worker_count must be at least 1, got {worker_count}')
 
     logging.debug('Starting classification in folder: %s', folder_path)
-    file_queue = Queue()
+    file_queue = Queue(maxsize=discovery_queue_maxsize)
     os.makedirs(DEFAULT_REPORT_DIR, exist_ok=True)
 
     _SENTINEL = object()
@@ -675,11 +667,14 @@ def handle_results(
     """
     _raise_checkpoint_writer_error(session)
 
+    resolved_media_type = media_type
+    if resolved_media_type is None:
+        resolved_media_type = detect_media_type(file_path)
+
     # Generate thumbnail for detected items
     thumbnail = ''
     if nudity_detected:
-        media_type = media_type or detect_media_type(file_path)
-        thumbnail = ThumbnailGenerator.generate(file_path, media_type, constants.THUMBNAIL_SIZE_REPORT) or ''
+        thumbnail = ThumbnailGenerator.generate(file_path, resolved_media_type, constants.THUMBNAIL_SIZE_REPORT) or ''
 
     # Ensure report directory exists
     if nudity_detected:
@@ -688,7 +683,7 @@ def handle_results(
     # Create entry
     entry_data = {
         constants.RESULT_FIELD_FILE: file_path,
-        constants.RESULT_FIELD_MEDIA_TYPE: media_type or detect_media_type(file_path),
+        constants.RESULT_FIELD_MEDIA_TYPE: resolved_media_type,
         constants.RESULT_FIELD_MODEL: model_name,
         constants.RESULT_FIELD_THRESHOLD: threshold_to_percent(threshold_percent),
         constants.RESULT_FIELD_CONFIDENCE: round(max(0.0, min(float(confidence_score), 1.0)) * 100, 2),

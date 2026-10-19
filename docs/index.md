@@ -43,4 +43,6 @@ Dependabot proposes monthly GitHub Actions updates. Review every proposed versio
 
 When behavior, API contracts, deployment steps, or architecture change, update the relevant doc under this `docs/` tree in the same change. Code and docs must stay in sync.
 
-For authoritative rules on verification, review, conventions, and context efficiency, see [agent-guide.md](agent-guide.md).
+For authoritative rules on verification, review, conventions, and context efficiency, see [agent-guide.md](agent-guide.md) and [openspec/config.yaml](../openspec/config.yaml) (when present in this repo).
+
+- Streamed scan progress: bounded producer/consumer discovery; see [architecture.md](architecture.md) "Scan Progress and Discovery (Issue #109)".

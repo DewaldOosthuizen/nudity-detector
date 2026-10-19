@@ -11,11 +11,13 @@ gi.require_version('Gtk', '4.0')
 from gi.repository import GLib
 
 from ..core import constants
+from ..core.inference_pool import RestartableDetectionPool
+from ..core.nudenet_worker import create_nudenet_detector
 from ..core.scan_session import ScanSession
 from ..core.utils import (
     DEFAULT_REPORT_DIR,
     classify_files_in_folder,
-    count_supported_files,
+    count_supported_files,  # noqa: F401 - imported for test patching
     create_frame_extractor,
     create_session_state,
     detect_with_timeout,
@@ -155,9 +157,14 @@ class ScanningMixin:
     # ------------------------------------------------------------------
 
     def create_nudenet_classifiers(self, existing_files, threshold_value, threshold_percent, session):
-        from nudenet import NudeDetector
-
-        detector = NudeDetector()
+        previous_pool = getattr(self, '_nudenet_worker_pool', None)
+        if isinstance(previous_pool, RestartableDetectionPool):
+            previous_pool.close()
+        detector = RestartableDetectionPool(
+            create_nudenet_detector,
+            worker_count=self._get_worker_thread_count(),
+        )
+        self._nudenet_worker_pool = detector
 
         detect_timeout = self._get_detect_timeout()
 
@@ -170,7 +177,7 @@ class ScanningMixin:
                 detection_result = detect_with_timeout(detector, file_path, detect_timeout)
             except TimeoutError:
                 logging.debug(
-                    'Detection timed out after %ds for %s; worker thread may continue in background',
+                    'Detection timed out after %ds for %s; worker process was stopped',
                     detect_timeout, file_path,
                 )
                 GLib.idle_add(
@@ -369,21 +376,9 @@ class ScanningMixin:
         # Single directory walk — collect all files once.
         # ------------------------------------------------------------------
         scan_start_time = datetime.now()
-        all_files = []
-        for root, _, files in os.walk(folder_path):
-            for file_name in files:
-                all_files.append(os.path.join(root, file_name))
-
-        total_files = count_supported_files(folder_path, file_list=all_files)
-        GLib.idle_add(self.log_message, f'Found {total_files} supported file(s) to scan.')
-        if total_files == 0:
-            GLib.idle_add(self.log_message, 'No supported media files found. Scan complete.', 'warning')
-            GLib.idle_add(self.finish_processing)
-            return
-
-        # Publish total to the mixin so the progress bar can switch from pulse
-        # to a real fraction (done on the main thread via idle_add).
-        GLib.idle_add(self._set_scan_total, total_files)
+        # Determine the total up front so progress reporting can be determinate.
+        total_files = count_supported_files(folder_path)
+        self._set_scan_total(total_files)
 
         # ------------------------------------------------------------------
         # Async save thread — receives (snapshot, session, path) from worker
@@ -490,7 +485,6 @@ class ScanningMixin:
                 classify_video,
                 worker_count=self._get_worker_thread_count(),
                 worker_timeout=self._get_worker_thread_timeout(),
-                file_list=all_files,
             )
 
             processed = files_processed[0]
@@ -547,11 +541,21 @@ class ScanningMixin:
         except Exception as error:
             GLib.idle_add(self.log_message, f'Error during processing: {error}', 'error')
         finally:
-            # Always drain and terminate the async save thread before finish_processing
-            # so there is no background writer touching report files after the scan ends.
-            _save_queue.put(None)
-            save_thread.join()
-            GLib.idle_add(self.finish_processing)
+            try:
+                self._close_nudenet_worker_pool()
+            finally:
+                # Always drain and terminate the async save thread before finish_processing
+                # so there is no background writer touching report files after the scan ends.
+                _save_queue.put(None)
+                save_thread.join()
+                GLib.idle_add(self.finish_processing)
+
+    def _close_nudenet_worker_pool(self) -> None:
+        """Stop NudeNet inference processes after the scan's workers have drained."""
+        worker_pool = getattr(self, '_nudenet_worker_pool', None)
+        if isinstance(worker_pool, RestartableDetectionPool):
+            worker_pool.close()
+            self._nudenet_worker_pool = None
 
     # ------------------------------------------------------------------
     # Progress pulse / fraction

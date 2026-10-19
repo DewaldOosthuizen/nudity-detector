@@ -9,6 +9,7 @@ import logging
 import os
 import shutil
 import tempfile
+import threading
 from io import BytesIO
 from typing import Generator, List, Optional, Tuple
 
@@ -26,6 +27,41 @@ except ImportError:
 
 from ..core import constants
 
+_MEDIA_TYPE_CACHE_MAX = 256
+_MEDIA_TYPE_CACHE = {}
+_MEDIA_TYPE_CACHE_ORDER = []
+_MEDIA_TYPE_CACHE_LOCK = threading.Lock()
+
+
+def clear_media_type_cache():
+    with _MEDIA_TYPE_CACHE_LOCK:
+        _MEDIA_TYPE_CACHE.clear()
+        _MEDIA_TYPE_CACHE_ORDER.clear()
+
+
+def invalidate_media_type_cache(file_path=None):
+    with _MEDIA_TYPE_CACHE_LOCK:
+        if file_path is None:
+            _MEDIA_TYPE_CACHE.clear()
+            _MEDIA_TYPE_CACHE_ORDER.clear()
+            return
+        # invalidate by path prefix
+        to_remove = [k for k in list(_MEDIA_TYPE_CACHE) if k[0] == os.path.abspath(file_path)]
+        for k in to_remove:
+            _MEDIA_TYPE_CACHE.pop(k, None)
+            try:
+                _MEDIA_TYPE_CACHE_ORDER.remove(k)
+            except ValueError:
+                pass
+
+
+_cache_key_func=None
+def _cache_key(file_path):
+    try:
+        st=os.stat(file_path)
+        return (os.path.abspath(file_path), st.st_mtime, st.st_size)
+    except OSError:
+        return (os.path.abspath(file_path), None, None)
 
 def detect_media_type(file_path: str) -> str:
     """Detect media type via extension and magic-byte MIME verification.
@@ -42,24 +78,47 @@ def detect_media_type(file_path: str) -> str:
     Returns:
         Media type: 'image', 'video', or 'unknown'
     """
+    if os.path.exists(file_path):
+        key = _cache_key(file_path)
+        with _MEDIA_TYPE_CACHE_LOCK:
+            if key in _MEDIA_TYPE_CACHE:
+                try:
+                    _MEDIA_TYPE_CACHE_ORDER.remove(key)
+                except ValueError:
+                    pass
+                _MEDIA_TYPE_CACHE_ORDER.append(key)
+                return _MEDIA_TYPE_CACHE[key]
+    else:
+        key = None
+
     _, ext = os.path.splitext(file_path)
     ext = ext.lower()
 
     if ext not in constants.SUPPORTED_EXTENSIONS:
-        return constants.MEDIA_TYPE_UNKNOWN
+        result = constants.MEDIA_TYPE_UNKNOWN
+    else:
+        try:
+            mime = magic.from_file(file_path, mime=True)
+        except (OSError, magic.MagicException) as e:
+            logging.warning('Could not determine MIME type for %s: %s', file_path, e)
+            result = constants.MEDIA_TYPE_UNKNOWN
+        else:
+            if ext in constants.IMAGE_EXTENSIONS and mime in constants.MIME_IMAGE_TYPES:
+                result = constants.MEDIA_TYPE_IMAGE
+            elif ext in constants.VIDEO_EXTENSIONS and mime in constants.MIME_VIDEO_TYPES:
+                result = constants.MEDIA_TYPE_VIDEO
+            else:
+                result = constants.MEDIA_TYPE_UNKNOWN
 
-    try:
-        mime = magic.from_file(file_path, mime=True)
-    except (OSError, magic.MagicException) as e:
-        logging.warning('Could not determine MIME type for %s: %s', file_path, e)
-        return constants.MEDIA_TYPE_UNKNOWN
-
-    if ext in constants.IMAGE_EXTENSIONS and mime in constants.MIME_IMAGE_TYPES:
-        return constants.MEDIA_TYPE_IMAGE
-    if ext in constants.VIDEO_EXTENSIONS and mime in constants.MIME_VIDEO_TYPES:
-        return constants.MEDIA_TYPE_VIDEO
-
-    return constants.MEDIA_TYPE_UNKNOWN
+    if key is not None:
+        with _MEDIA_TYPE_CACHE_LOCK:
+            if key not in _MEDIA_TYPE_CACHE:
+                _MEDIA_TYPE_CACHE[key] = result
+                _MEDIA_TYPE_CACHE_ORDER.append(key)
+                if len(_MEDIA_TYPE_CACHE_ORDER) > _MEDIA_TYPE_CACHE_MAX:
+                    old = _MEDIA_TYPE_CACHE_ORDER.pop(0)
+                    _MEDIA_TYPE_CACHE.pop(old, None)
+    return result
 
 
 def is_supported_file(file_path: str) -> bool:

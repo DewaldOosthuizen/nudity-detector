@@ -15,6 +15,7 @@ structured as it is, not just *how* it works.
 | 006  | GLib.idle_add for GUI updates from worker threads        | Accepted |
 | 007  | Seconds as the canonical timeout unit                    | Accepted |
 | 008  | Release workflow trigger and CalVer                      | Accepted |
+| 009  | Restartable workers for timeout-controlled inference     | Accepted |
 
 ## Conventions
 

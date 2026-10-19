@@ -67,6 +67,7 @@ _ensure_gi_stubs()
 sys.modules.setdefault("nudenet", MagicMock())
 
 from src.core import constants  # noqa: E402
+from src.core.inference_pool import RestartableDetectionPool  # noqa: E402
 from src.core.scan_session import ScanSession  # noqa: E402
 from src.gui.scanning import ScanningMixin  # noqa: E402
 from tests.conftest import ensure_gi_stubs  # noqa: E402
@@ -440,7 +441,7 @@ class TestScanningMixinNudeNet:
             classify_image, _ = ScanningMixin.create_nudenet_classifiers(
                 win, set(), 0.6, 60.0, session
             )
-        classify_image(str(img))
+            classify_image(str(img))
 
     def test_nudenet_classify_image_error(self, tmp_path):
         win = _make_win()
@@ -454,7 +455,7 @@ class TestScanningMixinNudeNet:
             classify_image, _ = ScanningMixin.create_nudenet_classifiers(
                 win, set(), 0.6, 60.0, session
             )
-        classify_image(str(img))
+            classify_image(str(img))
 
     def test_nudenet_classify_image_none_result(self, tmp_path):
         win = _make_win()
@@ -468,7 +469,7 @@ class TestScanningMixinNudeNet:
             classify_image, _ = ScanningMixin.create_nudenet_classifiers(
                 win, set(), 0.6, 60.0, session
             )
-        classify_image(str(img))
+            classify_image(str(img))
 
     def test_nudenet_classify_image_success(self, tmp_path):
         win = _make_win()
@@ -483,7 +484,7 @@ class TestScanningMixinNudeNet:
             classify_image, _ = ScanningMixin.create_nudenet_classifiers(
                 win, set(), 0.6, 60.0, session
             )
-        classify_image(str(img))
+            classify_image(str(img))
         assert len(session.get_results()) == 1
 
     def test_nudenet_classify_video_success(self, tmp_path):
@@ -505,7 +506,7 @@ class TestScanningMixinNudeNet:
             _, classify_video = ScanningMixin.create_nudenet_classifiers(
                 win, set(), 0.6, 60.0, session
             )
-        classify_video(str(vid))
+            classify_video(str(vid))
         fake_extractor.cleanup.assert_called()
 
     def test_nudenet_classify_video_frame_timeout(self, tmp_path):
@@ -526,7 +527,7 @@ class TestScanningMixinNudeNet:
             _, classify_video = ScanningMixin.create_nudenet_classifiers(
                 win, set(), 0.6, 60.0, session
             )
-        classify_video(str(vid))
+            classify_video(str(vid))
         fake_extractor.cleanup.assert_called()
 
 
@@ -1257,7 +1258,11 @@ class TestTimeoutUnits:
         )
         win.worker_thread_timeout_spin.get_value.return_value = 5
         win.create_nudenet_classifiers = MagicMock(return_value=(MagicMock(), MagicMock()))
+        win._nudenet_worker_pool = RestartableDetectionPool(lambda: None, worker_count=1)
         win.process_files = types.MethodType(ScanningMixin.process_files, win)
+        win._close_nudenet_worker_pool = types.MethodType(
+            ScanningMixin._close_nudenet_worker_pool, win
+        )
 
         with patch("src.gui.scanning.classify_files_in_folder") as mock_classify, \
              patch("src.gui.scanning.count_supported_files", return_value=1), \
@@ -1267,6 +1272,7 @@ class TestTimeoutUnits:
             ScanningMixin.start_scanning(win)
 
         assert mock_classify.call_args.kwargs["worker_timeout"] == 5
+        assert win._nudenet_worker_pool is None
 
     def test_detect_with_timeout_receives_seconds(self, tmp_path):
         window_cls = _load_nudity_window_class()
