@@ -495,17 +495,6 @@ class TestScanningMixinHellozNsfwVideo:
 
 
 class TestScanningMixinNudeNet:
-        win = _make_win()
-        session = ScanSession()
-        with patch("builtins.__import__", side_effect=lambda n, *a, **kw: MagicMock() if n == "requests" else __import__(n, *a, **kw)):
-            classify_image, classify_video = ScanningMixin.create_helloz_nsfw_classifiers(
-                win, set(), 0.6, 60.0, session
-            )
-        assert callable(classify_image)
-        assert callable(classify_video)
-
-
-class TestScanningMixinNudeNet:
     def test_create_nudenet_classifiers_returns_callables(self):
         win = _make_win()
         session = ScanSession()

@@ -27,6 +27,7 @@ from ..core.utils import (
     handle_results,
     make_scan_config,
     normalize_threshold,
+    record_error,
     save_nudity_report,
     simplify_nudenet_results,
 )
@@ -277,9 +278,15 @@ class ScanningMixin:
             return
         if self._verbose_log:
             GLib.idle_add(self.log_message, f'Processing image: {os.path.basename(file_path)}')
-        scored_result = self.request_helloz_nsfw_score(file_path, requests_module, helloz_nsfw_url, request_timeout)
+        try:
+            scored_result = self.request_helloz_nsfw_score(file_path, requests_module, helloz_nsfw_url, request_timeout)
+        except Exception as error:
+            GLib.idle_add(self.log_message, f'Failed to classify {os.path.basename(file_path)}: {error}', 'error')
+            record_error(file_path, error, threshold_percent, session, model_name=constants.MODEL_HELLOZ_NSFW)
+            return
         if scored_result is None:
             GLib.idle_add(self.log_message, f'Failed to classify {os.path.basename(file_path)}', 'error')
+            record_error(file_path, 'Helloz NSFW returned an unsuccessful response', threshold_percent, session, model_name=constants.MODEL_HELLOZ_NSFW)
             return
         result, confidence_score = scored_result
         handle_results(
@@ -302,17 +309,27 @@ class ScanningMixin:
         try:
             frame_scores = []
             max_confidence = 0.0
+            successfully_classified = 0
             for frame_path in frame_paths:
                 if not self.is_processing:
                     break
-                scored_result = self.request_helloz_nsfw_score(frame_path, requests_module, helloz_nsfw_url, request_timeout)
+                try:
+                    scored_result = self.request_helloz_nsfw_score(frame_path, requests_module, helloz_nsfw_url, request_timeout)
+                except Exception as error:
+                    GLib.idle_add(self.log_message, f'Frame classification failed: {error}', 'error')
+                    continue
                 if scored_result is None:
                     continue
                 _result, confidence_score = scored_result
                 frame_scores.append({'frame': os.path.basename(frame_path), 'unsafe_score': confidence_score})
                 max_confidence = max(max_confidence, confidence_score)
+                successfully_classified += 1
                 if max_confidence >= threshold_value:
                     break
+            if successfully_classified == 0:
+                record_error(file_path, 'No video frames were successfully classified', threshold_percent, session, model_name=constants.MODEL_HELLOZ_NSFW)
+                GLib.idle_add(self.log_message, f'Failed to classify {os.path.basename(file_path)}', 'error')
+                return
             handle_results(
                 file_path,
                 max_confidence >= threshold_value,
