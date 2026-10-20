@@ -171,6 +171,8 @@ A detailed Excel report named `nudity_report.xlsx` is saved in the reports folde
 - Detected nudity classes
 - Thumbnail image (embedded)
 
+> **Failed remote classifications:** When the Helloz NSFW server is unreachable, times out, or returns a non-200 response, the failed classification is recorded as an `ERROR:` entry in the Detected Classes field (`nudity_detected` is `False`, confidence is `0.0`). These rows indicate that classification did not complete and must **not** be interpreted as clean or negative results. A missing or empty Detected Classes field under a confirmed-negative row is a healthy outcome; an `ERROR:` row means the scanner has no reliable signal for that file.
+
 ### Report Persistence and Save Failures
 
 Each report run writes two files: the Excel workbook (`nudity_report.xlsx`) and the session file (`nudity_report_session.json`). Both must be written successfully for the save to be considered complete. If either write fails, the run is reported as a partial failure that names the file which could not be written: callers receive a `(workbook_saved, session_saved)` outcome instead of assuming success, and the GUI, CLI, and detector entry points log an error naming the missing file and warn the user where applicable. A failure of one file does not roll back the other; rerun or re-save once the underlying IO issue (permissions, full disk, read-only directory) is resolved.
