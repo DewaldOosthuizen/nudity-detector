@@ -344,6 +344,40 @@ class TestScanningMixinHellozNsfw:
         )
         # GLib.idle_add is mocked, nothing to assert except no crash
 
+    def test_run_helloz_nsfw_image_request_exception(self, tmp_path):
+        win = _make_win()
+        win.is_processing = True
+        img = tmp_path / "img.jpg"
+        img.write_bytes(b"x")
+        session = ScanSession()
+        # Simulate a request exception from request_helloz_nsfw_score
+        win.request_helloz_nsfw_score.side_effect = Exception("Helloz server unreachable")
+        ScanningMixin.run_helloz_nsfw_image(
+            win, str(img), set(), 0.6, 60.0, MagicMock(), 'http://localhost:6086/api/upload_check', 10, session
+        )
+        # Exactly one error entry recorded for the failed request
+        assert len(session.get_results()) == 1
+        entry = session.get_results()[0]
+        assert entry.detected_classes.startswith("ERROR:")
+        assert entry.nudity_detected is False
+
+    def test_run_helloz_nsfw_image_unsuccessful_response(self, tmp_path):
+        win = _make_win()
+        win.is_processing = True
+        img = tmp_path / "img.jpg"
+        img.write_bytes(b"x")
+        session = ScanSession()
+        # request_helloz_nsfw_score returns None on non-200 response
+        win.request_helloz_nsfw_score.return_value = None
+        ScanningMixin.run_helloz_nsfw_image(
+            win, str(img), set(), 0.6, 60.0, MagicMock(), 'http://localhost:6086/api/upload_check', 10, session
+        )
+        # Exactly one error entry recorded for the unsuccessful response
+        assert len(session.get_results()) == 1
+        entry = session.get_results()[0]
+        assert entry.detected_classes.startswith("ERROR:")
+        assert entry.nudity_detected is False
+
 
 class TestScanningMixinHellozNsfwVideo:
     def test_run_helloz_nsfw_video_not_processing(self, tmp_path):
@@ -376,9 +410,91 @@ class TestScanningMixinHellozNsfwVideo:
         ScanningMixin.run_helloz_nsfw_video(
             win, str(vid), set(), 0.6, 60.0, MagicMock(), 'http://localhost:6086/api/upload_check', 10, session
         )
-        fake_extractor.cleanup.assert_called()
+        fake_extractor.cleanup.assert_called_once()
+
+    def test_run_helloz_nsfw_video_all_frames_failed(self, tmp_path):
+        win = _make_win()
+        win.is_processing = True
+        vid = tmp_path / "vid.mp4"
+        vid.write_bytes(b"x")
+        frame0 = tmp_path / "frame_0.jpg"
+        frame0.write_bytes(b"x")
+        frame1 = tmp_path / "frame_1.jpg"
+        frame1.write_bytes(b"x")
+
+        session = ScanSession()
+
+        # First frame raises an exception, second frame returns None (unsuccessful)
+        def side_effect(frame_path, *args, **kwargs):
+            if frame_path == str(frame0):
+                raise Exception("Helloz request failed")
+            return None
+
+        win.request_helloz_nsfw_score.side_effect = side_effect
+
+        fake_extractor = MagicMock()
+        frame_iter = iter([str(frame0), str(frame1)])
+        win.extract_video_frames.return_value = (fake_extractor, frame_iter)
+
+        ScanningMixin.run_helloz_nsfw_video(
+            win, str(vid), set(), 0.6, 60.0, MagicMock(), 'http://localhost:6086/api/upload_check', 10, session
+        )
+
+        # Exactly one file-level error entry recorded (the video as a whole)
+        assert len(session.get_results()) == 1
+        entry = session.get_results()[0]
+        assert entry.detected_classes.startswith("ERROR:")
+        assert entry.nudity_detected is False
+        # extractor cleanup must still run
+        fake_extractor.cleanup.assert_called_once()
+
+    def test_run_helloz_nsfw_video_partial_success(self, tmp_path):
+        win = _make_win()
+        win.is_processing = True
+        vid = tmp_path / "vid.mp4"
+        vid.write_bytes(b"x")
+        frame0 = tmp_path / "frame_0.jpg"
+        frame0.write_bytes(b"x")
+        frame1 = tmp_path / "frame_1.jpg"
+        frame1.write_bytes(b"x")
+
+        session = ScanSession()
+
+        # First frame succeeds, second frame returns None (unsuccessful)
+        win.request_helloz_nsfw_score.return_value = ({"data": {"nsfw": 0.5}}, 0.5)
+
+        fake_extractor = MagicMock()
+        frame_iter = iter([str(frame0), str(frame1)])
+        win.extract_video_frames.return_value = (fake_extractor, frame_iter)
+
+        with patch("src.gui.scanning.handle_results") as mock_handle_results:
+            ScanningMixin.run_helloz_nsfw_video(
+                win, str(vid), set(), 0.6, 60.0, MagicMock(), 'http://localhost:6086/api/upload_check', 10, session
+            )
+
+        # handle_results called once for the successful frame scores only
+        assert mock_handle_results.call_count == 1
+        call_args = mock_handle_results.call_args
+        assert call_args[0][0] == str(vid)  # file_path
+        assert call_args[0][1] is False      # nudity_detected
+        assert call_args[0][2][0]["frame"] == "frame_0.jpg"
+        # No file-level error sentinel recorded for the video
+        assert len(session.get_results()) == 0
+        # extractor cleanup must still run
+        fake_extractor.cleanup.assert_called_once()
 
     def test_create_helloz_nsfw_classifiers_returns_callables(self):
+        win = _make_win()
+        session = ScanSession()
+        with patch("builtins.__import__", side_effect=lambda n, *a, **kw: MagicMock() if n == "requests" else __import__(n, *a, **kw)):
+            classify_image, classify_video = ScanningMixin.create_helloz_nsfw_classifiers(
+                win, set(), 0.6, 60.0, session
+            )
+        assert callable(classify_image)
+        assert callable(classify_video)
+
+
+class TestScanningMixinNudeNet:
         win = _make_win()
         session = ScanSession()
         with patch("builtins.__import__", side_effect=lambda n, *a, **kw: MagicMock() if n == "requests" else __import__(n, *a, **kw)):
