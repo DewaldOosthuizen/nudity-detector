@@ -4,7 +4,7 @@
 #
 #    pip-compile --output-file=requirements.txt requirements.in
 #
-certifi==2026.5.20
+certifi==2026.10.23
     # via requests
 charset-normalizer==3.4.7
     # via requests
@@ -31,7 +31,7 @@ openpyxl==3.1.5
     # via -r requirements.in
 packaging==26.2
     # via onnxruntime
-pillow==12.3.0
+pillow==13.0.0
     # via -r requirements.in
 protobuf==7.35.0
     # via onnxruntime
