@@ -125,9 +125,19 @@ both go through the coordination layer in `src/core/utils.py`.
 | `src/gui/scan_history.py` | `ScanHistoryMixin` + `ScanRunItem` — previous scan runs tab, load/export/delete |
 | `src/gui/result_item.py` | `ResultItem` — `GObject.Object` model powering the results `Gtk.ColumnView` |
 | `src/detectors/nudenet.py` | NudeNet local detector — CLI invocation and result parsing |
-| `src/detectors/helloz_nsfw.py` | Helloz NSFW detector — HTTP POST to Docker-hosted AI service |
+|| `src/detectors/helloz_nsfw.py` | Helloz NSFW detector — HTTP POST to Docker-hosted AI service |
 
 ---
+
+The report export layer (`src/reporting/report_manager.py`) writes untrusted
+values — file paths from scanned media and strings from the configured
+detection service — directly into workbook cells. To prevent formula
+execution, every string value that could be interpreted as a formula (a
+value beginning with `=`) is coerced to a literal text cell on save
+(`ReportManager._coerce_text_cell`). The displayed value is preserved
+verbatim; only the stored cell type changes so spreadsheet software never
+evaluates the content. The same protection applies on reload, where
+formula-leading strings are returned as literal strings.
 
 ## GUI Mixin Composition
 

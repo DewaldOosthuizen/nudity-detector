@@ -12,6 +12,7 @@ from io import BytesIO
 from typing import List
 
 import openpyxl
+from openpyxl.cell.cell import Cell
 
 try:
     from PIL import Image
@@ -138,6 +139,23 @@ class ReportManager:
             return []
 
     @staticmethod
+    def _coerce_text_cell(cell: Cell) -> None:
+        """Force a worksheet cell to be written as literal text, never a formula.
+
+        Spreadsheet software interprets a string that begins with '=' as a
+        formula. openpyxl marks such cells as formula cells (data_type 'f'),
+        which causes compatible software to evaluate the value on open. For
+        untrusted report values (for example, attacker-controlled file paths
+        and detector output) we force the cell data type to 's' (string) so
+        the value is preserved verbatim and never evaluated.
+
+        Args:
+            cell: openpyxl cell to normalise in place.
+        """
+        if isinstance(cell.value, str) and len(cell.value) > 1 and cell.value.startswith("="):
+            cell.data_type = "s"
+
+    @staticmethod
     def save_entries(entries: List[ReportEntry], file_path: str) -> bool:
         """Save report entries to Excel file.
 
@@ -163,9 +181,13 @@ class ReportManager:
             sheet.delete_rows(1, sheet.max_row or 1)
             sheet.append(constants.REPORT_HEADERS)
 
-            # Write entries
+            # Write entries; untrusted string columns are coerced to literal text
+            # cells so leading '=' values are never evaluated as formulas.
             for entry in entries:
-                sheet.append(entry.to_row())
+                row = entry.to_row()
+                sheet.append(row)
+                for column in range(1, len(row) + 1):
+                    ReportManager._coerce_text_cell(sheet.cell(row=sheet.max_row, column=column))
 
             # Embed thumbnails
             ReportManager._embed_thumbnails(sheet, entries)

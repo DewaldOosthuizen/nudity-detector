@@ -160,3 +160,70 @@ def test_validate_report_dir_system_protected():
     valid, msg = ReportManager.validate_report_dir("/")
     assert valid is False
     assert "system directory" in msg.lower()
+
+
+# ---------------------------------------------------------------------------
+# formula injection / text-coercion regression tests
+# ---------------------------------------------------------------------------
+
+def test_save_entries_formula_leading_strings_are_text(tmp_path):
+    """A value beginning with '=' must be stored as a literal text cell, not a formula."""
+    import openpyxl
+
+    report = str(tmp_path / "report.xlsx")
+    entries = [
+        _make_entry(
+            file="=cmd|' /C calc'!Z9",
+            media_type="=SUM(1,1)",
+            model_name="+1",
+            detected_classes='="x"',
+        ),
+    ]
+    assert ReportManager.save_entries(entries, report) is True
+
+    wb = openpyxl.load_workbook(report)
+    ws = wb.active
+    assert ws.cell(row=2, column=1).value == "=cmd|' /C calc'!Z9"
+    assert ws.cell(row=2, column=1).data_type == "s"
+    assert ws.cell(row=2, column=2).value == "=SUM(1,1)"
+    assert ws.cell(row=2, column=2).data_type == "s"
+    assert ws.cell(row=2, column=3).value == "+1"
+    assert ws.cell(row=2, column=3).data_type == "s"
+    assert ws.cell(row=2, column=7).value == '="x"'
+    assert ws.cell(row=2, column=7).data_type == "s"
+
+
+def test_save_and_load_entries_preserves_literal_formula_values(tmp_path):
+    """Reloaded reports preserve formula-leading values as literal strings."""
+    report = str(tmp_path / "report.xlsx")
+    entries = [
+        _make_entry(
+            file="=cmd|' /C calc'!Z9",
+            media_type="=SUM(1,1)",
+            model_name="+1",
+            detected_classes='="x"',
+            nudity_detected=True,
+        ),
+    ]
+    assert ReportManager.save_entries(entries, report) is True
+
+    loaded = ReportManager.load_entries(report)
+    assert len(loaded) == 1
+    assert loaded[0].file == "=cmd|' /C calc'!Z9"
+    assert loaded[0].media_type == "=SUM(1,1)"
+    assert loaded[0].model_name == "+1"
+    assert loaded[0].detected_classes == '="x"'
+
+
+def test_saved_report_contains_no_formula_cells(tmp_path):
+    """The saved xlsx must not evaluate any untrusted value as a formula."""
+    import zipfile
+
+    report = str(tmp_path / "report.xlsx")
+    entries = [_make_entry(file="=cmd|' /C calc'!Z9", nudity_detected=True)]
+    assert ReportManager.save_entries(entries, report) is True
+
+    with zipfile.ZipFile(report) as z:
+        xml = z.read("xl/worksheets/sheet1.xml").decode("utf-8")
+
+    assert "<f>" not in xml, "a cell was written as a formula"
