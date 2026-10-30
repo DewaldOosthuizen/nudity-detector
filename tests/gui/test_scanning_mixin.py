@@ -806,6 +806,8 @@ def _attach_widget_stubs(win):
     win.folder_entry = MagicMock(**{"get_text.return_value": "/tmp"})
     win.helloz_nsfw_host_entry = MagicMock(**{"get_text.return_value": "localhost"})
     win.helloz_nsfw_endpoint_entry = MagicMock(**{"get_text.return_value": "/api/upload_check"})
+    win.helloz_nsfw_scheme_dropdown = MagicMock(**{"get_selected.return_value": 0})
+    win.helloz_nsfw_test_button = MagicMock()
     return win
 
 
@@ -1030,14 +1032,27 @@ class TestTimeoutUnits:
         (the old 600/300/60) cannot return unnoticed.
         """
         window_cls = _load_nudity_window_class()
+        # Use a fresh mock so this test is isolated from sibling tests that may
+        # have recorded calls against the shared Gtk stub in sys.modules.
         Gtk = sys.modules["gi.repository.Gtk"]
-        Gtk.Adjustment.reset_mock()
+        adj_mock = MagicMock()
+        Gtk.Adjustment = adj_mock
+        # src.gui.app imported Gtk at module load time from the pre-existing stub
+        # set, so the module-level Gtk inside src.gui.app is a different object
+        # than sys.modules["gi.repository.Gtk"] once sibling test modules replace
+        # the stub. Patch the module-level attribute directly so the spin-button
+        # construction below is recorded by the same mock.
+        import src.gui.app  # noqa: F401
+        src.gui.app.Gtk.Adjustment = adj_mock
+        # Reset so any prior sibling-test calls are cleared; only _build_settings_tab
+        # calls are expected below.
+        adj_mock.reset_mock()
         # _build_settings_tab reads the values __init__ computed from the config,
         # so a real configured instance supplies them.
         win = _attach_widget_stubs(_make_window_instance(window_cls, {}))
         window_cls._build_settings_tab(win)
 
-        uppers = {call.kwargs["upper"] for call in Gtk.Adjustment.call_args_list}
+        uppers = {call.kwargs["upper"] for call in adj_mock.call_args_list if "upper" in call.kwargs}
         for bound in constants.TIMEOUT_MAX_SECONDS.values():
             assert bound in uppers, f"no spin button accepts the documented maximum {bound}"
         assert constants.MAX_PORT in uppers
@@ -1166,6 +1181,9 @@ class TestTimeoutUnits:
             'helloz_nsfw_host': 'myserver',
             'some_future_key': {'nested': True},
         }))
+        # The scheme widget is set to https so _get_helloz_nsfw_scheme returns
+        # 'https' and the resolved URL is valid.
+        win.helloz_nsfw_scheme_dropdown.get_selected.return_value = 1
         config_path = tmp_path / constants.CONFIG_FILE_NAME
         with patch("src.core.constants.CONFIG_DIR", str(tmp_path)):
             window_cls._save_config(win)
@@ -1190,6 +1208,9 @@ class TestTimeoutUnits:
             'helloz_nsfw_scheme': 'https',
             'helloz_nsfw_host': 'myserver',
         }))
+        # The scheme widget is set to https so _get_helloz_nsfw_scheme returns
+        # 'https' and the resolved URL is https for the remote host.
+        win.helloz_nsfw_scheme_dropdown.get_selected.return_value = 1
         assert window_cls._get_helloz_nsfw_url(win) == 'https://localhost:6086/api/upload_check'
 
         win = _attach_widget_stubs(_make_window_instance(window_cls, {

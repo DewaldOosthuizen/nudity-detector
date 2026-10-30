@@ -9,8 +9,14 @@
 nudenet>=3.4.2,<4
 # VNudeNet>=2.1.0,<3  # REMOVED: unused transitive dependency; see comment above
 openpyxl>=3.1.5,<4
+# Security fix: upgrade from 12.3.0 to 13.0.0+ (multiple Pillow CVEs fixed in
+# 13.0.0; the previous <13 upper bound blocked the patched release).
 Pillow>=13.0.0,<14
 requests>=2.34.2,<3
 Send2Trash>=2.1.0,<3
 darkdetect>=0.8.0,<1
 python-magic>=0.4.27,<1
+# Security fix: pin certifi to >= 2026.10.19 (first patched version for
+# multiple certifi CVE advisories; certifi is the TLS certificate bundle used
+# by requests and http.client).
+certifi>=2026.10.19,<2027

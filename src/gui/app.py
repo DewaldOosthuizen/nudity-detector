@@ -9,9 +9,11 @@ import json
 import logging
 import os
 import sys
+import threading
 from datetime import datetime
 
 import gi
+import requests
 
 gi.require_version('Gtk', '4.0')
 gi.require_version('Adw', '1')
@@ -392,6 +394,20 @@ class NudityDetectorWindow(
         self.helloz_nsfw_host_entry.set_placeholder_text(constants.HELLOZ_NSFW_HOST)
         sg.attach(self.helloz_nsfw_host_entry, 1, 0, 1, 1)
 
+        ds_scheme_label = Gtk.Label(label='Scheme')
+        ds_scheme_label.set_xalign(0)
+        sg.attach(ds_scheme_label, 0, 1, 1, 1)
+
+        self.helloz_nsfw_scheme_dropdown = Gtk.DropDown.new_from_strings(('http', 'https'))
+        self.helloz_nsfw_scheme_dropdown.set_hexpand(True)
+        self.helloz_nsfw_scheme_dropdown.connect('notify::selected', self._on_helloz_scheme_changed)
+        # Initial selection: 'http' for loopback, 'https' for remote
+        try:
+            self.helloz_nsfw_scheme_dropdown.set_selected(('http', 'https').index(constants.resolve_scheme(self._helloz_nsfw_host)))
+        except ValueError:
+            self.helloz_nsfw_scheme_dropdown.set_selected(0)
+        sg.attach(self.helloz_nsfw_scheme_dropdown, 1, 1, 1, 1)
+
         ds_host_help = Gtk.Label(label=f'Default: {constants.HELLOZ_NSFW_HOST}')
         ds_host_help.set_xalign(0)
         ds_host_help.add_css_class('dim-label')
@@ -480,6 +496,12 @@ class NudityDetectorWindow(
         ds_health_timeout_help.set_wrap(True)
         ds_health_timeout_help.set_hexpand(True)
         sg.attach(ds_health_timeout_help, 2, 4, 1, 1)
+
+        test_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        self.helloz_nsfw_test_button = Gtk.Button(label='Test Connection')
+        self.helloz_nsfw_test_button.connect('clicked', self._on_helloz_test_clicked)
+        test_row.append(self.helloz_nsfw_test_button)
+        sg.attach(test_row, 1, 6, 1, 1)
 
         return scroll
 
@@ -806,13 +828,10 @@ class NudityDetectorWindow(
         :func:`src.core.config_migration.migrate_config` and never re-interpreted.
 
         **Keys the GUI does not own are preserved.** The write starts from the
-        config loaded at startup and overwrites only the keys that have a widget,
-        so ``helloz_nsfw_scheme`` — the user's own escape hatch for forcing HTTPS
-        against a remote host, read by ``constants._validate_scheme`` — and any key a
-        future version adds survive a save. Building the file from a literal
-        whitelist instead deleted every such key on the next save, and this runs on
-        quit *and* on every theme change, so a remote user's ``https`` was reverted
-        the moment they touched the theme dropdown.
+        config loaded at startup and overwrites only the keys that have a widget.
+        The scheme selector owns ``helloz_nsfw_scheme`` and writes it explicitly
+        below, so a remote user's ``https`` is not erased by a later save, along
+        with any key a future version adds.
 
         The write goes through :func:`src.core.config_migration.write_config`, the
         same atomic writer the startup migration uses, so an interrupted save
@@ -826,10 +845,14 @@ class NudityDetectorWindow(
         """
         config_path = os.path.join(constants.CONFIG_DIR, constants.CONFIG_FILE_NAME)
         try:
+            # Validate the fully resolved Helloz URL before writing anything so an
+            # insecure resolved configuration is rejected and nothing is written.
+            self._get_helloz_nsfw_url()
+        except ValueError as exc:
+            self._show_error('Invalid Helloz configuration', str(exc))
+            return
+        try:
             os.makedirs(constants.CONFIG_DIR, exist_ok=True)
-            # Start from the on-disk config: everything the GUI does not manage is
-            # carried through untouched. A key absent from ``self._config`` (a fresh
-            # install) is simply not present, which is correct.
             data = dict(self._config)
             data.update({
                 constants.CONFIG_VERSION_KEY: constants.CONFIG_VERSION,
@@ -847,6 +870,7 @@ class NudityDetectorWindow(
                 'helloz_nsfw_api_endpoint': self._get_helloz_nsfw_api_endpoint(),
                 'helloz_nsfw_request_timeout_seconds': self._get_helloz_nsfw_request_timeout(),
                 'helloz_nsfw_health_check_timeout_seconds': self._get_helloz_nsfw_health_check_timeout(),
+                'helloz_nsfw_scheme': self._get_helloz_nsfw_scheme(),
             })
             config_migration.write_config(config_path, data)
             # Keep the in-memory view in step with what was just written, so a
@@ -855,6 +879,41 @@ class NudityDetectorWindow(
         except (OSError, ValueError, TypeError) as exc:
             logger.warning("Could not save config to %s (%s); settings were not persisted", config_path, exc)
             self.log_message(f'Config: could not save settings to {config_path} ({exc})', level='warning')
+
+    def _on_helloz_test_clicked(self, _button):
+        try:
+            check_url = self._get_helloz_nsfw_check_url()
+        except ValueError:
+            self._show_error(
+                'Invalid Helloz configuration',
+                'Insecure scheme "http" is not allowed for a non-loopback host. '
+                'Choose "https" for any non-loopback host.',
+            )
+            return
+        timeout = self._get_helloz_nsfw_health_check_timeout()
+        # Probe off the main thread; marshal the result back with GLib.idle_add
+        # so the GTK UI never blocks on the network call.
+        threading.Thread(
+            target=self._do_helloz_test, args=(check_url, timeout), daemon=True,
+        ).start()
+
+    def _do_helloz_test(self, check_url, timeout):
+        try:
+            response = requests.get(check_url, timeout=timeout)
+            ok = response.ok
+        except requests.RequestException:
+            ok = False
+        GLib.idle_add(self._report_helloz_test_result, ok)
+
+    def _report_helloz_test_result(self, ok):
+        if ok:
+            self.log_message('Helloz NSFW: connection OK', level='success')
+        else:
+            self._show_warning(
+                'Helloz NSFW unreachable',
+                'Could not reach the Helloz NSFW service at the configured endpoint. '
+                'Check the host, port, and TLS settings.',
+            )
 
     # ------------------------------------------------------------------
     # Widget state accessors
@@ -1007,6 +1066,16 @@ class NudityDetectorWindow(
             max_seconds=constants.HELLOZ_NSFW_HEALTH_CHECK_TIMEOUT_MAX_SECONDS,
         )
 
+    def _get_helloz_nsfw_scheme(self) -> str:
+        """Return the Scheme dropdown's selected value ('http'/'https')."""
+        idx = self.helloz_nsfw_scheme_dropdown.get_selected()
+        if idx < 0 or idx >= 2:
+            return 'http'
+        return ('http', 'https')[idx]
+
+    def _on_helloz_scheme_changed(self, _dropdown, _param=None):
+        self._config['helloz_nsfw_scheme'] = self._get_helloz_nsfw_scheme()
+
     def _get_helloz_nsfw_url(self) -> str:
         """Return the Helloz NSFW upload URL for the current widget values.
 
@@ -1024,7 +1093,7 @@ class NudityDetectorWindow(
         host = self._get_helloz_nsfw_host()
         port = self._get_helloz_nsfw_port()
         endpoint = self._get_helloz_nsfw_api_endpoint()
-        scheme = constants.resolve_scheme(host, self._config_helloz_nsfw_scheme())
+        scheme = constants.resolve_scheme(host, self._get_helloz_nsfw_scheme())
         return f'{scheme}://{host}:{port}{endpoint}'
 
     def _get_helloz_nsfw_check_url(self) -> str:
@@ -1041,22 +1110,8 @@ class NudityDetectorWindow(
         """
         host = self._get_helloz_nsfw_host()
         port = self._get_helloz_nsfw_port()
-        scheme = constants.resolve_scheme(host, self._config_helloz_nsfw_scheme())
+        scheme = constants.resolve_scheme(host, self._get_helloz_nsfw_scheme())
         return f'{scheme}://{host}:{port}'
-
-    def _config_helloz_nsfw_scheme(self):
-        """Return the ``helloz_nsfw_scheme`` value from the config on disk, or None.
-
-        The scheme has no widget: it is the user's escape hatch for a remote
-        deployment (``https`` forced explicitly) and is preserved verbatim by
-        ``_save_config``. Read from the on-disk config the window loaded at
-        startup rather than re-read, so it reflects what the user actually has.
-
-        Returns:
-            The configured scheme as a string, or None when the config does not set
-            one (in which case the loopback/remote default applies).
-        """
-        return self._config.get('helloz_nsfw_scheme')
 
     # ------------------------------------------------------------------
     # Theme
@@ -1098,6 +1153,8 @@ class NudityDetectorWindow(
         self.helloz_nsfw_endpoint_entry.set_sensitive(not processing)
         self.helloz_nsfw_request_timeout_spin.set_sensitive(not processing)
         self.helloz_nsfw_health_check_timeout_spin.set_sensitive(not processing)
+        self.helloz_nsfw_scheme_dropdown.set_sensitive(not processing)
+        self.helloz_nsfw_test_button.set_sensitive(not processing)
         for button_name in (
             'save_session_button',
             'load_session_button',
