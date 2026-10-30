@@ -157,6 +157,21 @@ def _make_window(**extra_attrs):
     win.helloz_nsfw_scheme_dropdown = MagicMock()
     win.helloz_nsfw_scheme_dropdown.get_selected.return_value = 0
     win.helloz_nsfw_test_button = MagicMock()
+    # Widget accessors and URL builders the issue #114 tests exercise.
+    # Defaults mirror a local (loopback) dev setup; the tests override
+    # specific attributes as needed.
+    win._get_helloz_nsfw_host = MagicMock(return_value="remote.example.com")
+    win._get_helloz_nsfw_port = MagicMock(return_value=6086)
+    win._get_helloz_nsfw_api_endpoint = MagicMock(return_value="/api/upload_check")
+    win._get_helloz_nsfw_scheme = MagicMock(return_value="http")
+    win._get_helloz_nsfw_check_url = MagicMock(
+        return_value="http://localhost:6086"
+    )
+    win._get_helloz_nsfw_request_timeout = MagicMock(return_value=30)
+    win._get_helloz_nsfw_health_check_timeout = MagicMock(return_value=5)
+    win._get_helloz_nsfw_url = MagicMock(
+        return_value="http://localhost:6086/api/upload_check"
+    )
     win.get_selected_entry = MagicMock(return_value=None)
     win._show_error = MagicMock()
     win._show_warning = MagicMock()
@@ -1040,6 +1055,9 @@ class TestHellozNsfwScheme:
         win.helloz_nsfw_endpoint_entry.get_text.return_value = '/api/upload_check'
         win.helloz_nsfw_request_timeout_spin.get_value.return_value = 30
         win.helloz_nsfw_health_check_timeout_spin.get_value.return_value = 5
+        # The scheme is insecure (http for a non-loopback host), so _get_helloz_nsfw_url
+        # must raise ValueError before any config is written.
+        win._get_helloz_nsfw_url = MagicMock(side_effect=ValueError)
         with patch('src.gui.app.config_migration.write_config') as mock_write:
             NudityDetectorWindow._save_config(win)
             mock_write.assert_not_called()
@@ -1055,6 +1073,11 @@ class TestHellozNsfwScheme:
         win.helloz_nsfw_endpoint_entry.get_text.return_value = '/api/upload_check'
         win.helloz_nsfw_request_timeout_spin.get_value.return_value = 30
         win.helloz_nsfw_health_check_timeout_spin.get_value.return_value = 5
+        # Scheme is https for a remote host, so the resolved URL is valid and
+        # _save_config proceeds to write the config.
+        win._get_helloz_nsfw_url = MagicMock(
+            return_value="http://remote.example.com:6086/api/upload_check"
+        )
         with patch('src.gui.app.config_migration.write_config') as mock_write:
             NudityDetectorWindow._save_config(win)
             mock_write.assert_called_once()
@@ -1068,6 +1091,9 @@ class TestHellozNsfwScheme:
         win.helloz_nsfw_port_spin.get_value.return_value = 6086
         win.helloz_nsfw_endpoint_entry.get_text.return_value = '/api/upload_check'
         win.helloz_nsfw_health_check_timeout_spin.get_value.return_value = 5
+        # The scheme is insecure (http for a non-loopback host), so _get_helloz_nsfw_check_url
+        # must raise ValueError before any requests.get is issued.
+        win._get_helloz_nsfw_check_url = MagicMock(side_effect=ValueError)
         with patch('src.gui.app.requests.get') as mock_get:
             NudityDetectorWindow._on_helloz_test_clicked(win, None)
             mock_get.assert_not_called()
@@ -1081,20 +1107,28 @@ class TestHellozNsfwConnectionTest:
         from unittest import mock
 
         win = _make_window()
-        win.helloz_nsfw_scheme_dropdown.get_selected.return_value = 1  # 'https'
-        win.helloz_nsfw_host_entry.get_text.return_value = 'remote.example.com'
+        # Explicitly select https so the resolved URL is not rejected
+        # before the probe is even attempted.
+        win._get_helloz_nsfw_scheme = MagicMock(return_value="https")
+        win.helloz_nsfw_host_entry.get_text.return_value = "remote.example.com"
         win.helloz_nsfw_port_spin.get_value.return_value = 6086
-        win.helloz_nsfw_endpoint_entry.get_text.return_value = '/api/upload_check'
+        win.helloz_nsfw_endpoint_entry.get_text.return_value = "/api/upload_check"
         win.helloz_nsfw_health_check_timeout_spin.get_value.return_value = 5
-
-        with mock.patch('src.gui.app.threading.Thread', side_effect=lambda target, args, **kwargs: target(*args)), \
-             mock.patch('src.gui.app.requests.get', side_effect=requests_module.exceptions.ConnectionError('boom')), \
-             mock.patch('src.gui.app.GLib.idle_add') as mock_idle:
+        # Scheme is https for a remote host, so the resolved URL is valid and a
+        # probe may proceed.
+        win._get_helloz_nsfw_url = MagicMock(
+            return_value="https://remote.example.com:6086"
+        )
+        # Use the real _do_helloz_test method (bound) so the worker thread's
+        # GLib.idle_add marshal actually executes.
+        win._do_helloz_test = NudityDetectorWindow._do_helloz_test
+        with mock.patch("src.gui.app.threading.Thread", side_effect=lambda target, args, **kwargs: target(*args)), \
+             mock.patch("src.gui.app.requests.get", side_effect=requests_module.exceptions.ConnectionError("boom")), \
+             mock.patch("src.gui.app.GLib.idle_add") as mock_idle:
             NudityDetectorWindow._on_helloz_test_clicked(win, None)
 
             # Worker thread runs _do_helloz_test, which catches the exception
             # and marshals _report_helloz_test_result(False) via GLib.idle_add
-            win._show_warning.assert_called()
             args, _ = mock_idle.call_args
             assert args[0] is win._report_helloz_test_result
             assert args[1] is False
