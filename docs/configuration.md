@@ -52,7 +52,11 @@ Only `worker_thread_count` is read for the worker pool; the per-detector counts 
 
 ### helloz_nsfw_scheme (special key)
 
-One key is deliberately *not* in the table above, because it is not shipped with a default: `helloz_nsfw_scheme`. When present it forces the scheme used for the Helloz NSFW endpoint (`constants.resolve_scheme`); when absent the rule is `http` for a loopback host and `https` for any remote host, and `constants._validate_scheme` rejects an explicit `http` paired with a non-loopback host. It has no GUI widget, and `_save_config` preserves it verbatim — set it to `"https"` for a remote deployment and it stays set, including across the saves that run on quit and on every theme change.
+One key is deliberately *not* in the table above, because it is not shipped with a default: `helloz_nsfw_scheme`. When present it forces the scheme used for the Helloz NSFW endpoint (`constants.resolve_scheme`); when absent the rule is `http` for a loopback host and `https` for any remote host, and `constants._validate_scheme` rejects an explicit `http` paired with a non-loopback host.
+
+The **Scheme** dropdown in the **Helloz NSFW** frame of the **Settings** tab owns this key: `http` for loopback hosts, `https` for any remote host. The resolved scheme is validated before any save, so a remote user cannot persist an insecure `http` configuration. The selector writes this key explicitly via `_save_config`; every other key the GUI does not own is preserved verbatim.
+
+The **Test Connection** button in the same frame probes the Helloz health-check URL without saving anything. A connection test never writes to `config/app_config.json` — it only reports the result in the activity log and via a dialog.
 
 ---
 

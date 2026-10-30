@@ -1037,6 +1037,13 @@ class TestTimeoutUnits:
         Gtk = sys.modules["gi.repository.Gtk"]
         adj_mock = MagicMock()
         Gtk.Adjustment = adj_mock
+        # src.gui.app imported Gtk at module load time from the pre-existing stub
+        # set, so the module-level Gtk inside src.gui.app is a different object
+        # than sys.modules["gi.repository.Gtk"] once sibling test modules replace
+        # the stub. Patch the module-level attribute directly so the spin-button
+        # construction below is recorded by the same mock.
+        import src.gui.app  # noqa: F401
+        src.gui.app.Gtk.Adjustment = adj_mock
         # Reset so any prior sibling-test calls are cleared; only _build_settings_tab
         # calls are expected below.
         adj_mock.reset_mock()

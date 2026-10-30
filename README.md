@@ -21,6 +21,15 @@ All documentation lives in [docs/](docs/).
 | [docs/releasing.md](docs/releasing.md) | Release process |
 | [docs/add/README.md](docs/add/README.md) | Architectural Decision Documents |
 
+## Helloz NSFW endpoint settings flow
+
+The Helloz NSFW endpoint configuration (host, port, API endpoint, request and
+health-check timeouts, and `helloz_nsfw_scheme`) lives in the **Settings** tab,
+**Helloz NSFW** frame. Use the **Scheme** dropdown (`http` for loopback, `https`
+for remote) and the **Test Connection** button to verify reachability without
+persisting — a live server outage can never wipe valid settings. The scheme
+rule is single-sourced in `src/core/constants.py` and validated on every save.
+
 ## Quick Start
 
 ```bash
