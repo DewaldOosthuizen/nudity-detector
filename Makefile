@@ -51,8 +51,8 @@ build:  ## Build the AppImage locally and verify the two artifacts
 
 clean:  ## Remove build artifacts and caches (consistent with .gitignore)
 	rm -rf dist/ build/ .coverage .coverage.* htmlcov/ .pytest_cache/ .ruff_cache/
-	find src tests -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
-	find src tests -type f -name '*.pyc' -delete 2>/dev/null || true
+	find src tests -type d -name __pycache__ -exec rm -rf {} +
+	find src tests -type f -name '*.pyc' -delete
 
 format: ci-install  ## Format code to the project's ruff style (py312, 160)
 	.venv/bin/ruff format --target-version py312 --line-length 160 src/ tests/
