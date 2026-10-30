@@ -103,6 +103,7 @@ _ensure_gi_stubs()
 # Now safe to import src.gui modules
 from src.core import constants  # noqa: E402
 from src.core.models import ReportEntry, ScanConfig, SessionState  # noqa: E402
+from src.gui.app import NudityDetectorWindow
 from src.gui.dialogs import DialogsMixin  # noqa: E402
 from src.gui.preview import PreviewMixin  # noqa: E402
 from src.gui.result_item import ResultItem  # noqa: E402
@@ -110,7 +111,6 @@ from src.gui.results import ResultsMixin  # noqa: E402
 from src.gui.scan_history import ScanHistoryMixin  # noqa: E402
 from src.gui.scanning import ScanningMixin  # noqa: E402
 from src.gui.session import SessionMixin
-from src.gui.app import NudityDetectorWindow
 from src.reporting.report_manager import ReportManager
 
 # ---------------------------------------------------------------------------
@@ -1013,21 +1013,21 @@ class TestScanningMixin:
 
 class TestHellozNsfwScheme:
     def test_get_helloz_nsfw_scheme_returns_selected_value(self):
-        from src.gui.app import NudityDetectorWindow
+
         win = _make_window()
         win.helloz_nsfw_scheme_dropdown.get_selected.return_value = 1  # 'https'
         scheme = NudityDetectorWindow._get_helloz_nsfw_scheme(win)
         assert scheme == 'https'
 
     def test_get_helloz_nsfw_scheme_falls_back_to_http_when_out_of_range(self):
-        from src.gui.app import NudityDetectorWindow
+
         win = _make_window()
         win.helloz_nsfw_scheme_dropdown.get_selected.return_value = 99
         scheme = NudityDetectorWindow._get_helloz_nsfw_scheme(win)
         assert scheme == 'http'
 
     def test_get_helloz_nsfw_url_propagates_valueerror(self):
-        from src.gui.app import NudityDetectorWindow
+
         win = _make_window()
         win.helloz_nsfw_scheme_dropdown.get_selected.return_value = 0  # 'http'
         win.helloz_nsfw_host_entry.get_text.return_value = 'remote.example.com'
@@ -1037,7 +1037,7 @@ class TestHellozNsfwScheme:
             NudityDetectorWindow._get_helloz_nsfw_url(win)
 
     def test_get_helloz_nsfw_check_url_propagates_valueerror(self):
-        from src.gui.app import NudityDetectorWindow
+
         win = _make_window()
         win.helloz_nsfw_scheme_dropdown.get_selected.return_value = 0  # 'http'
         win.helloz_nsfw_host_entry.get_text.return_value = 'remote.example.com'
@@ -1046,7 +1046,7 @@ class TestHellozNsfwScheme:
             NudityDetectorWindow._get_helloz_nsfw_check_url(win)
 
     def test_save_config_rejects_insecure_scheme(self):
-        from src.gui.app import NudityDetectorWindow
+
         win = _make_window()
         win._config = {}
         win.helloz_nsfw_scheme_dropdown.get_selected.return_value = 0  # 'http'
@@ -1064,7 +1064,7 @@ class TestHellozNsfwScheme:
             win._show_error.assert_called()
 
     def test_save_config_accepts_valid_scheme(self):
-        from src.gui.app import NudityDetectorWindow
+
         win = _make_window()
         win._config = {}
         win.helloz_nsfw_scheme_dropdown.get_selected.return_value = 1  # 'https'
@@ -1084,7 +1084,7 @@ class TestHellozNsfwScheme:
             win._show_error.assert_not_called()
 
     def test_on_helloz_test_clicked_rejects_insecure_scheme(self):
-        from src.gui.app import NudityDetectorWindow
+
         win = _make_window()
         win.helloz_nsfw_scheme_dropdown.get_selected.return_value = 0  # 'http'
         win.helloz_nsfw_host_entry.get_text.return_value = 'remote.example.com'
@@ -1102,9 +1102,10 @@ class TestHellozNsfwScheme:
 
 class TestHellozNsfwConnectionTest:
     def test_on_helloz_test_clicked_handles_unreachable_server(self):
-        from src.gui.app import NudityDetectorWindow
-        import requests as requests_module
+
         from unittest import mock
+
+        import requests as requests_module
 
         win = _make_window()
         # Explicitly select https so the resolved URL is not rejected
@@ -1121,10 +1122,17 @@ class TestHellozNsfwConnectionTest:
         )
         # Use the real _do_helloz_test method (bound) so the worker thread's
         # GLib.idle_add marshal actually executes.
-        win._do_helloz_test = NudityDetectorWindow._do_helloz_test
-        with mock.patch("src.gui.app.threading.Thread", side_effect=lambda target, args, **kwargs: target(*args)), \
+        win._do_helloz_test = NudityDetectorWindow._do_helloz_test.__get__(win)
+        with mock.patch("src.gui.app.threading.Thread") as mock_thread_cls, \
              mock.patch("src.gui.app.requests.get", side_effect=requests_module.exceptions.ConnectionError("boom")), \
              mock.patch("src.gui.app.GLib.idle_add") as mock_idle:
+            def thread_side_effect(target, args, **kwargs):
+                # Run the target synchronously to simulate the worker thread.
+                target(*args)
+                # Return the mock itself so the implementation's .start() call
+                # succeeds and the worker's GLib.idle_add marshal executes.
+                return mock_thread_cls
+            mock_thread_cls.side_effect = thread_side_effect
             NudityDetectorWindow._on_helloz_test_clicked(win, None)
 
             # Worker thread runs _do_helloz_test, which catches the exception
@@ -1134,7 +1142,7 @@ class TestHellozNsfwConnectionTest:
             assert args[1] is False
 
     def test_set_controls_for_processing_disables_new_widgets(self):
-        from src.gui.app import NudityDetectorWindow
+
         win = _make_window()
         NudityDetectorWindow.set_controls_for_processing(win, True)
         win.helloz_nsfw_scheme_dropdown.set_sensitive.assert_called_with(False)

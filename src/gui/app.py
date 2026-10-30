@@ -10,10 +10,10 @@ import logging
 import os
 import sys
 import threading
-import requests
 from datetime import datetime
 
 import gi
+import requests
 
 gi.require_version('Gtk', '4.0')
 gi.require_version('Adw', '1')
