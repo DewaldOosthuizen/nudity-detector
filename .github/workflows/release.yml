@@ -145,7 +145,7 @@ jobs:
             pkg-config \
             libglib2.0-0 libglib2.0-dev \
             libgirepository1.0-dev \
-            fuse libfuse2
+            fuse libfuse2 xvfb
         env:
           DEBIAN_FRONTEND: noninteractive
 
@@ -166,6 +166,19 @@ jobs:
           echo "AppImage size: $(du -h dist/NudityDetector-x86_64.AppImage | cut -f1)"
           test -d dist/nudity-detector
           echo "Bundle size:   $(du -sh dist/nudity-detector | cut -f1)"
+
+      - name: Smoke-test AppImage startup
+        run: |
+          set +e
+          timeout 20s xvfb-run -a env APPIMAGE_EXTRACT_AND_RUN=1 \
+            ./dist/NudityDetector-x86_64.AppImage > appimage-smoke.log 2>&1
+          status=$?
+          set -e
+          if [ "$status" -ne 124 ]; then
+            cat appimage-smoke.log
+            echo "AppImage exited during startup (status $status)"
+            exit 1
+          fi
 
       - name: Upload build artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

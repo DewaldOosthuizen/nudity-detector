@@ -75,6 +75,10 @@ all_hiddenimports = (
         'src.gui.results',
         'src.gui.dialogs',
         'src.gui.result_item',
+        # CPython's struct module imports this low-level implementation at runtime.
+        # Explicitly collect it because it is a built-in on some build interpreters
+        # but a shared extension module on others; the release bundle must support both.
+        '_struct',
         # Common runtime deps
         'openpyxl',
         'PIL',
