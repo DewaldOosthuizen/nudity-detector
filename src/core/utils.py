@@ -131,6 +131,11 @@ def record_error(file_path, error, threshold_percent, session, model_name=consta
     session.add_result(entry)
 
 
+def _nudenet_class_name(record):
+    """Return the class field used by NudeNet 3.x or the legacy ``label`` field."""
+    return record.get('class') or record.get('label', '')
+
+
 def simplify_nudenet_results(detection_result):
     """Simplify NudeNet detection result to class/score dicts.
 
@@ -141,7 +146,7 @@ def simplify_nudenet_results(detection_result):
         List of {'class': str, 'score': float} dicts.
     """
     return [
-        {'class': record.get('label', ''), 'score': record.get('score', 0.0)}
+        {'class': _nudenet_class_name(record), 'score': record.get('score', 0.0)}
         for record in detection_result
     ]
 
@@ -162,7 +167,7 @@ def get_nudenet_confidence(detection_result):
     class_scores = [
         record.get("score", 0.0)
         for record in detection_result
-        if record.get("label") in constants.NUDITY_CLASSES_BROAD
+        if _nudenet_class_name(record) in constants.NUDITY_CLASSES_BROAD
     ]
     return max(class_scores, default=0.0)
 

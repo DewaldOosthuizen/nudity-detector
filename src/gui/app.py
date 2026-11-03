@@ -43,6 +43,7 @@ class NudityDetectorWindow(
 ):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.set_icon_name(constants.APP_ICON_NAME)
         self.set_title(constants.GUI_WINDOW_TITLE)
         self.set_default_size(
             int(constants.GUI_WINDOW_GEOMETRY.split('x')[0]),
@@ -1217,7 +1218,7 @@ class NudityDetectorWindow(
 
 class NudityDetectorApp(Adw.Application):
     def __init__(self):
-        super().__init__(application_id='io.github.dewaldoosthuizen.nuditydetector')
+        super().__init__(application_id=constants.APP_ID)
         self.connect('activate', self._on_activate)
 
     def _on_activate(self, _app):

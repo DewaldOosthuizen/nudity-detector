@@ -26,6 +26,7 @@ BUILD_DIR="${PROJECT_ROOT}/build"
 APPDIR="${BUILD_DIR}/AppDir"
 VENV_DIR="${BUILD_DIR}/.build-venv"
 TOOLS_DIR="${SCRIPT_DIR}"          # build tools live alongside this script
+SYSTEM_PYTHON="/usr/bin/python3"   # GTK typelibs must match the system PyGObject ABI
 
 # ── Tool URLs ─────────────────────────────────────────────────────────────────
 APPIMAGETOOL_URL="https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage"
@@ -52,11 +53,14 @@ step() { (( STEP++ )) || true; echo -e "\n${BLUE}── Step ${STEP}: $* ──$
 # =============================================================================
 step "Checking prerequisites"
 
-for cmd in python3 pip3 patchelf curl; do
+for cmd in patchelf curl; do
     if ! command -v "$cmd" &>/dev/null; then
         error "'$cmd' is not installed. See the requirements at the top of this script."
     fi
 done
+if [[ ! -x "$SYSTEM_PYTHON" ]]; then
+    error "System Python was not found at ${SYSTEM_PYTHON}; GTK bindings require the matching system interpreter."
+fi
 
 # Verify GTK4 typelibs are available on the host (needed for bundling)
 TYPELIB_DIR=""
@@ -69,7 +73,10 @@ done
 if [[ -z "$TYPELIB_DIR" ]]; then
     error "Gtk-4.0.typelib not found. Install: sudo apt-get install gir1.2-gtk-4.0"
 fi
-success "All prerequisites satisfied (typelibs at ${TYPELIB_DIR})"
+if ! "$SYSTEM_PYTHON" -c 'import gi, importlib.metadata; importlib.metadata.version("pygobject"); gi.require_version("Gtk", "4.0"); gi.require_version("Adw", "1"); from gi.repository import Gtk, Adw' >/dev/null 2>&1; then
+    error "${SYSTEM_PYTHON} cannot import the required GTK4/libadwaita bindings. Install the system PyGObject packages first."
+fi
+success "GTK4 and libadwaita bindings are available in ${SYSTEM_PYTHON}"
 
 # =============================================================================
 # 2. Download build tools (once)
@@ -97,24 +104,43 @@ download_tool "$LINUXDEPLOY_GTK_PLUGIN_URL" "$LINUXDEPLOY_GTK" "755"
 # =============================================================================
 step "Preparing build virtual environment"
 
+SYSTEM_PYTHON_VERSION="$($SYSTEM_PYTHON -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+if [[ -d "$VENV_DIR" ]]; then
+    BUILD_VENV_VERSION="$("${VENV_DIR}/bin/python" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null || true)"
+    if [[ "$BUILD_VENV_VERSION" != "$SYSTEM_PYTHON_VERSION" ]]; then
+        warn "Build venv uses Python ${BUILD_VENV_VERSION:-unknown}, but system GTK bindings require Python ${SYSTEM_PYTHON_VERSION}; recreating it."
+        rm -rf "$VENV_DIR"
+    fi
+fi
+
 if [[ ! -d "$VENV_DIR" ]]; then
-    info "Creating build venv at ${VENV_DIR}"
-    python3 -m venv "$VENV_DIR"
+    info "Creating build venv with ${SYSTEM_PYTHON} at ${VENV_DIR}"
+    "$SYSTEM_PYTHON" -m venv "$VENV_DIR"
 fi
 
 # Activate
 # shellcheck source=/dev/null
 source "${VENV_DIR}/bin/activate"
 
-# Expose system gi (PyGObject) to the build venv – gi cannot be pip-installed
+# Expose only the system gi package (and its GTK typelibs), not all of
+# /usr/lib/python3/dist-packages. Adding the entire system path makes unrelated
+# system packages visible to PyInstaller's hook discovery and can load binary
+# extensions built for a different Python ABI.
 VENV_SITE_PACKAGES="$(python3 -c 'import site; print(site.getsitepackages()[0])')"
-GI_SYSTEM_PATH="$(/usr/bin/python3 -c 'import gi, pathlib; print(pathlib.Path(gi.__file__).resolve().parent.parent)' 2>/dev/null || true)"
-if [[ -n "$GI_SYSTEM_PATH" ]]; then
-    PTH_FILE="${VENV_SITE_PACKAGES}/system-gi.pth"
-    if [[ ! -f "$PTH_FILE" ]]; then
-        echo "$GI_SYSTEM_PATH" > "$PTH_FILE"
-        info "Linked system gi at ${GI_SYSTEM_PATH}"
+GI_PACKAGE_PATH="$("$SYSTEM_PYTHON" -c 'import gi, pathlib; print(pathlib.Path(gi.__file__).resolve().parent)' 2>/dev/null || true)"
+if [[ -n "$GI_PACKAGE_PATH" ]]; then
+    GI_VENDOR_DIR="${VENV_SITE_PACKAGES}/_system_gi"
+    mkdir -p "$GI_VENDOR_DIR"
+    ln -sfn "$GI_PACKAGE_PATH" "${GI_VENDOR_DIR}/gi"
+    PYGOBJECT_METADATA_PATH="$("$SYSTEM_PYTHON" -c 'import importlib.metadata; print(importlib.metadata.distribution("pygobject")._path)' 2>/dev/null || true)"
+    if [[ -n "$PYGOBJECT_METADATA_PATH" && -e "$PYGOBJECT_METADATA_PATH" ]]; then
+        ln -sfn "$PYGOBJECT_METADATA_PATH" "${VENV_SITE_PACKAGES}/$(basename "$PYGOBJECT_METADATA_PATH")"
+    else
+        error "Could not locate PyGObject package metadata required by PyInstaller."
     fi
+    PTH_FILE="${VENV_SITE_PACKAGES}/system-gi.pth"
+    printf '%s\n' "$GI_VENDOR_DIR" > "$PTH_FILE"
+    info "Linked system gi package and PyGObject metadata"
 else
     warn "Could not locate system gi – GTK4 GUI may not bundle correctly."
 fi
@@ -135,6 +161,8 @@ step "Building PyInstaller one-dir bundle"
 rm -rf "${DIST_DIR}/nudity-detector" "${BUILD_DIR}/nudity-detector"
 
 cd "$PROJECT_ROOT"
+APP_ID="$(python3 -c 'from src.core.constants import APP_ID; print(APP_ID)')"
+ICON_NAME="$(python3 -c 'from src.core.constants import APP_ICON_NAME; print(APP_ICON_NAME)')"
 pyinstaller \
     --distpath "${DIST_DIR}" \
     --workpath "${BUILD_DIR}" \
@@ -193,9 +221,10 @@ mkdir -p "${APPDIR}/usr/share/icons/hicolor/256x256/apps"
 info "Copying PyInstaller bundle into AppDir …"
 cp -r "${DIST_DIR}/nudity-detector" "${APPDIR}/usr/bin/nudity-detector-bin"
 
-# Desktop file
-cp "${SCRIPT_DIR}/nudity-detector.desktop" "${APPDIR}/nudity-detector.desktop"
-cp "${SCRIPT_DIR}/nudity-detector.desktop" "${APPDIR}/usr/share/applications/nudity-detector.desktop"
+# Desktop file — its filename must match the Gtk.Application ID so launchers can
+# associate the running window with this entry and resolve its icon.
+cp "${SCRIPT_DIR}/nudity-detector.desktop" "${APPDIR}/${APP_ID}.desktop"
+cp "${SCRIPT_DIR}/nudity-detector.desktop" "${APPDIR}/usr/share/applications/${APP_ID}.desktop"
 
 # AppRun entry point
 cp "${SCRIPT_DIR}/AppRun" "${APPDIR}/AppRun"
@@ -217,17 +246,17 @@ done
 
 if [[ -f "$CUSTOM_ICON" ]]; then
     info "Using custom icon: ${CUSTOM_ICON}"
-    cp "$CUSTOM_ICON" "${APPDIR}/nudity-detector.png"
-    cp "$CUSTOM_ICON" "${APPDIR}/usr/share/icons/hicolor/256x256/apps/nudity-detector.png"
+    cp "$CUSTOM_ICON" "${APPDIR}/${ICON_NAME}.png"
+    cp "$CUSTOM_ICON" "${APPDIR}/usr/share/icons/hicolor/256x256/apps/${ICON_NAME}.png"
 elif [[ -n "$SYSTEM_ICON" ]]; then
     warn "No custom icon found at scripts/nudity-detector.png — using system fallback."
-    cp "$SYSTEM_ICON" "${APPDIR}/nudity-detector.png"
-    cp "$SYSTEM_ICON" "${APPDIR}/usr/share/icons/hicolor/256x256/apps/nudity-detector.png"
+    cp "$SYSTEM_ICON" "${APPDIR}/${ICON_NAME}.png"
+    cp "$SYSTEM_ICON" "${APPDIR}/usr/share/icons/hicolor/256x256/apps/${ICON_NAME}.png"
 else
     warn "No icon found. AppImage will be created without an icon."
     # appimagetool requires at least a placeholder
-    convert -size 256x256 xc:transparent "${APPDIR}/nudity-detector.png" 2>/dev/null \
-        || touch "${APPDIR}/nudity-detector.png"
+    convert -size 256x256 xc:transparent "${APPDIR}/${ICON_NAME}.png" 2>/dev/null \
+        || touch "${APPDIR}/${ICON_NAME}.png"
 fi
 
 success "AppDir assembled at ${APPDIR}"
@@ -249,8 +278,8 @@ export APPIMAGE_EXTRACT_AND_RUN=1
     --appdir "$APPDIR" \
     --plugin gtk \
     --output appimage \
-    --desktop-file "${APPDIR}/nudity-detector.desktop" \
-    --icon-file "${APPDIR}/nudity-detector.png" || true
+    --desktop-file "${APPDIR}/${APP_ID}.desktop" \
+    --icon-file "${APPDIR}/${ICON_NAME}.png" || true
 # Note: we do NOT let linuxdeploy create the final AppImage (--output appimage
 # is listed for linuxdeploy context; actual image creation is done by
 # appimagetool below for more control).  The "--output appimage" flag may

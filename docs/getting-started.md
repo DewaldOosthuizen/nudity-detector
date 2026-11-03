@@ -99,6 +99,8 @@ Ensure Docker Compose is installed: <https://docs.docker.com/compose/install/>
 python3 run_gui.py
 ```
 
+For local development on a desktop where the application should appear with its branded panel icon, run `make start`. It installs or refreshes the current checkout's desktop entry and icon under `~/.local/share` before launching. Run `make install-local` separately if you launch the GUI directly with Python.
+
 The GUI provides:
 
 - Model selection (NudeNet or Helloz NSFW)
@@ -232,7 +234,7 @@ bash scripts/build_linux.sh
 The script will:
 
 1. Download `appimagetool` and `linuxdeploy` (with GTK plugin) into `scripts/` on first run (cached for subsequent builds).
-2. Create an isolated build virtual environment in `build/`.
+2. Create an isolated build virtual environment in `build/` using `/usr/bin/python3`, which must match the installed system PyGObject/GTK bindings. If the existing build environment uses a different Python minor version, the script recreates it; only the system `gi` package and its metadata are exposed to PyInstaller.
 3. Run PyInstaller using `scripts/nudity-detector.spec` to produce `dist/nudity-detector/`.
 4. Bundle GTK4 typelibs and copy them into the PyInstaller output.
 5. Assemble an AppDir and run `linuxdeploy --plugin gtk` to gather GTK4 shared libraries, schemas, and themes.
@@ -249,9 +251,9 @@ chmod +x dist/NudityDetector-x86_64.AppImage
 ./dist/NudityDetector-x86_64.AppImage
 ```
 
-### Custom icon
+### Application icon
 
-Place a `256x256` PNG at `scripts/nudity-detector.png` before building to embed a custom icon in the AppImage. If no custom icon is found, a system fallback icon is used.
+The repository includes the branded `256x256` PNG at `scripts/nudity-detector.png`. The Linux build embeds it under `usr/share/icons/hicolor/256x256/apps/` and packages a desktop entry named for the GTK application ID with `Exec=AppRun`. Local `make start` installs the same icon and a matching development desktop entry under `~/.local/share`, and the GTK window requests the `nudity-detector` theme icon. Replace the PNG to customize the artwork; if it is absent, the AppImage build falls back to a system icon.
 
 ### Runtime requirements on the target system
 

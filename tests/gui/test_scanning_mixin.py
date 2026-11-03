@@ -592,6 +592,29 @@ class TestScanningMixinNudeNet:
             classify_image(str(img))
         assert len(session.get_results()) == 1
 
+    def test_nudenet_classify_image_with_nudenet_3_result_shape_is_detected(self, tmp_path):
+        from src.core.utils import get_detected_results
+
+        win = _make_win()
+        win.is_processing = True
+        session = ScanSession()
+        img = tmp_path / "img.jpg"
+        img.write_bytes(b"x")
+        detection = [{"class": "BELLY_EXPOSED", "score": 0.67, "box": [0, 0, 10, 10]}]
+        with (
+            patch("nudenet.NudeDetector", return_value=MagicMock()),
+            patch("src.gui.scanning.detect_with_timeout", return_value=detection),
+        ):
+            classify_image, _ = ScanningMixin.create_nudenet_classifiers(win, set(), 0.6, 60.0, session)
+            classify_image(str(img))
+
+        entries = session.get_results()
+        assert len(entries) == 1
+        assert entries[0].nudity_detected is True
+        assert entries[0].confidence_percent == pytest.approx(67.0)
+        assert get_detected_results(entries) == entries
+        assert json.loads(entries[0].detected_classes) == [{"class": "BELLY_EXPOSED", "score": 0.67}]
+
     def test_nudenet_classify_video_success(self, tmp_path):
         win = _make_win()
         win.is_processing = True
@@ -890,6 +913,16 @@ class TestTimeoutUnits:
         # A stub (no __file__) is never treated as real.
         assert conftest._is_real_gi(types.ModuleType("gi")) is False
         assert conftest._is_real_gi(None) is False
+
+    # -- app identity and branding -------------------------------------------
+
+    def test_window_sets_the_branded_icon_name(self):
+        """The GTK window icon must use the same named theme icon as the desktop entry."""
+        window_cls = _load_nudity_window_class()
+        base_window_class = window_cls.__mro__[-2]
+        with patch.object(base_window_class, "set_icon_name", create=True) as set_icon_name:
+            _make_window_instance(window_cls, {})
+        set_icon_name.assert_called_once_with(constants.APP_ICON_NAME)
 
     # -- widget accessors ---------------------------------------------------
 
@@ -1222,10 +1255,11 @@ class TestTimeoutUnits:
         with pytest.raises(ValueError, match="'http' is not allowed for non-loopback host"):
             window_cls._get_helloz_nsfw_check_url(win)
 
-    def test_init_missing_keys_fall_back_to_constants(self):
+    def test_init_missing_keys_fall_back_to_constants(self, tmp_path):
         """An empty config yields the constant defaults, without raising."""
         window_cls = _load_nudity_window_class()
-        win = _make_window_instance(window_cls, {})
+        with patch("src.core.constants.CONFIG_DIR", str(tmp_path)):
+            win = _make_window_instance(window_cls, {})
         assert win._worker_thread_timeout == constants.WORKER_THREAD_TIMEOUT
         assert win._detect_timeout == constants.DETECT_TIMEOUT
         assert win._worker_thread_count == constants.WORKER_THREAD_COUNT

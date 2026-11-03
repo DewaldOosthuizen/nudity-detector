@@ -31,6 +31,34 @@ def test_simplify_nudenet_results_typical():
     ]
 
 
+def test_simplify_nudenet_results_reads_nudenet_3_class_field():
+    raw = [{"class": "FEMALE_BREAST_EXPOSED", "score": 0.9, "box": [0, 0, 10, 10]}]
+    assert simplify_nudenet_results(raw) == [{"class": "FEMALE_BREAST_EXPOSED", "score": 0.9}]
+
+
+def test_get_nudenet_confidence_reads_nudenet_3_class_field_and_labels():
+    raw = [
+        {"class": "FACE_FEMALE", "score": 0.99},
+        {"class": "FEMALE_BREAST_EXPOSED", "score": 0.82},
+    ]
+    assert get_nudenet_confidence(raw) == pytest.approx(0.82)
+
+
+@pytest.mark.parametrize("class_name", [
+    "ANUS_EXPOSED",
+    "FEMALE_BREAST_EXPOSED",
+    "FEMALE_GENITALIA_EXPOSED",
+    "MALE_GENITALIA_EXPOSED",
+    "BUTTOCKS_EXPOSED",
+    "ARMPITS_EXPOSED",
+    "BELLY_EXPOSED",
+    "MALE_BREAST_EXPOSED",
+    "FEET_EXPOSED",
+])
+def test_get_nudenet_confidence_recognizes_nudenet_3_class_names(class_name):
+    assert get_nudenet_confidence([{"class": class_name, "score": 0.8}]) == pytest.approx(0.8)
+
+
 def test_simplify_nudenet_results_empty():
     assert simplify_nudenet_results([]) == []
 

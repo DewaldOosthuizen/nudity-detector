@@ -25,7 +25,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A([Push to main\nor manual workflow_dispatch]) --> B[Validation jobs\nlint · pytest · pip-audit\ntest needs lint; audit runs in parallel]
+    A([Manual workflow_dispatch only\nautomatic main-push trigger paused]) --> B[Validation jobs\nlint · pytest · pip-audit\ntest needs lint; audit runs in parallel]
     B --> C{Validation gate\nall jobs passed?}
     C -- No --> D([Workflow fails\nno build or release])
     C -- Yes --> E[Build AppImage\nUbuntu runner\nAPPIMAGE_EXTRACT_AND_RUN=1]
