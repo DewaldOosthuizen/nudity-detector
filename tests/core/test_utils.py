@@ -94,3 +94,21 @@ def test_handle_results_uses_session(tmp_path):
     results = session.get_results()
     assert len(results) == 1
     assert results[0].file == str(tmp_path / "test.jpg")
+
+
+def test_get_detected_result_dicts_converts_entries_and_passes_dicts_through():
+    from src.core.models import ReportEntry
+    from src.core.utils import get_detected_result_dicts
+
+    detected = ReportEntry(
+        file="a.jpg", media_type="image", model_name="m", threshold_percent=60.0,
+        confidence_percent=80.0, nudity_detected=True, detected_classes="[]",
+    )
+    clean = ReportEntry(
+        file="b.jpg", media_type="image", model_name="m", threshold_percent=60.0,
+        confidence_percent=1.0, nudity_detected=False, detected_classes="[]",
+    )
+    loaded = {"file": "c.jpg", "nudity_detected": True}
+    skipped = {"file": "d.jpg", "nudity_detected": False}
+
+    assert get_detected_result_dicts([detected, clean, loaded, skipped]) == [detected.to_dict(), loaded]

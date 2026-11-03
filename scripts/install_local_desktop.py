@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """Install the local development launcher and branded icon for the current user."""
 
+import logging
 import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
@@ -38,7 +41,6 @@ def install_local_desktop(project_root: Path, data_home: Path) -> tuple[Path, Pa
         FileNotFoundError: If a required local launcher or branding asset is absent.
         ValueError: If the packaged desktop template does not contain exactly one
             ``Exec`` entry.
-        subprocess.CalledProcessError: If the available GTK icon-cache updater fails.
     """
     project_root = project_root.resolve()
     python_executable = project_root / ".venv" / "bin" / "python"
@@ -70,10 +72,15 @@ def install_local_desktop(project_root: Path, data_home: Path) -> tuple[Path, Pa
 
     icon_cache_updater = shutil.which("gtk-update-icon-cache")
     if icon_cache_updater:
-        subprocess.run(
+        # The cache only speeds up icon lookup; a failure must not block launching the app.
+        result = subprocess.run(
             [icon_cache_updater, "--force", "--ignore-theme-index", str(data_home / "icons" / "hicolor")],
-            check=True,
+            check=False,
+            capture_output=True,
+            text=True,
         )
+        if result.returncode != 0:
+            logger.warning("gtk-update-icon-cache exited with %s: %s", result.returncode, result.stderr.strip())
 
     return desktop_path, installed_icon_path
 

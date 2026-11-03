@@ -916,6 +916,19 @@ class TestTimeoutUnits:
 
     # -- app identity and branding -------------------------------------------
 
+    def test_window_resolves_preview_hook_to_preview_mixin(self):
+        """ResultsMixin declares a stub update_thumbnail_preview; PreviewMixin must win the MRO.
+
+        Reordering the window's bases would silently turn every results refresh into
+        NotImplementedError, and the mixin tests mock the window so they cannot see it.
+        """
+        from src.gui.preview import PreviewMixin
+        from src.gui.results import ResultsMixin
+
+        window_cls = _load_nudity_window_class()
+        assert window_cls.update_thumbnail_preview is PreviewMixin.update_thumbnail_preview
+        assert window_cls.update_thumbnail_preview is not ResultsMixin.update_thumbnail_preview
+
     def test_window_sets_the_branded_icon_name(self):
         """The GTK window icon must use the same named theme icon as the desktop entry."""
         window_cls = _load_nudity_window_class()
@@ -1433,6 +1446,37 @@ class TestTimeoutUnits:
 
         assert mock_classify.call_args.kwargs["worker_timeout"] == 5
         assert win._nudenet_worker_pool is None
+
+    def test_scan_completion_hands_dict_results_to_results_view(self, tmp_path):
+        """ResultsMixin/PreviewMixin read entries with ``.get``; the scan's ReportEntry
+        objects must be converted at the boundary or the results list stays empty."""
+        from src.core.models import ReportEntry
+
+        entry = ReportEntry(
+            file=str(tmp_path / "a.jpg"), media_type="image", model_name="nudenet",
+            threshold_percent=60.0, confidence_percent=80.0, nudity_detected=True,
+            detected_classes="[]",
+        )
+        clean = ReportEntry(
+            file=str(tmp_path / "b.jpg"), media_type="image", model_name="nudenet",
+            threshold_percent=60.0, confidence_percent=10.0, nudity_detected=False,
+            detected_classes="[]",
+        )
+        win = _make_win()
+        win.folder_entry.get_text.return_value = str(tmp_path)
+        win._get_model.return_value = constants.MODEL_NUDENET
+        win._scan_session.get_results.return_value = [entry, clean]
+        win.create_nudenet_classifiers = MagicMock(return_value=(MagicMock(), MagicMock()))
+        win._close_nudenet_worker_pool = MagicMock()
+
+        with patch("src.gui.scanning.classify_files_in_folder"), \
+             patch("src.gui.scanning.count_supported_files", return_value=2), \
+             patch("src.gui.scanning.save_nudity_report", return_value=(True, True)), \
+             patch("src.gui.scanning.GLib") as glib:
+            ScanningMixin.process_files(win, str(tmp_path), str(tmp_path))
+
+        assert win.detected_results == [entry.to_dict()]
+        glib.idle_add.assert_any_call(win.populate_results, win.detected_results)
 
     def test_detect_with_timeout_receives_seconds(self, tmp_path):
         window_cls = _load_nudity_window_class()

@@ -196,6 +196,15 @@ def get_detected_results(report_data: list) -> list:
     return [entry for entry in report_data if (entry.get('nudity_detected') if isinstance(entry, dict) else entry.nudity_detected)]
 
 
+def get_detected_result_dicts(report_data: list) -> list:
+    """Return detected results as plain dicts, the shape the GUI results view consumes.
+
+    ``ScanSession`` holds ``ReportEntry`` objects while ``ResultsMixin`` and
+    ``PreviewMixin`` read entries with ``dict.get``; this is the conversion boundary.
+    """
+    return [entry if isinstance(entry, dict) else entry.to_dict() for entry in get_detected_results(report_data)]
+
+
 # ============================================================================
 # Report Management Delegation
 # ============================================================================

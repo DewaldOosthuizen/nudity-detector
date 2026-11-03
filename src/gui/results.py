@@ -21,6 +21,10 @@ class ResultsMixin:
     """Results table population, row selection, row actions, and clear-all.
     Mixed into NudityDetectorWindow."""
 
+    def update_thumbnail_preview(self):
+        """Preview hook supplied by PreviewMixin in the composed application window."""
+        raise NotImplementedError
+
     # ------------------------------------------------------------------
     # Button handlers
     # ------------------------------------------------------------------
@@ -57,8 +61,16 @@ class ResultsMixin:
             )
         else:
             self.summary_label.set_text('No explicit media detected in the current session.')
+        # Select the first row so the preview is populated without a click. GTK does not
+        # reliably select a row on its own (autoselect is off), which left the panel on
+        # "Select a result to preview." after a scan.
+        selection = self.column_view.get_model()
+        if results and hasattr(selection, 'set_selected'):
+            selection.set_selected(0)
         self.update_result_action_state()
-        self.clear_thumbnail_preview()
+        # Re-evaluate the preview after rebuilding the model: the selection may already
+        # have been at row 0 (no selection-changed emitted) and clearing would erase it.
+        self.update_thumbnail_preview()
 
     def append_results(self, new_entries, start_index):
         """Append only new result entries to the list store without a full rebuild.

@@ -22,11 +22,6 @@ ci-install:  ## Create .venv and install the locked requirements (idempotent)
 	.venv/bin/pip install --disable-pip-version-check --upgrade pip
 	.venv/bin/pip install --disable-pip-version-check -r requirements.txt
 	.venv/bin/pip install --disable-pip-version-check -r requirements-dev.txt
-	@if ! .venv/bin/python -c "from nudenet import NudeDetector" >/dev/null 2>&1; then \
-		echo "NudeNet import failed; repairing pinned inference packages from requirements.txt"; \
-		grep -E '^(nudenet|opencv-python-headless|onnxruntime|numpy|flatbuffers|packaging|protobuf)==' requirements.txt | \
-			xargs -r .venv/bin/pip install --disable-pip-version-check --force-reinstall --no-deps; \
-	fi
 	.venv/bin/python -c "from nudenet import NudeDetector"
 
 ci-lint: ci-install  ## Lint source and test code with ruff (E, F, I; py312)
