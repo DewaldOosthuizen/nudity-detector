@@ -10,7 +10,7 @@ WORKFLOW_PATHS = (
 )
 EXPECTED_ACTIONS = {
     "actions/checkout": ("11d5960a326750d5838078e36cf38b85af677262", "v4.4.0", 8),
-    "actions/setup-python": ("a26af69be951a213d495a4c3e4e4022e16d87065", "v5.6.0", 7),
+    "actions/setup-python": ("a26af69be951a213d495a4c3e4e4022e16d87065", "v5.6.0", 6),
     "actions/upload-artifact": ("ea165f8d65b6e75b540449e92b4886f43607fa02", "v4.6.2", 1),
     "actions/download-artifact": ("d3f86a106a0bac45b974a628896c90dbdf5c8093", "v4.3.0", 1),
     "softprops/action-gh-release": ("3bb12739c298aeb8a4eeaf626c5b8d85266b0e65", "v2.6.2", 1),
