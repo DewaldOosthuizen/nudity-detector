@@ -278,6 +278,41 @@ class TestResultsMixin:
         ResultsMixin.populate_results(win, results)
         assert win._list_store.append.call_count == 3
 
+    def test_populate_results_refreshes_preview_after_appending_rows(self):
+        win = _make_window()
+        events = []
+        win._list_store.append.side_effect = lambda _item: events.append("append")
+        win.update_thumbnail_preview = MagicMock(side_effect=lambda: events.append("preview"))
+        win.clear_thumbnail_preview = MagicMock(side_effect=lambda: events.append("clear"))
+
+        ResultsMixin.populate_results(
+            win,
+            [{"file": "/img.jpg", "media_type": "image", "confidence_percent": 70.0, "model_name": "test"}],
+        )
+
+        assert events == ["append", "preview"]
+        win.clear_thumbnail_preview.assert_not_called()
+
+    def test_populate_results_selects_first_row_so_preview_shows_without_click(self):
+        class FakeSingleSelection:
+            def __init__(self):
+                self.selected = []
+
+            def set_selected(self, position):
+                self.selected.append(position)
+
+        win = _make_window()
+        selection = FakeSingleSelection()
+        win.column_view.get_model.return_value = selection
+        win.update_thumbnail_preview = MagicMock()
+        entry = {"file": "/img.jpg", "media_type": "image", "confidence_percent": 70.0, "model_name": "t"}
+
+        ResultsMixin.populate_results(win, [entry, entry])
+        assert selection.selected == [0]
+
+        ResultsMixin.populate_results(win, [])
+        assert selection.selected == [0]  # an empty result set selects nothing
+
     def test_on_open_file_clicked(self):
         win = _make_window()
         win.open_selected_file = MagicMock()

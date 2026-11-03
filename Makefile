@@ -13,7 +13,7 @@
 # CI test and pip-audit jobs) before the checks run, so a fresh checkout
 # can execute `make ci` without manual dependency setup. The virtual
 # environment is reused on subsequent runs.
-.PHONY: ci ci-install ci-lint ci-test ci-audit help lint test audit build clean format start
+.PHONY: ci ci-install ci-lint ci-test ci-audit help lint test audit build clean format start install-local
 
 ci: ci-install ci-lint ci-test ci-audit  ## Run the full CI gate (lint, test, audit)
 
@@ -22,6 +22,7 @@ ci-install:  ## Create .venv and install the locked requirements (idempotent)
 	.venv/bin/pip install --disable-pip-version-check --upgrade pip
 	.venv/bin/pip install --disable-pip-version-check -r requirements.txt
 	.venv/bin/pip install --disable-pip-version-check -r requirements-dev.txt
+	.venv/bin/python -c "from nudenet import NudeDetector"
 
 ci-lint: ci-install  ## Lint source and test code with ruff (E, F, I; py312)
 	.venv/bin/ruff check src/ tests/
@@ -57,7 +58,10 @@ clean:  ## Remove build artifacts and caches (consistent with .gitignore)
 format: ci-install  ## Format code to the project's ruff style (py312, 160)
 	.venv/bin/ruff format --target-version py312 --line-length 160 src/ tests/
 
-start: ci-install  ## Launch the GTK4/libadwaita GUI app (xvfb-run when headless)
+install-local: ci-install  ## Install this checkout's launcher and icon under ~/.local/share
+	.venv/bin/python scripts/install_local_desktop.py
+
+start: install-local  ## Install local icon integration and launch the GTK GUI
 ifndef DISPLAY
 	xvfb-run -a .venv/bin/python run_gui.py
 else

@@ -592,6 +592,29 @@ class TestScanningMixinNudeNet:
             classify_image(str(img))
         assert len(session.get_results()) == 1
 
+    def test_nudenet_classify_image_with_nudenet_3_result_shape_is_detected(self, tmp_path):
+        from src.core.utils import get_detected_results
+
+        win = _make_win()
+        win.is_processing = True
+        session = ScanSession()
+        img = tmp_path / "img.jpg"
+        img.write_bytes(b"x")
+        detection = [{"class": "BELLY_EXPOSED", "score": 0.67, "box": [0, 0, 10, 10]}]
+        with (
+            patch("nudenet.NudeDetector", return_value=MagicMock()),
+            patch("src.gui.scanning.detect_with_timeout", return_value=detection),
+        ):
+            classify_image, _ = ScanningMixin.create_nudenet_classifiers(win, set(), 0.6, 60.0, session)
+            classify_image(str(img))
+
+        entries = session.get_results()
+        assert len(entries) == 1
+        assert entries[0].nudity_detected is True
+        assert entries[0].confidence_percent == pytest.approx(67.0)
+        assert get_detected_results(entries) == entries
+        assert json.loads(entries[0].detected_classes) == [{"class": "BELLY_EXPOSED", "score": 0.67}]
+
     def test_nudenet_classify_video_success(self, tmp_path):
         win = _make_win()
         win.is_processing = True
@@ -890,6 +913,29 @@ class TestTimeoutUnits:
         # A stub (no __file__) is never treated as real.
         assert conftest._is_real_gi(types.ModuleType("gi")) is False
         assert conftest._is_real_gi(None) is False
+
+    # -- app identity and branding -------------------------------------------
+
+    def test_window_resolves_preview_hook_to_preview_mixin(self):
+        """ResultsMixin declares a stub update_thumbnail_preview; PreviewMixin must win the MRO.
+
+        Reordering the window's bases would silently turn every results refresh into
+        NotImplementedError, and the mixin tests mock the window so they cannot see it.
+        """
+        from src.gui.preview import PreviewMixin
+        from src.gui.results import ResultsMixin
+
+        window_cls = _load_nudity_window_class()
+        assert window_cls.update_thumbnail_preview is PreviewMixin.update_thumbnail_preview
+        assert window_cls.update_thumbnail_preview is not ResultsMixin.update_thumbnail_preview
+
+    def test_window_sets_the_branded_icon_name(self):
+        """The GTK window icon must use the same named theme icon as the desktop entry."""
+        window_cls = _load_nudity_window_class()
+        base_window_class = window_cls.__mro__[-2]
+        with patch.object(base_window_class, "set_icon_name", create=True) as set_icon_name:
+            _make_window_instance(window_cls, {})
+        set_icon_name.assert_called_once_with(constants.APP_ICON_NAME)
 
     # -- widget accessors ---------------------------------------------------
 
@@ -1222,10 +1268,11 @@ class TestTimeoutUnits:
         with pytest.raises(ValueError, match="'http' is not allowed for non-loopback host"):
             window_cls._get_helloz_nsfw_check_url(win)
 
-    def test_init_missing_keys_fall_back_to_constants(self):
+    def test_init_missing_keys_fall_back_to_constants(self, tmp_path):
         """An empty config yields the constant defaults, without raising."""
         window_cls = _load_nudity_window_class()
-        win = _make_window_instance(window_cls, {})
+        with patch("src.core.constants.CONFIG_DIR", str(tmp_path)):
+            win = _make_window_instance(window_cls, {})
         assert win._worker_thread_timeout == constants.WORKER_THREAD_TIMEOUT
         assert win._detect_timeout == constants.DETECT_TIMEOUT
         assert win._worker_thread_count == constants.WORKER_THREAD_COUNT
@@ -1399,6 +1446,37 @@ class TestTimeoutUnits:
 
         assert mock_classify.call_args.kwargs["worker_timeout"] == 5
         assert win._nudenet_worker_pool is None
+
+    def test_scan_completion_hands_dict_results_to_results_view(self, tmp_path):
+        """ResultsMixin/PreviewMixin read entries with ``.get``; the scan's ReportEntry
+        objects must be converted at the boundary or the results list stays empty."""
+        from src.core.models import ReportEntry
+
+        entry = ReportEntry(
+            file=str(tmp_path / "a.jpg"), media_type="image", model_name="nudenet",
+            threshold_percent=60.0, confidence_percent=80.0, nudity_detected=True,
+            detected_classes="[]",
+        )
+        clean = ReportEntry(
+            file=str(tmp_path / "b.jpg"), media_type="image", model_name="nudenet",
+            threshold_percent=60.0, confidence_percent=10.0, nudity_detected=False,
+            detected_classes="[]",
+        )
+        win = _make_win()
+        win.folder_entry.get_text.return_value = str(tmp_path)
+        win._get_model.return_value = constants.MODEL_NUDENET
+        win._scan_session.get_results.return_value = [entry, clean]
+        win.create_nudenet_classifiers = MagicMock(return_value=(MagicMock(), MagicMock()))
+        win._close_nudenet_worker_pool = MagicMock()
+
+        with patch("src.gui.scanning.classify_files_in_folder"), \
+             patch("src.gui.scanning.count_supported_files", return_value=2), \
+             patch("src.gui.scanning.save_nudity_report", return_value=(True, True)), \
+             patch("src.gui.scanning.GLib") as glib:
+            ScanningMixin.process_files(win, str(tmp_path), str(tmp_path))
+
+        assert win.detected_results == [entry.to_dict()]
+        glib.idle_add.assert_any_call(win.populate_results, win.detected_results)
 
     def test_detect_with_timeout_receives_seconds(self, tmp_path):
         window_cls = _load_nudity_window_class()

@@ -1,4 +1,5 @@
 import base64
+import logging
 from io import BytesIO
 
 import gi
@@ -14,6 +15,8 @@ except ImportError:
 
 from ..core import constants
 from ..processing.media_processor import ThumbnailGenerator
+
+logger = logging.getLogger(__name__)
 
 
 class PreviewMixin:
@@ -38,6 +41,7 @@ class PreviewMixin:
         )
 
         if Image is None:
+            logger.error("Pillow is not importable; image previews are disabled")
             self._thumb_placeholder.set_text(constants.NO_THUMBNAIL_TEXT)
             self.thumbnail_meta_label.set_text(meta_text)
             return
@@ -52,7 +56,7 @@ class PreviewMixin:
                 self.thumbnail_meta_label.set_text(meta_text)
                 return
             except Exception:
-                pass
+                logger.exception("Failed to render preview for %s", entry.get('file', ''))
 
         self.thumbnail_picture.set_paintable(None)
         self._thumb_placeholder.set_text(
@@ -70,7 +74,7 @@ class PreviewMixin:
                 try:
                     return self._load_preview_from_file(file_path, media_type)
                 except Exception:
-                    pass
+                    logger.exception("Failed to load preview from %s", file_path)
         if thumbnail_b64:
             try:
                 return self._load_preview_from_thumbnail(thumbnail_b64)

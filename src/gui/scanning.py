@@ -21,7 +21,7 @@ from ..core.utils import (
     create_frame_extractor,
     create_session_state,
     detect_with_timeout,
-    get_detected_results,
+    get_detected_result_dicts,
     get_nudenet_confidence,
     get_report_path,
     handle_results,
@@ -448,7 +448,7 @@ class ScanningMixin:
                     len(snapshot),
                 )
 
-            current_results = get_detected_results(snapshot)
+            current_results = get_detected_result_dicts(snapshot)
             detected_count = len(current_results)
             fraction = count / total_files if total_files > 0 else 0.0
             GLib.idle_add(
@@ -507,7 +507,7 @@ class ScanningMixin:
             processed = files_processed[0]
             skipped = total_files - processed
             all_results = scan_session.get_results()
-            self.detected_results = get_detected_results(all_results)
+            self.detected_results = get_detected_result_dicts(all_results)
             self.last_report_path = report_path
             session_state = self.build_session_state()
 

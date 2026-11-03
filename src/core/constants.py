@@ -35,13 +35,19 @@ MEDIA_TYPE_UNKNOWN = 'unknown'
 # ============================================================================
 # Nudity Detection - Model Classes
 # ============================================================================
-# NudeNet detector class labels for nudity
+# NudeNet 2.x used EXPOSED_* labels; NudeNet 3.x uses noun-first labels.
+# Retain both spellings so older persisted results and compatible detector versions work.
 NUDITY_CLASSES = frozenset({
     'EXPOSED_ANUS',
     'EXPOSED_BREAST_F',
     'EXPOSED_GENITALIA_F',
     'EXPOSED_GENITALIA_M',
     'EXPOSED_BUTTOCKS',
+    'ANUS_EXPOSED',
+    'FEMALE_BREAST_EXPOSED',
+    'FEMALE_GENITALIA_EXPOSED',
+    'MALE_GENITALIA_EXPOSED',
+    'BUTTOCKS_EXPOSED',
 })
 # Optional exposed classes that can increase recall, but may also raise false positives.
 NUDITY_CLASSES_EXTENDED = frozenset({
@@ -49,6 +55,10 @@ NUDITY_CLASSES_EXTENDED = frozenset({
     'EXPOSED_BELLY',
     'EXPOSED_BREAST_M',
     'EXPOSED_FEET',
+    'ARMPITS_EXPOSED',
+    'BELLY_EXPOSED',
+    'MALE_BREAST_EXPOSED',
+    'FEET_EXPOSED',
 })
 
 NUDITY_CLASSES_BROAD = frozenset(NUDITY_CLASSES | NUDITY_CLASSES_EXTENDED)
@@ -284,6 +294,8 @@ def get_helloz_nsfw_connection_check_url():
 # ============================================================================
 # GUI Configuration - UI Constants
 # ============================================================================
+APP_ID = 'io.github.dewaldoosthuizen.nuditydetector'
+APP_ICON_NAME = 'nudity-detector'
 GUI_WINDOW_TITLE = 'Nudity Detector'
 GUI_WINDOW_GEOMETRY = '1080x950'
 GUI_WINDOW_MIN_WIDTH = 900

@@ -1,10 +1,9 @@
 name: Release
 #
-# CalVer rolling-release pipeline. Runs on every push to `main` (and manual
-# workflow_dispatch) instead of on manual `v*` tag pushes. The workflow itself
-# computes the next CalVer tag, creates it, then builds and publishes the
-# AppImage — matching the auto-versioning flow used by the reference repos
-# (tech-cheat-sheets-and-notes style: validate -> gate -> build -> tag+release).
+# CalVer rolling-release pipeline. Manual workflow_dispatch only for now:
+# automatic AppImage builds/releases on pushes to `main` are paused to conserve
+# GitHub Actions minutes. The automatic trigger is commented out below and can
+# be re-enabled when desired. Manual runs still validate, build, tag, and publish.
 #
 # Phases:
 #   1. validation        — lint / pip-audit / test, run again here (NOT just
@@ -35,8 +34,10 @@ name: Release
 # fallback for repos with "no safe way to push a bump commit" — just tag.
 
 on:
-  push:
-    branches: ["main"]
+  # Automatic releases are paused to conserve minutes used by the long AppImage build.
+  # Uncomment this block to resume releasing automatically on pushes to main:
+  # push:
+  #   branches: ["main"]
   workflow_dispatch: {}
 
 concurrency:

@@ -23,9 +23,11 @@ nudity-detector/
 ├── pyproject.toml                   ← Ruff linting configuration
 ├── scripts/                         ← Linux packaging tooling
 │   ├── build_linux.sh               ← Full build pipeline (venv → PyInstaller → AppImage)
+│   ├── install_local_desktop.py     ← Install the development launcher/icon under ~/.local/share
 │   ├── nudity-detector.spec         ← PyInstaller spec (one-dir mode, GTK4 hidden imports)
+│   ├── nudity-detector.png          ← Branded 256×256 desktop/AppImage icon
 │   ├── AppRun                       ← AppImage entry point (env var wiring)
-│   └── nudity-detector.desktop      ← FreeDesktop entry used by appimagetool
+│   └── nudity-detector.desktop      ← Shared desktop metadata/AppImage entry template
 ├── docs/
 │   ├── architecture.md              ← This file
 │   ├── add/                         ← Architectural Decision Documents
@@ -202,6 +204,12 @@ before that worker slot can process another image or video frame. Scan teardown
 closes all remaining detector processes. This boundary is required because a
 Python thread cannot be safely stopped while native inference is running.
 
+The shared NudeNet result parser must match the pinned NudeNet 3.x contract:
+records use `class` and `score`, and the label vocabulary uses names such as
+`FEMALE_BREAST_EXPOSED` and `BELLY_EXPOSED`. It also accepts legacy `label` /
+`EXPOSED_*` records so older saved or test data remains compatible. Both GUI
+and CLI detection use this shared normalization and classification path.
+
 ---
 
 ## Session Persistence Format
@@ -237,7 +245,7 @@ See `docs/diagrams/05-build-pipeline.md` for the full pipeline diagram.
 | Workflow | File | Trigger | Purpose |
 |----------|------|---------|---------|
 | PR Gate | `.github/workflows/pr_gate.yml` | Every pull request targeting `main` | Consolidated quality gate: `lint` (`ruff check src/ tests/`), `test` (`pytest --cov --cov-report=term-missing tests/`, `needs: lint`), `pip-audit` (`pip-audit -r requirements.txt`, parallel with lint), and `pr-gate-summary` (needs all three, `if: always()`) — a single required status check for branch protection |
-| Release | `.github/workflows/release.yml` | Push to `main` and `workflow_dispatch` | Runs lint, tests, and pip-audit validation, then the validation gate; builds and verifies the AppImage before computing and checking a unique UTC CalVer tag (`YYYY.MM.DD` or `YYYY.MM.DD.N`), pushing it, renaming the asset to `NudityDetector-<generated-tag>-x86_64.AppImage`, and publishing the GitHub Release. A pushed tag does not trigger a release. |
+| Release | `.github/workflows/release.yml` | Manual `workflow_dispatch` only (automatic push-to-`main` trigger commented out temporarily) | A manual run performs lint, tests, and pip-audit validation, then builds and verifies the AppImage before computing and checking a unique UTC CalVer tag (`YYYY.MM.DD` or `YYYY.MM.DD.N`), pushing it, renaming the asset to `NudityDetector-<generated-tag>-x86_64.AppImage`, and publishing the GitHub Release. A pushed tag does not trigger a release. |
 
 See [docs/releasing.md](releasing.md) for the full release process, versioning
 convention, and rollback procedure.

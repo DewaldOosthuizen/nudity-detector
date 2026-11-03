@@ -1,10 +1,12 @@
 # Release Process
 
-Releases are automated by `.github/workflows/release.yml`. The workflow runs
-when a commit is pushed to `main` or when manually started with
-`workflow_dispatch`. It validates the selected commit, builds and verifies the
-AppImage, then generates and pushes its own UTC CalVer tag before publishing.
-Do not create or push a version tag to trigger a release.
+Releases are managed by `.github/workflows/release.yml`. Automatic releases on
+pushes to `main` are temporarily paused to conserve GitHub Actions minutes used
+by the AppImage build; the push trigger is commented out in the workflow. Start
+a release manually with `workflow_dispatch`. A manual run validates the selected
+commit, builds and verifies the AppImage, then generates and pushes its UTC
+CalVer tag before publishing. Do not create or push a version tag to trigger a
+release.
 
 ---
 
@@ -21,10 +23,10 @@ not choose, create, or push these tags.
 
 ### 1. Start a release
 
-Merge or push the intended changes to `main` to start the workflow
-automatically. Alternatively, select the `Release` workflow in GitHub Actions
-and run it with `workflow_dispatch` for the intended commit. The workflow
-validates the selected commit; a manually pushed tag does not start a release.
+In GitHub Actions, select the `Release` workflow and choose **Run workflow**
+(`workflow_dispatch`) for the intended commit. Pushes to `main` do not start a
+release while automatic triggering is paused. The workflow validates the
+selected commit; a manually pushed tag does not start a release.
 
 ### 2. Workflow operation order
 
@@ -67,8 +69,10 @@ The release page will contain:
 
 ## What the workflow does
 
-Defined in `.github/workflows/release.yml`. Triggered by pushes to `main` or
-manual `workflow_dispatch`; it is not triggered by a pushed version tag.
+Defined in `.github/workflows/release.yml`. It is manually triggered with
+`workflow_dispatch`; the automatic push-to-`main` trigger is commented out
+while AppImage build minutes are being conserved. A pushed version tag does not
+trigger a release.
 
 | Step | Action |
 |------|--------|
@@ -93,10 +97,9 @@ TAG="<generated-tag>"
 gh release delete "$TAG" --yes
 ```
 
-After correcting the issue, push the fix to `main` or start a new
-`workflow_dispatch` run for the intended commit. The workflow generates the
-next tag (using the next numeric suffix if this is still the same UTC date);
-do not create or push a tag manually.
+After correcting the issue, start a new `workflow_dispatch` run for the
+intended commit. The workflow generates the next tag (using the next numeric
+suffix if this is still the same UTC date); do not create or push a tag manually.
 
 > Do not manually reuse or recreate a generated release tag.
 
