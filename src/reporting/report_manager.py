@@ -291,6 +291,13 @@ class ReportManager:
                     return SessionState.from_dict(data)
             except (OSError, json.JSONDecodeError) as e:
                 logging.warning('Failed to load session from %s: %s', session_path, e)
+            except ValueError as e:
+                # SessionState.from_dict validates and migrates the stored version.
+                # An unrecoverable session (non-integer version, unsupported
+                # version, missing migration path) must not escape as an
+                # exception: the existing fallback-to-empty contract (verified by
+                # test_load_session_corrupt_json) must be preserved.
+                logging.warning('Failed to load session from %s: %s', session_path, e)
 
         # Try embedded session in Excel
         if os.path.exists(file_path) and file_path.endswith(constants.XLSX_EXTENSION):
