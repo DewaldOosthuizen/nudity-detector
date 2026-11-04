@@ -2,11 +2,10 @@
 import base64
 import os
 import sys
+from unittest.mock import MagicMock, patch
 
 import cv2
 import numpy as np
-from unittest.mock import MagicMock, patch
-
 import pytest
 
 sys.modules.setdefault("nudenet", MagicMock())
