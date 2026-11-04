@@ -151,6 +151,16 @@ class FrameExtractor:
         self.temp_dir: Optional[str] = None
         self.frame_paths: List[str] = []
 
+    def __enter__(self):
+        """Enter the context manager; returns self so `with FrameExtractor() as e:` works."""
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        """Exit the context manager; runs cleanup() on every exit path and
+        returns False so any exception raised in the with-block propagates."""
+        self.cleanup()
+        return False
+
     def extract(self, file_path: str) -> Tuple[Optional[str], List[str]]:
         """Extract all frames from a video file (eager, backward-compatible shim).
 
