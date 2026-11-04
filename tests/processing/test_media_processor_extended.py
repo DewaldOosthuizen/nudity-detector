@@ -2,6 +2,9 @@
 import base64
 import os
 import sys
+
+import cv2
+import numpy as np
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -12,6 +15,25 @@ from src.processing.media_processor import (
     FrameExtractor,
     ThumbnailGenerator,
 )
+
+# ---------------------------------------------------------------------------
+# Synthetic video helpers
+# ---------------------------------------------------------------------------
+
+def create_synthetic_video(path, num_frames=30, width=64, height=64, fps=30):
+    """Write a small synthetic video with num_frames frames."""
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    writer = cv2.VideoWriter(path, fourcc, fps, (width, height))
+    for i in range(num_frames):
+        frame = np.full((height, width, 3), i * 8 % 256, dtype=np.uint8)
+        writer.write(frame)
+    writer.release()
+
+
+# ---------------------------------------------------------------------------
+# FrameExtractor context-manager protocol and end-to-end regression tests
+# ---------------------------------------------------------------------------
+
 
 # ---------------------------------------------------------------------------
 # ThumbnailGenerator.generate_from_image
@@ -411,3 +433,45 @@ def test_iter_frames_cleanup_on_normal_completion():
     assert captured_temp_dir is not None
     assert extractor.temp_dir is None
     assert not os.path.isdir(captured_temp_dir)
+
+
+# ---------------------------------------------------------------------------
+# FrameExtractor context-manager protocol (AC-2 / Issue 3)
+# ---------------------------------------------------------------------------
+
+
+def test_frame_extractor_supports_context_manager(tmp_path):
+    """FrameExtractor supports the context-manager protocol; __exit__ runs
+    cleanup() and returns False so exceptions still propagate."""
+    video_path = str(tmp_path / "ctx_video.mp4")
+    create_synthetic_video(video_path, num_frames=5)
+
+    captured_temp_dir = None
+    with FrameExtractor(frame_rate=1) as extractor:
+        paths = list(extractor.iter_frames(video_path))
+        assert len(paths) == 1
+        assert extractor.temp_dir is not None
+        captured_temp_dir = extractor.temp_dir
+
+    # The with-block exit ran cleanup(): temp dir removed, paths cleared.
+    assert extractor.temp_dir is None
+    assert extractor.frame_paths == []
+    assert not os.path.isdir(captured_temp_dir)
+
+
+def test_frame_extractor_context_manager_propagates_exception(tmp_path):
+    """Exception inside the with-block propagates after __exit__ runs cleanup()."""
+    video_path = str(tmp_path / "ctx_video.mp4")
+    create_synthetic_video(video_path, num_frames=5)
+
+    extractor = FrameExtractor(frame_rate=1)
+    try:
+        with extractor:
+            list(extractor.iter_frames(video_path))
+            raise RuntimeError("boom")
+    except RuntimeError as exc:
+        assert str(exc) == "boom"
+
+    # __exit__ ran cleanup() before propagating the exception.
+    assert extractor.temp_dir is None
+    assert extractor.frame_paths == []
