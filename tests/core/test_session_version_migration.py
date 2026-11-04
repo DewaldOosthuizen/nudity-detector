@@ -9,11 +9,10 @@ from unittest.mock import MagicMock
 
 sys.modules.setdefault("nudenet", MagicMock())
 
-from src.core import constants
 import src.core.models as models
+from src.core import constants
 from src.core.models import ReportEntry, ScanConfig, SessionState
 from src.reporting.report_manager import ReportManager
-
 
 # ---------------------------------------------------------------------------
 # AC-2: the v1 -> v2 migration hook is registered and is a payload no-op
@@ -47,7 +46,7 @@ def test_unsupported_versions_raise():
         try:
             SessionState.from_dict(data)
         except ValueError as exc:
-            assert bad_version in str(exc), (
+            assert str(bad_version) in str(exc), (
                 f"ValueError did not name stored version {bad_version!r}"
             )
         else:

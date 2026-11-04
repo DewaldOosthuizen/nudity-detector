@@ -88,7 +88,12 @@ DEFAULT_REPORT_DIR = 'reports'
 REPORT_FILE_NAME = 'nudity_report.xlsx'
 XLSX_EXTENSION = '.xlsx'
 SESSION_FILE_SUFFIX = '_session.json'
-SESSION_VERSION = 1
+# Current on-disk session format version.
+#
+# v1: first persistent version.
+# v2: keeps the v1 schema bit-for-bit (no payload change); a v1 session is
+#     migrated to v2 by SessionState.from_dict on load.
+SESSION_VERSION = 2
 SCAN_RUN_DATE_FORMAT = '%Y-%m-%d_%H-%M-%S'
 
 REPORT_HEADERS = (
