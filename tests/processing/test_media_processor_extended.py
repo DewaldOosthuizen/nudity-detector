@@ -446,11 +446,15 @@ def test_frame_extractor_supports_context_manager(tmp_path):
     create_synthetic_video(video_path, num_frames=5)
 
     captured_temp_dir = None
+    paths = []
     with FrameExtractor(frame_rate=5) as extractor:
-        paths = list(extractor.iter_frames(video_path))
-        assert len(paths) == 1  # frame_rate=5, 5 frames -> frame 0 sampled
-        assert extractor.temp_dir is not None
-        captured_temp_dir = extractor.temp_dir
+        for frame_path in extractor.iter_frames(video_path):
+            paths.append(frame_path)
+            if captured_temp_dir is None:
+                captured_temp_dir = extractor.temp_dir
+
+    assert len(paths) == 1  # frame_rate=5, 5 frames -> frame 0 sampled
+    assert captured_temp_dir is not None  # temp dir created during iteration
 
     # The with-block exit ran cleanup(): temp dir removed, paths cleared.
     assert extractor.temp_dir is None
