@@ -4,6 +4,8 @@ Covers the session-version migration hook in src.core.models and the
 version-aware SessionState.from_dict loader in src.reporting.report_manager.
 """
 
+import json
+import logging
 import sys
 from unittest.mock import MagicMock
 
@@ -121,3 +123,35 @@ def test_unknown_version_raises():
         assert "no migration path" in str(exc)
     else:
         raise AssertionError("expected ValueError for version 999")
+
+
+# ---------------------------------------------------------------------------
+# AC-5: unsupported session versions fail open to an empty SessionState
+# ---------------------------------------------------------------------------
+
+
+def test_load_session_invalid_version_falls_back_to_empty(tmp_path, caplog):
+    """A session file whose version cannot be loaded falls back to an empty SessionState.
+
+    Verifies that ReportManager.load_session catches the ValueError raised by
+    SessionState.from_dict (non-integer, boolean, or newer-than-current
+    version) and returns an empty SessionState instead of letting the
+    exception escape, while logging a warning.
+    """
+    for bad_version in ("x", True, 999):
+        session_path = str(tmp_path / f"session_{bad_version}.json")
+        payload = {
+            "version": bad_version,
+            "saved_at": "2024-01-01T00:00:00",
+            "scan_config": {"source_folder": "/x"},
+            "results": [],
+        }
+        with open(session_path, "w", encoding="utf-8") as f:
+            json.dump(payload, f)
+
+        with caplog.at_level(logging.WARNING):
+            result = ReportManager.load_session(session_path)
+
+        assert isinstance(result, SessionState)
+        assert len(result.results) == 0
+        assert any("Session file declares" in record.message for record in caplog.records)
