@@ -447,9 +447,9 @@ def test_frame_extractor_supports_context_manager(tmp_path):
     create_synthetic_video(video_path, num_frames=5)
 
     captured_temp_dir = None
-    with FrameExtractor(frame_rate=1) as extractor:
+    with FrameExtractor(frame_rate=5) as extractor:
         paths = list(extractor.iter_frames(video_path))
-        assert len(paths) == 1
+        assert len(paths) == 1  # frame_rate=5, 5 frames -> frame 0 sampled
         assert extractor.temp_dir is not None
         captured_temp_dir = extractor.temp_dir
 
@@ -464,7 +464,7 @@ def test_frame_extractor_context_manager_propagates_exception(tmp_path):
     video_path = str(tmp_path / "ctx_video.mp4")
     create_synthetic_video(video_path, num_frames=5)
 
-    extractor = FrameExtractor(frame_rate=1)
+    extractor = FrameExtractor(frame_rate=5)
     try:
         with extractor:
             list(extractor.iter_frames(video_path))
