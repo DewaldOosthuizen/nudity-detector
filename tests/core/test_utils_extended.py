@@ -1,6 +1,7 @@
 """Extended tests for src/core/utils.py to boost coverage."""
 import os
 import sys
+import threading
 import time
 from unittest.mock import MagicMock, patch
 
@@ -13,6 +14,9 @@ from src.core import constants
 from src.core.inference_pool import RemoteDetectionError, RestartableDetectionPool
 from src.core.scan_session import ScanSession
 from src.core.utils import (
+    _checkpoint_writers,
+    _get_or_create_checkpoint_writer,
+    _raise_checkpoint_writer_error,
     count_supported_files,
     create_session_state,
     delete_file_safely,
@@ -483,6 +487,413 @@ def test_handle_results_nudity_detected(tmp_path):
         )
     assert entry["nudity_detected"] is True
     assert len(session.get_results()) == 1
+
+
+# ---------------------------------------------------------------------------
+# handle_results checkpoint writer: creation, error propagation, periodicity,
+# concurrent registry access
+# ---------------------------------------------------------------------------
+
+def _wait_until(predicate, timeout=5.0, interval=0.01):
+    """Poll *predicate* until it becomes truthy or *timeout* seconds elapse.
+
+    The checkpoint writer thread never calls ``Queue.task_done()``, so
+    ``Queue.join()`` would block forever; polling is the only safe way to wait
+    for asynchronous writer progress.
+
+    Args:
+        predicate: Zero-argument callable whose truthy return means the
+            expected condition has been reached.
+        timeout: Maximum number of seconds to keep polling.
+        interval: Seconds to sleep between polls.
+
+    Returns:
+        The final predicate result (True on success, False on timeout).
+    """
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if predicate():
+            return True
+        time.sleep(interval)
+    return bool(predicate())
+
+
+def _shutdown_checkpoint_writer(session, timeout=2.0):
+    """Stop *session*'s checkpoint writer thread via the ``None`` sentinel.
+
+    Production code never sends the sentinel (src/core/utils.py:621-622), so a
+    writer thread would otherwise linger for the process lifetime. Every test
+    must call this to avoid leaking daemon threads across tests.
+
+    Args:
+        session: ScanSession whose checkpoint writer should be stopped.
+        timeout: Maximum seconds to wait for the writer thread to exit.
+    """
+    writer_state = _checkpoint_writers.get(session)
+    if writer_state is None:
+        return
+    writer_state['queue'].put(None)
+    writer_state['thread'].join(timeout=timeout)
+
+
+def _make_handle_kwargs(tmp_path, idx, session):
+    """Build the ``handle_results`` keyword set for a synthetic result.
+
+    ``nudity_detected=False`` keeps thumbnail generation and report-directory
+    creation out of the test path, and ``media_type`` is pinned so no file-type
+    probing runs against a non-existent file.
+
+    Args:
+        tmp_path: Pytest ``tmp_path`` fixture, used for file paths and report_dir.
+        idx: Index giving each synthetic file a distinct path.
+        session: ScanSession the result is appended to.
+
+    Returns:
+        dict of keyword arguments for ``handle_results``.
+    """
+    return {
+        'file_path': str(tmp_path / f'file_{idx}.jpg'),
+        'nudity_detected': False,
+        'raw_result': [],
+        'session': session,
+        'confidence_score': 0.0,
+        'media_type': 'image',
+        'model_name': 'nudenet',
+        'threshold_percent': 60.0,
+        'report_dir': str(tmp_path),
+    }
+
+
+def _make_recording_save(save_calls, delay=0.0):
+    """Return a fake ``save_entries`` that records ``(len(entries), path)``.
+
+    Args:
+        save_calls: List the recorded ``(length, path)`` tuples are appended to.
+        delay: Optional seconds to sleep before recording, so the writer
+            thread's progress is observable by a test.
+
+    Returns:
+        Callable suitable as a ``save_entries`` side effect.
+    """
+    def _save(entries, path):
+        if delay:
+            time.sleep(delay)
+        save_calls.append((len(entries), path))
+        return True
+
+    return _save
+
+
+class _ThreadFactory:
+    """Callable stand-in for ``threading.Thread`` that records constructions."""
+
+    def __init__(self, real_thread):
+        self._real_thread = real_thread
+        self.created = []
+
+    def __call__(self, *args, **kwargs):
+        thread = self._real_thread(*args, **kwargs)
+        self.created.append(thread)
+        return thread
+
+
+# --- AC-1: writer creation -------------------------------------------------
+
+def test_no_checkpoint_writer_before_500_boundary(tmp_path):
+    """No checkpoint writer is registered until the 500th result is appended."""
+    session = ScanSession()
+    save_calls = []
+    try:
+        with patch('src.core.utils.ReportManager.save_entries',
+                   side_effect=_make_recording_save(save_calls)):
+            for i in range(499):
+                handle_results(**_make_handle_kwargs(tmp_path, i, session))
+        assert save_calls == []
+        assert _checkpoint_writers.get(session) is None
+    finally:
+        _shutdown_checkpoint_writer(session)
+
+
+def test_checkpoint_writer_created_at_500_boundary(tmp_path):
+    """The checkpoint writer is created lazily at the 500-entry boundary.
+
+    Deviation from the issue's literal wording: the writer is NOT created on the
+    first ``nudity_detected=True`` result. ``_get_or_create_checkpoint_writer``
+    is only reached from the ``count % 500 == 0`` branch of ``handle_results``
+    (src/core/utils.py:714-718), so it appears on the 500th result of any kind.
+    """
+    session = ScanSession()
+    save_calls = []
+    try:
+        with patch('src.core.utils.ReportManager.save_entries',
+                   side_effect=_make_recording_save(save_calls)):
+            for i in range(499):
+                handle_results(**_make_handle_kwargs(tmp_path, i, session))
+            assert _checkpoint_writers.get(session) is None
+
+            handle_results(**_make_handle_kwargs(tmp_path, 499, session))
+
+            state = _checkpoint_writers.get(session)
+            assert state is not None
+            assert set(state.keys()) == {'queue', 'errors', 'thread'}
+            assert state['thread'].name == 'checkpoint-writer'
+            assert state['thread'].daemon is True
+            assert state['thread'].is_alive()
+            assert state['errors'] == []
+            assert _wait_until(lambda: len(save_calls) == 1)
+    finally:
+        _shutdown_checkpoint_writer(session)
+
+
+def test_checkpoint_writer_lookup_is_idempotent(tmp_path):
+    """Repeated lookups return the identical writer state dict and thread object."""
+    session = ScanSession()
+    try:
+        first = _get_or_create_checkpoint_writer(session)
+        second = _get_or_create_checkpoint_writer(session)
+        assert second is first
+        assert second['thread'] is first['thread']
+        assert _checkpoint_writers.get(session) is first
+    finally:
+        _shutdown_checkpoint_writer(session)
+
+
+# --- AC-2: error propagation ----------------------------------------------
+
+def test_checkpoint_writer_error_is_reraised(tmp_path):
+    """A failure recorded by the writer thread is re-raised on demand.
+
+    Production ``ReportManager.save_entries`` swallows every exception and
+    returns ``False`` (src/reporting/report_manager.py:198-200), so the writer's
+    ``except Exception`` (src/core/utils.py:626-628) is reachable in production
+    only when ``save_entries`` itself raises. This test simulates that by
+    patching ``save_entries`` to raise; it does not verify the issue's stated
+    disk-full failure mode end to end.
+    """
+    session = ScanSession()
+
+    def failing_save(entries, path):
+        raise RuntimeError('disk full')
+
+    try:
+        with patch('src.core.utils.ReportManager.save_entries', side_effect=failing_save):
+            for i in range(500):
+                handle_results(**_make_handle_kwargs(tmp_path, i, session))
+
+            state = _checkpoint_writers.get(session)
+            assert state is not None
+            assert _wait_until(lambda: len(state['errors']) == 1)
+
+            with pytest.raises(RuntimeError, match='disk full'):
+                _raise_checkpoint_writer_error(session)
+    finally:
+        _shutdown_checkpoint_writer(session)
+
+
+def test_handle_results_reraises_checkpoint_error_before_append(tmp_path):
+    """The next handle_results call re-raises a stored writer error pre-append.
+
+    The error is raised at the pre-append check (src/core/utils.py:682), so the
+    session's result count is left unchanged. See
+    ``test_checkpoint_writer_error_is_reraised`` for why ``save_entries`` is
+    patched to raise instead of relying on a real save failure.
+    """
+    session = ScanSession()
+
+    def failing_save(entries, path):
+        raise RuntimeError('disk full')
+
+    try:
+        with patch('src.core.utils.ReportManager.save_entries', side_effect=failing_save):
+            for i in range(500):
+                handle_results(**_make_handle_kwargs(tmp_path, i, session))
+
+            state = _checkpoint_writers.get(session)
+            assert _wait_until(lambda: len(state['errors']) == 1)
+
+            count_before = len(session.get_results())
+            with pytest.raises(RuntimeError, match='disk full'):
+                handle_results(**_make_handle_kwargs(tmp_path, 9999, session))
+            assert len(session.get_results()) == count_before
+    finally:
+        _shutdown_checkpoint_writer(session)
+
+
+def test_raise_checkpoint_writer_error_without_writer_is_silent(tmp_path):
+    """A session with no registered writer produces no error."""
+    session = ScanSession()
+    assert _checkpoint_writers.get(session) is None
+    assert _raise_checkpoint_writer_error(session) is None
+
+
+def test_raise_checkpoint_writer_error_without_errors_is_silent(tmp_path):
+    """A writer that has only saved successfully produces no error."""
+    session = ScanSession()
+    save_calls = []
+    try:
+        with patch('src.core.utils.ReportManager.save_entries',
+                   side_effect=_make_recording_save(save_calls)):
+            for i in range(500):
+                handle_results(**_make_handle_kwargs(tmp_path, i, session))
+
+            state = _checkpoint_writers.get(session)
+            assert state is not None
+            assert _wait_until(lambda: len(save_calls) == 1)
+            assert state['errors'] == []
+            assert _raise_checkpoint_writer_error(session) is None
+    finally:
+        _shutdown_checkpoint_writer(session)
+
+
+# --- AC-3: periodic save trigger -------------------------------------------
+
+def test_no_checkpoint_save_below_500(tmp_path):
+    """No checkpoint save fires for the first 499 results."""
+    session = ScanSession()
+    save_calls = []
+    try:
+        with patch('src.core.utils.ReportManager.save_entries',
+                   side_effect=_make_recording_save(save_calls)):
+            for i in range(499):
+                handle_results(**_make_handle_kwargs(tmp_path, i, session))
+        assert save_calls == []
+    finally:
+        _shutdown_checkpoint_writer(session)
+
+
+def test_checkpoint_saves_at_every_500_boundary(tmp_path):
+    """Exactly one save fires per 500 results, with snapshots 500/1000/1500.
+
+    The loop is sequential and single-threaded, so the snapshot lengths are
+    deterministic.
+    """
+    session = ScanSession()
+    save_calls = []
+    try:
+        with patch('src.core.utils.ReportManager.save_entries',
+                   side_effect=_make_recording_save(save_calls)):
+            for i in range(1500):
+                handle_results(**_make_handle_kwargs(tmp_path, i, session))
+            assert _wait_until(lambda: len(save_calls) == 3)
+        assert [length for length, _ in save_calls] == [500, 1000, 1500]
+    finally:
+        _shutdown_checkpoint_writer(session)
+
+
+def test_checkpoint_uses_report_path_for_report_dir(tmp_path):
+    """Each checkpoint is handed the path returned by get_report_path(report_dir)."""
+    session = ScanSession()
+    save_calls = []
+    expected_path = get_report_path(str(tmp_path))
+    try:
+        with patch('src.core.utils.ReportManager.save_entries',
+                   side_effect=_make_recording_save(save_calls)):
+            for i in range(500):
+                handle_results(**_make_handle_kwargs(tmp_path, i, session))
+            assert _wait_until(lambda: len(save_calls) == 1)
+        assert [path for _, path in save_calls] == [expected_path]
+    finally:
+        _shutdown_checkpoint_writer(session)
+
+
+# --- AC-4: concurrent registry access --------------------------------------
+
+def test_concurrent_writer_creation_returns_single_writer(tmp_path):
+    """Simultaneous callers create exactly one writer and share its state dict."""
+    session = ScanSession()
+    barrier = threading.Barrier(8)
+    results = []
+    worker_errors = []
+    results_lock = threading.Lock()
+    factory = _ThreadFactory(threading.Thread)
+
+    def worker():
+        barrier.wait()
+        try:
+            state = _get_or_create_checkpoint_writer(session)
+        except Exception as exc:
+            with results_lock:
+                worker_errors.append(exc)
+            return
+        with results_lock:
+            results.append(state)
+
+    try:
+        with patch('src.core.utils.Thread', factory):
+            threads = [threading.Thread(target=worker) for _ in range(8)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join(timeout=10)
+
+        assert not worker_errors
+        assert all(not thread.is_alive() for thread in threads)
+        assert len(results) == 8
+        assert all(state is results[0] for state in results)
+        assert len(factory.created) == 1
+        assert factory.created[0].name == 'checkpoint-writer'
+        assert _checkpoint_writers.get(session) is results[0]
+    finally:
+        _shutdown_checkpoint_writer(session)
+
+
+def test_concurrent_handle_results_single_writer(tmp_path):
+    """8 threads x 125 results yield one writer, two checkpoints, no errors."""
+    thread_count = 8
+    entries_per_thread = 125
+    session = ScanSession()
+    save_calls = []
+    worker_errors = []
+    errors_lock = threading.Lock()
+    factory = _ThreadFactory(threading.Thread)
+
+    def slow_save(entries, path):
+        time.sleep(0.05)
+        save_calls.append((len(entries), path))
+        return True
+
+    def worker(thread_idx):
+        try:
+            for i in range(entries_per_thread):
+                handle_results(**_make_handle_kwargs(tmp_path, thread_idx * 1000 + i, session))
+        except Exception as exc:
+            with errors_lock:
+                worker_errors.append(exc)
+
+    try:
+        # The patch must stay active while the writer thread drains the queue:
+        # the writer is a daemon that can still be processing a checkpoint after
+        # the worker threads have joined, and an exited patch would hand that
+        # checkpoint to the real save_entries.
+        with patch('src.core.utils.ReportManager.save_entries', side_effect=slow_save), \
+                patch('src.core.utils.Thread', factory):
+            threads = [threading.Thread(target=worker, args=(idx,)) for idx in range(thread_count)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join(timeout=30)
+
+            assert all(not thread.is_alive() for thread in threads)
+            assert worker_errors == []
+            # The second save may still be in flight when the workers join, so
+            # poll for it rather than asserting immediately.
+            assert _wait_until(lambda: len(save_calls) == 2, timeout=10.0)
+
+            # Snapshot lengths are asserted order-independently: queue delivery
+            # order is not deterministic and the 500-boundary snapshot is taken
+            # after add_result released the session lock, so it can exceed 500.
+            lengths = [length for length, _ in save_calls]
+            assert min(lengths) >= 500
+            assert max(lengths) == 1000
+
+            state = _checkpoint_writers.get(session)
+            assert state is not None
+            assert state['errors'] == []
+            assert state['thread'].name == 'checkpoint-writer'
+            assert len(factory.created) == 1
+            assert _get_or_create_checkpoint_writer(session) is state
+    finally:
+        _shutdown_checkpoint_writer(session)
 
 
 # ---------------------------------------------------------------------------
