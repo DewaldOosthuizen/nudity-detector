@@ -139,6 +139,7 @@ HELLOZ_NSFW_PORT = 6086
 HELLOZ_NSFW_API_ENDPOINT = '/api/upload_check'
 HELLOZ_NSFW_REQUEST_TIMEOUT = 30  # seconds
 HELLOZ_NSFW_HEALTH_CHECK_TIMEOUT = 5  # seconds
+HELLOZ_NSFW_MAX_FILE_BYTES = 20 * 1024 * 1024  # 20 MiB
 HELLOZ_NSFW_MAX_RETRIES = 3
 HELLOZ_NSFW_RETRY_BACKOFF = 1.0  # seconds; doubles on each attempt
 
@@ -149,6 +150,49 @@ _LOOPBACK_HOSTS = frozenset({'localhost', '127.0.0.1', '::1'})
 def _config_path():
     """Return the path to app_config.json relative to the current working directory."""
     return os.path.join(CONFIG_DIR, CONFIG_FILE_NAME)
+
+
+def get_helloz_nsfw_max_file_bytes():
+    """Return the configured maximum size for a Helloz upload, in bytes.
+
+    Missing or unreadable configuration uses the built-in default. Invalid values
+    are normalized through the same positive-integer policy as other numeric
+    settings.
+
+    Returns:
+        A positive maximum file size in bytes.
+    """
+    try:
+        with open(_config_path(), 'r', encoding='utf-8') as config_file:
+            cfg = json.load(config_file)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return HELLOZ_NSFW_MAX_FILE_BYTES
+    if not isinstance(cfg, dict):
+        return HELLOZ_NSFW_MAX_FILE_BYTES
+    return normalize_positive_int(
+        cfg.get('helloz_nsfw_max_file_bytes'),
+        HELLOZ_NSFW_MAX_FILE_BYTES,
+        name='helloz_nsfw_max_file_bytes',
+        min_value=1,
+    )
+
+
+def ensure_helloz_nsfw_file_size(file_path):
+    """Reject a file that exceeds the configured Helloz upload limit.
+
+    Args:
+        file_path: Path to an image or extracted video frame before upload.
+
+    Raises:
+        OSError: If the file size cannot be read.
+        ValueError: If the file is larger than the configured maximum.
+    """
+    file_size = os.path.getsize(file_path)
+    max_file_bytes = get_helloz_nsfw_max_file_bytes()
+    if file_size > max_file_bytes:
+        raise ValueError(
+            f'File size {file_size} bytes exceeds the {max_file_bytes}-byte limit'
+        )
 
 
 def _normalize_config_text(value, default, name):
@@ -413,6 +457,7 @@ CONFIG_DEFAULT_ALIGNMENT = {
     'detect_timeout_seconds': DETECT_TIMEOUT,
     'helloz_nsfw_request_timeout_seconds': HELLOZ_NSFW_REQUEST_TIMEOUT,
     'helloz_nsfw_health_check_timeout_seconds': HELLOZ_NSFW_HEALTH_CHECK_TIMEOUT,
+    'helloz_nsfw_max_file_bytes': HELLOZ_NSFW_MAX_FILE_BYTES,
 }
 
 

@@ -10,7 +10,7 @@ No environment-variable overrides are supported — there is no `python-dotenv` 
 
 ## Config Keys
 
-All 19 keys in `config/app_config.json`:
+All 20 keys in `config/app_config.json`:
 
 | Key | Default | Constant (src/core/constants.py) | Scope |
 |-----|---------|----------------------------------|-------|
@@ -33,6 +33,7 @@ All 19 keys in `config/app_config.json`:
 | `helloz_nsfw_api_endpoint` | `"/api/upload_check"` | `HELLOZ_NSFW_API_ENDPOINT` | Helloz-NSFW |
 | `helloz_nsfw_request_timeout_seconds` | `30` | `HELLOZ_NSFW_REQUEST_TIMEOUT` | Helloz-NSFW |
 | `helloz_nsfw_health_check_timeout_seconds` | `5` | `HELLOZ_NSFW_HEALTH_CHECK_TIMEOUT` | Helloz-NSFW |
+| `helloz_nsfw_max_file_bytes` | `20971520` (20 MiB) | `HELLOZ_NSFW_MAX_FILE_BYTES` | Helloz-NSFW |
 
 ### Unit convention
 

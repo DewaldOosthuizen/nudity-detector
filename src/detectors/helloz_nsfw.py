@@ -79,6 +79,7 @@ def make_classify_image(existing_files, threshold_value, threshold_percent, sess
             return
 
         try:
+            constants.ensure_helloz_nsfw_file_size(file_path)
             with open(file_path, 'rb') as image_file:
                 response = _post_with_retry(constants.get_helloz_nsfw_url(), files={'file': image_file}, timeout=constants.HELLOZ_NSFW_REQUEST_TIMEOUT)
 
@@ -124,6 +125,7 @@ def make_classify_video(existing_files, threshold_value, threshold_percent, sess
 
             for frame_path in extractor.iter_frames(file_path):
                 try:
+                    constants.ensure_helloz_nsfw_file_size(frame_path)
                     with open(frame_path, 'rb') as image_file:
                         response = _post_with_retry(upload_url, files={'file': image_file}, timeout=constants.HELLOZ_NSFW_REQUEST_TIMEOUT)
                     if response.status_code != 200:

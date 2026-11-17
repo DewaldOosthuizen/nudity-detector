@@ -17,5 +17,6 @@
   "helloz_nsfw_port": 6086,
   "helloz_nsfw_api_endpoint": "/api/upload_check",
   "helloz_nsfw_request_timeout_seconds": 30,
-  "helloz_nsfw_health_check_timeout_seconds": 5
+  "helloz_nsfw_health_check_timeout_seconds": 5,
+  "helloz_nsfw_max_file_bytes": 20971520
 }
