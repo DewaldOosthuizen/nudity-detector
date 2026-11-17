@@ -361,6 +361,24 @@ class TestScanningMixinHellozNsfw:
         assert entry.detected_classes.startswith("ERROR:")
         assert entry.nudity_detected is False
 
+    def test_run_helloz_nsfw_image_rejects_oversized_file_before_post(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(constants, "get_helloz_nsfw_max_file_bytes", lambda: 1)
+        win = _make_win()
+        win.is_processing = True
+        img = tmp_path / "large.jpg"
+        img.write_bytes(b"xx")
+        session = ScanSession()
+        requests_module = MagicMock()
+        win.request_helloz_nsfw_score.side_effect = lambda *args: ScanningMixin.request_helloz_nsfw_score(win, *args)
+
+        ScanningMixin.run_helloz_nsfw_image(
+            win, str(img), set(), 0.6, 60.0, requests_module, "http://localhost:6086/api/upload_check", 10, session
+        )
+
+        requests_module.post.assert_not_called()
+        assert len(session.get_results()) == 1
+        assert session.get_results()[0].detected_classes.startswith("ERROR:")
+
     def test_run_helloz_nsfw_image_unsuccessful_response(self, tmp_path):
         win = _make_win()
         win.is_processing = True
@@ -446,6 +464,29 @@ class TestScanningMixinHellozNsfwVideo:
         assert entry.detected_classes.startswith("ERROR:")
         assert entry.nudity_detected is False
         # extractor cleanup must still run
+        fake_extractor.cleanup.assert_called_once()
+
+    def test_run_helloz_nsfw_video_rejects_oversized_frame_before_post(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(constants, "get_helloz_nsfw_max_file_bytes", lambda: 1)
+        win = _make_win()
+        win.is_processing = True
+        vid = tmp_path / "vid.mp4"
+        vid.write_bytes(b"x")
+        frame = tmp_path / "large-frame.jpg"
+        frame.write_bytes(b"xx")
+        session = ScanSession()
+        requests_module = MagicMock()
+        win.request_helloz_nsfw_score.side_effect = lambda *args: ScanningMixin.request_helloz_nsfw_score(win, *args)
+        fake_extractor = MagicMock()
+        win.extract_video_frames.return_value = (fake_extractor, [str(frame)])
+
+        ScanningMixin.run_helloz_nsfw_video(
+            win, str(vid), set(), 0.6, 60.0, requests_module, "http://localhost:6086/api/upload_check", 10, session
+        )
+
+        requests_module.post.assert_not_called()
+        assert len(session.get_results()) == 1
+        assert session.get_results()[0].detected_classes.startswith("ERROR:")
         fake_extractor.cleanup.assert_called_once()
 
     def test_run_helloz_nsfw_video_partial_success(self, tmp_path):

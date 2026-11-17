@@ -91,6 +91,30 @@ def test_classify_image_non_200_status(tmp_path):
     assert results[0].detected_classes.startswith('ERROR:')
 
 
+def test_classify_image_records_error_without_post_for_oversized_file(tmp_path, monkeypatch):
+    img = tmp_path / 'large.jpg'
+    img.write_bytes(b'larger than the configured limit')
+
+    from src.detectors.helloz_nsfw import make_classify_image
+    monkeypatch.setattr('src.detectors.helloz_nsfw.constants.get_helloz_nsfw_max_file_bytes', lambda: 8)
+    session = _make_session()
+    classify_image = make_classify_image(
+        existing_files=set(),
+        threshold_value=0.6,
+        threshold_percent=60.0,
+        session=session,
+    )
+
+    with patch('src.detectors.helloz_nsfw._post_with_retry') as mock_post:
+        classify_image(str(img))
+
+    mock_post.assert_not_called()
+    results = session.get_results()
+    assert len(results) == 1
+    assert results[0].detected_classes.startswith('ERROR:')
+    assert 'exceeds the 8-byte limit' in results[0].detected_classes
+
+
 def test_classify_image_json_parse_failure(tmp_path):
     """classify_image: JSON parse failure → ERROR entry recorded."""
     img = tmp_path / 'broken.jpg'

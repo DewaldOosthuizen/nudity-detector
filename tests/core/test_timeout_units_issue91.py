@@ -939,6 +939,7 @@ FIXTURE_CONSTANT_KEYS = [
     ("helloz_nsfw_api_endpoint", constants.HELLOZ_NSFW_API_ENDPOINT),
     ("helloz_nsfw_request_timeout_seconds", constants.HELLOZ_NSFW_REQUEST_TIMEOUT),
     ("helloz_nsfw_health_check_timeout_seconds", constants.HELLOZ_NSFW_HEALTH_CHECK_TIMEOUT),
+    ("helloz_nsfw_max_file_bytes", constants.HELLOZ_NSFW_MAX_FILE_BYTES),
 ]
 
 # Keys present in the fixture that are not backed by a constant.
